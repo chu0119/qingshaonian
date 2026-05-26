@@ -79,6 +79,7 @@ def save_progress(db: Session, sheet_id: int, answers: list[dict]):
         content = ans.get("answer_content")
         duration = ans.get("duration_seconds", 0)
         displayed_order = ans.get("displayed_order", 0)
+        selected_display_index = ans.get("selected_display_index", 0)
         question = db.query(Question).filter(Question.id == question_id).first()
         if not question:
             continue
@@ -91,11 +92,13 @@ def save_progress(db: Session, sheet_id: int, answers: list[dict]):
         if existing:
             existing.answer_content = content
             existing.duration_seconds = duration
+            existing.selected_display_index = selected_display_index
         else:
             db.add(AnswerRecord(
                 answer_sheet_id=sheet_id, question_id=question_id,
                 question_type=question.type, answer_content=content,
                 duration_seconds=duration, displayed_order=displayed_order,
+                selected_display_index=selected_display_index,
             ))
     db.commit()
 
@@ -495,20 +498,28 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
 
     # 2. 连续同选项检测（按选项ID而非分值）
     answers_list: list[str | None] = []
+    selected_option_keys: list[str] = []
+    display_positions: list[int] = []
     for r in sorted(records, key=lambda x: x.displayed_order):
         ans = r.answer_content
         if isinstance(ans, dict):
-            # 单选题用 selected_option_id，多选题用 selected_option_ids 排序后的元组
             if "selected_option_id" in ans and ans["selected_option_id"] is not None:
-                answers_list.append(str(ans["selected_option_id"]))
+                key = str(ans["selected_option_id"])
+                answers_list.append(key)
+                selected_option_keys.append(key)
             elif "selected_option_ids" in ans and ans["selected_option_ids"] is not None:
-                answers_list.append(str(sorted(ans["selected_option_ids"])))
+                key = str(sorted(ans["selected_option_ids"]))
+                answers_list.append(key)
+                selected_option_keys.append(key)
             elif "value" in ans and ans["value"] is not None:
                 answers_list.append(str(ans["value"]))
             else:
                 answers_list.append(None)
         else:
             answers_list.append(str(ans) if ans is not None else None)
+
+        if getattr(r, "selected_display_index", 0):
+            display_positions.append(r.selected_display_index)
 
     max_consecutive_same = 0
     if answers_list:
@@ -521,12 +532,22 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
                 current_same = 1
         max_consecutive_same = max(max_consecutive_same, current_same)
 
-    # 3. 选项分布（按分数值统计）
+    # 3. 集中度统计
     score_counts: dict[float, int] = {}
     scores_list = [r.score for r in sorted(records, key=lambda x: x.displayed_order)]
     for s in scores_list:
         score_counts[s] = score_counts.get(s, 0) + 1
-    same_option_ratio = max(score_counts.values()) / max(total_q, 1) if score_counts else 0
+    same_score_ratio = max(score_counts.values()) / max(total_q, 1) if score_counts else 0
+
+    option_counts: dict[str, int] = {}
+    for key in selected_option_keys:
+        option_counts[key] = option_counts.get(key, 0) + 1
+    same_option_ratio = max(option_counts.values()) / max(total_q, 1) if option_counts else 0
+
+    display_index_counts: dict[int, int] = {}
+    for idx in display_positions:
+        display_index_counts[idx] = display_index_counts.get(idx, 0) + 1
+    same_display_position_ratio = max(display_index_counts.values()) / max(total_q, 1) if display_index_counts else 0
 
     # 4. 注意力检测
     attention_passed = True
@@ -602,6 +623,10 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
         # 选项分布异常（权重10%）
         if same_option_ratio > 0.8:
             quality_score -= 10; deductions.append("某一选项占比过高")
+        elif same_display_position_ratio > 0.8:
+            quality_score -= 10; deductions.append("某一显示位置点击占比过高")
+        elif same_score_ratio > 0.8:
+            quality_score -= 10; deductions.append("某一得分占比过高")
 
         # 注意力检测失败（权重20%）
         if not attention_passed:
@@ -649,10 +674,20 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
         pattern_detected=pattern_detected, suggest_retest=suggest_retest,
         details={"deductions": deductions, "fast_ratio": fast_count/max(total_q,1),
                  "max_consecutive_fast": max_consecutive_fast, "pattern_detail": pattern_detail,
-                 "min_expected_time": min_time_per_q},
+                 "min_expected_time": min_time_per_q, "same_score_ratio": same_score_ratio,
+                 "same_option_ratio": same_option_ratio, "same_display_position_ratio": same_display_position_ratio},
     ))
 
-    return {"quality_level": quality_level, "quality_score": quality_score, "validity": validity, "suggest_retest": suggest_retest, "deductions": deductions}
+    return {
+        "quality_level": quality_level,
+        "quality_score": quality_score,
+        "validity": validity,
+        "suggest_retest": suggest_retest,
+        "deductions": deductions,
+        "same_score_ratio": same_score_ratio,
+        "same_option_ratio": same_option_ratio,
+        "same_display_position_ratio": same_display_position_ratio,
+    }
 
 
 def check_risk_alerts(db: Session, sheet_id: int) -> dict:

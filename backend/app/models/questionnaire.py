@@ -39,6 +39,7 @@ class Questionnaire(Base, TimestampMixin):
     scoring_rule = Column(JSON, default=dict)
     risk_rules = Column(JSON, default=dict)
     quality_rules = Column(JSON, default=dict)
+    builtin_content_hash = Column(String(64), default="")
     status = Column(String(20), default="draft")  # draft / active / inactive
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     version = Column(Integer, default=1)

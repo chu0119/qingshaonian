@@ -45,6 +45,7 @@ class Settings(BaseSettings):
 
     # 调试
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    INIT_DEFAULT_SCHOOL: bool = os.getenv("INIT_DEFAULT_SCHOOL", "false").lower() == "true"
     INIT_BUILTIN_QUESTIONNAIRES: bool = os.getenv(
         "INIT_BUILTIN_QUESTIONNAIRES",
         "true" if os.getenv("APP_ENV", "demo").lower() in {"demo", "development"} else "false",

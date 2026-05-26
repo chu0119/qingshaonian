@@ -110,23 +110,13 @@ def seed_all(db):
 
     env = getattr(_settings, "APP_ENV", "demo").lower()
 
-    # Production: only create the admin account (school/org must be created explicitly).
+    create_builtin_dictionaries(db)
+
+    # Production: only create platform/admin accounts explicitly configured.
     if env == "production":
         from .models.user import User
-        if _settings.ADMIN_USERNAME and _settings.ADMIN_PASSWORD:
-            user = db.query(User).filter(User.username == _settings.ADMIN_USERNAME).first()
-            if not user:
-                from .utils.password import hash_password
-                db.add(User(
-                    username=_settings.ADMIN_USERNAME,
-                    password_hash=hash_password(_settings.ADMIN_PASSWORD),
-                    real_name="系统管理员",
-                    role="school_admin",
-                    must_change_password=True,
-                ))
         if _settings.PLATFORM_ADMIN_USERNAME and _settings.PLATFORM_ADMIN_PASSWORD:
             from .utils.password import hash_password
-            from .models.user import User
             platform_admin = db.query(User).filter(User.username == _settings.PLATFORM_ADMIN_USERNAME).first()
             if not platform_admin:
                 db.add(User(
@@ -136,14 +126,15 @@ def seed_all(db):
                     role="platform_admin",
                     status=True,
                 ))
-        create_builtin_dictionaries(db)
         db.commit()
         return
 
-    # Demo / development: create default school, admin, and platform admin.
-    school = create_default_school(db)
-    create_default_admin(db, school.id)
-    create_builtin_dictionaries(db)
+    # Demo / development: create default school only when explicitly enabled.
+    school = None
+    if getattr(_settings, "INIT_DEFAULT_SCHOOL", False) or getattr(_settings, "INIT_DEMO_DATA", False):
+        school = create_default_school(db)
+        create_default_admin(db, school.id)
+
     if _settings.PLATFORM_ADMIN_USERNAME and _settings.PLATFORM_ADMIN_PASSWORD:
         from .utils.password import hash_password
         from .models.user import User

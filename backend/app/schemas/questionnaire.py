@@ -59,10 +59,12 @@ class QuestionnaireCreate(BaseModel):
     description: Optional[str] = ""
     category: Optional[str] = "custom"
     applicable_grades: Optional[str] = ""
-    dimensions: Optional[list[dict[str, Any]]] = None
-    scoring_rule: Optional[dict[str, Any]] = None
-    risk_rules: Optional[dict[str, Any]] = None
-    quality_rules: Optional[dict[str, Any]] = None
+    disclaimer: Optional[str] = ""
+    dimensions: list[dict[str, Any]] = []
+    scoring_rule: dict[str, Any] = {}
+    risk_rules: dict[str, Any] = {}
+    quality_rules: dict[str, Any] = {}
+    source_type: Optional[str] = "school_custom"
 
 
 class QuestionnaireUpdate(BaseModel):
@@ -71,7 +73,9 @@ class QuestionnaireUpdate(BaseModel):
     category: Optional[str] = None
     applicable_grades: Optional[str] = None
     status: Optional[str] = None
+    disclaimer: Optional[str] = None
     dimensions: Optional[list[dict[str, Any]]] = None
     scoring_rule: Optional[dict[str, Any]] = None
     risk_rules: Optional[dict[str, Any]] = None
     quality_rules: Optional[dict[str, Any]] = None
+    source_type: Optional[str] = None

@@ -56,3 +56,4 @@ class AnswerRecord(Base, TimestampMixin):
     score = Column(Integer, default=0)
     duration_seconds = Column(Integer, default=0)
     displayed_order = Column(Integer, default=0)
+    selected_display_index = Column(Integer, default=0)

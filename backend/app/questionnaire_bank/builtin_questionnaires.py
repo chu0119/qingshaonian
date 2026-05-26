@@ -1,4 +1,6 @@
 from copy import deepcopy
+import hashlib
+import json
 
 from sqlalchemy.orm import Session
 
@@ -68,6 +70,21 @@ SCORING_RULE_DEFAULT = {
 
 def _clone_options(options: list[dict]) -> list[dict]:
     return [dict(item) for item in options]
+
+
+def _compute_builtin_content_hash(data: dict) -> str:
+    payload = {
+        "title": data.get("title", ""),
+        "description": data.get("description", ""),
+        "dimensions": data.get("dimensions", []),
+        "questions": data.get("questions", []),
+        "scoring_rule": data.get("scoring_rule", {}),
+        "risk_rules": data.get("risk_rules", {}),
+        "quality_rules": data.get("quality_rules", {}),
+        "contradiction_groups": data.get("contradiction_groups", []),
+    }
+    content = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _options_with_risk(options: list[dict], risk_indexes: list[int]) -> list[dict]:
@@ -866,6 +883,7 @@ def _refresh_questionnaire(existing: Questionnaire, data: dict) -> None:
     existing.scoring_rule = data["scoring_rule"]
     existing.risk_rules = data["risk_rules"]
     existing.quality_rules = data["quality_rules"]
+    existing.builtin_content_hash = _compute_builtin_content_hash(data)
     existing.version = data["version"]
     existing.locked_after_publish = True
     existing.rule_version = f"builtin-{data['version']}"
@@ -882,13 +900,18 @@ def ensure_builtin_questionnaires(db: Session) -> list[Questionnaire]:
 
     created_or_existing: list[Questionnaire] = []
     for data in BUILTIN_QUESTIONNAIRES:
+        content_hash = _compute_builtin_content_hash(data)
         existing = db.query(Questionnaire).filter(Questionnaire.code == data["code"]).first()
         if existing is None:
             existing = Questionnaire(code=data["code"], title=data["title"])
             db.add(existing)
             db.flush()
 
-        needs_rebuild = existing.version != data["version"] or len(existing.questions) != len(data["questions"])
+        needs_rebuild = (
+            existing.version != data["version"]
+            or len(existing.questions) != len(data["questions"])
+            or (existing.builtin_content_hash or "") != content_hash
+        )
         _refresh_questionnaire(existing, data)
 
         if needs_rebuild:

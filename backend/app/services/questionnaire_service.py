@@ -52,14 +52,21 @@ def format_questionnaire(q: Questionnaire, db: Session) -> dict:
 
 
 def create_questionnaire(db: Session, data: QuestionnaireCreate, user_id: int, school_id: int) -> Questionnaire:
-    q = Questionnaire(school_id=school_id, title=data.title, description=data.description,
-                       category=data.category, applicable_grades=data.applicable_grades or "",
-                       source_type="school_custom", disclaimer="",
-                       dimensions=data.dimensions or [],
-                       scoring_rule=data.scoring_rule or {},
-                       risk_rules=data.risk_rules or {},
-                       quality_rules=data.quality_rules or {},
-                       created_by=user_id, status="draft")
+    q = Questionnaire(
+        school_id=school_id,
+        title=data.title,
+        description=data.description,
+        category=data.category,
+        applicable_grades=data.applicable_grades or "",
+        source_type=data.source_type or "school_custom",
+        disclaimer=data.disclaimer or "",
+        dimensions=data.dimensions or [],
+        scoring_rule=data.scoring_rule or {},
+        risk_rules=data.risk_rules or {},
+        quality_rules=data.quality_rules or {},
+        created_by=user_id,
+        status="draft",
+    )
     db.add(q)
     db.commit()
     db.refresh(q)
@@ -68,7 +75,7 @@ def create_questionnaire(db: Session, data: QuestionnaireCreate, user_id: int, s
 
 _ALLOWED_UPDATE_FIELDS = {
     "title", "description", "category", "applicable_grades", "status",
-    "dimensions", "scoring_rule", "risk_rules", "quality_rules",
+    "disclaimer", "dimensions", "scoring_rule", "risk_rules", "quality_rules", "source_type",
 }
 
 
