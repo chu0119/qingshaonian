@@ -66,12 +66,19 @@ def create_questionnaire(db: Session, data: QuestionnaireCreate, user_id: int, s
     return q
 
 
+_ALLOWED_UPDATE_FIELDS = {
+    "title", "description", "category", "applicable_grades", "status",
+    "dimensions", "scoring_rule", "risk_rules", "quality_rules",
+}
+
+
 def update_questionnaire(db: Session, qid: int, data: QuestionnaireUpdate) -> Questionnaire:
     q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
     if not q:
         raise ValueError("问卷不存在")
     for k, v in data.model_dump(exclude_unset=True).items():
-        setattr(q, k, v)
+        if k in _ALLOWED_UPDATE_FIELDS:
+            setattr(q, k, v)
     db.commit()
     db.refresh(q)
     return q

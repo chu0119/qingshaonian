@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Switch, InputNumber, Popconfirm, Alert, Descriptions, Tag } from 'antd';
+import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Switch, InputNumber, Popconfirm, Alert, Descriptions, Tag, Collapse } from 'antd';
 import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, CopyOutlined } from '@ant-design/icons';
 import {
   getQuestionnaire, createQuestionnaire, updateQuestionnaire, copyQuestionnaire,
@@ -14,14 +14,27 @@ const questionTypes = [
   { value: 'true_false', label: '判断题' }, { value: 'scale', label: '量表题' },
   { value: 'fill_blank', label: '填空题' }, { value: 'short_answer', label: '简答题' },
 ];
-const dimensions = ['', 'emotion', 'sleep', 'academic_pressure', 'interpersonal', 'family_support', 'campus_safety', 'internet_use', 'self_safety'];
-const dimensionLabels: Record<string, string> = { '': '不设置', emotion: '情绪状态', sleep: '睡眠状态', academic_pressure: '学习压力', interpersonal: '人际关系', family_support: '家庭支持', campus_safety: '校园安全', internet_use: '网络使用', self_safety: '自我安全风险' };
+const dimensionOptions = [
+  { value: 'emotion', label: '情绪状态' }, { value: 'sleep', label: '睡眠状态' },
+  { value: 'academic_pressure', label: '学习压力' }, { value: 'interpersonal', label: '人际关系' },
+  { value: 'family_support', label: '家庭支持' }, { value: 'campus_safety', label: '校园安全' },
+  { value: 'internet_use', label: '网络使用' }, { value: 'self_safety', label: '自我安全风险' },
+];
+const dimensionLabels: Record<string, string> = { emotion: '情绪状态', sleep: '睡眠状态', academic_pressure: '学习压力', interpersonal: '人际关系', family_support: '家庭支持', campus_safety: '校园安全', internet_use: '网络使用', self_safety: '自我安全风险' };
+const riskTagOptions = [
+  { value: '', label: '不设置' }, ...dimensionOptions.map(d => ({ value: d.value, label: d.label + '关注信号' })),
+  { value: 'bullying', label: '校园欺凌关注信号' },
+];
 const relationTypeLabels: Record<string, string> = { opposite: '相反关系', positive_correlated: '正相关', mutually_exclusive: '互斥关系' };
 const categories = [
   { value: 'mental_health', label: '心理健康筛查' }, { value: 'bullying', label: '校园欺凌排查' },
   { value: 'internet_addiction', label: '网络沉迷评估' }, { value: 'family_relationship', label: '家庭关系调查' },
   { value: 'safety_awareness', label: '安全意识测评' }, { value: 'interpersonal', label: '人际关系测评' },
   { value: 'academic_pressure', label: '学业压力测评' }, { value: 'custom', label: '综合' },
+];
+const gradeOptions = [
+  { value: '初一', label: '初一' }, { value: '初二', label: '初二' }, { value: '初三', label: '初三' },
+  { value: '高一', label: '高一' }, { value: '高二', label: '高二' }, { value: '高三', label: '高三' },
 ];
 
 const emptyOption = (): OptionData => ({ content: '', score: 0, sort_order: 0, is_risk_option: false });
@@ -31,6 +44,22 @@ const emptyQuestion = (): QuestionData => ({
   options: [emptyOption(), emptyOption()],
 });
 
+function JsonEditor({ value, onChange, placeholder }: { value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; placeholder?: string }) {
+  const [text, setText] = useState(JSON.stringify(value, null, 2));
+  const [error, setError] = useState('');
+  useEffect(() => { setText(JSON.stringify(value, null, 2)); }, [value]);
+  return (
+    <div>
+      <Input.TextArea value={text} rows={6} placeholder={placeholder} onChange={e => {
+        setText(e.target.value);
+        try { const parsed = JSON.parse(e.target.value); setError(''); onChange(parsed); }
+        catch { setError('JSON 格式不正确'); }
+      }} />
+      {error && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
 export default function QuestionnaireEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -38,7 +67,6 @@ export default function QuestionnaireEditor() {
   const isNew = id === 'new';
   const qid = isNew ? null : Number(id);
 
-  // 根据当前路径推断角色前缀：/teacher/... 或 /school-admin/...
   const rolePrefix = location.pathname.startsWith('/teacher') ? '/teacher' : '/school-admin';
 
   const [loading, setLoading] = useState(false);
@@ -47,6 +75,7 @@ export default function QuestionnaireEditor() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('custom');
+  const [applicableGrades, setApplicableGrades] = useState<string[]>([]);
   const [status, setStatus] = useState('draft');
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [contradictions, setContradictions] = useState<ContradictionGroupData[]>([]);
@@ -55,6 +84,11 @@ export default function QuestionnaireEditor() {
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [cgModalOpen, setCgModalOpen] = useState(false);
   const [cgForm] = Form.useForm();
+
+  // 维度 & 规则
+  const [dimensions, setDimensions] = useState<Array<{ code: string; title: string }>>([]);
+  const [scoringRule, setScoringRule] = useState<Record<string, unknown>>({});
+  const [riskRules, setRiskRules] = useState<Record<string, unknown>>({});
 
   const isBuiltin = Boolean(detail?.is_builtin);
 
@@ -65,6 +99,10 @@ export default function QuestionnaireEditor() {
         setDetail(d);
         setTitle(d.title); setDescription(d.description); setCategory(d.category); setStatus(d.status);
         setQuestions(d.questions || []); setContradictions(d.contradiction_groups || []);
+        setDimensions(d.dimensions || []);
+        setScoringRule(d.scoring_rule || {});
+        setRiskRules(d.risk_rules || {});
+        setApplicableGrades(d.applicable_grades ? d.applicable_grades.split(',').filter(Boolean) : []);
       }).finally(() => setLoading(false));
     }
   }, [qid, isNew]);
@@ -79,12 +117,17 @@ export default function QuestionnaireEditor() {
   const handleSaveBase = async () => {
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        title: title || '未命名问卷', description, category,
+        applicable_grades: applicableGrades.join(','),
+        dimensions, scoring_rule: scoringRule, risk_rules: riskRules,
+      };
       if (isNew) {
-        const res = await createQuestionnaire({ title: title || '未命名问卷', description, category });
+        const res = await createQuestionnaire(payload);
         message.success('问卷创建成功，请继续添加题目');
         navigate(`${rolePrefix}/questionnaires/${res.data.id}/edit`, { replace: true });
       } else {
-        await updateQuestionnaire(qid!, { title, description, category, status });
+        await updateQuestionnaire(qid!, { ...payload, status });
         message.success('保存成功');
       }
     } finally { setSaving(false); }
@@ -142,7 +185,7 @@ export default function QuestionnaireEditor() {
   const saveContradiction = async () => {
     const values = await cgForm.validateFields();
     await addContradiction(qid!, values);
-    const allQuestions = questions; // use latest questions for display
+    const allQuestions = questions;
     const qa = allQuestions.find(q => q.id === values.question_a_id);
     const qb = allQuestions.find(q => q.id === values.question_b_id);
     setContradictions([...contradictions, { ...values, question_a_title: qa?.title?.substring(0, 30), question_b_title: qb?.title?.substring(0, 30) } as unknown as ContradictionGroupData]);
@@ -157,6 +200,15 @@ export default function QuestionnaireEditor() {
 
   const needsOptionsType = (type: string) => ['single_choice', 'multi_choice', 'scale'].includes(type);
   const sourceTypeLabel = detail?.source_type === 'standard_like' ? '参考标准结构' : detail?.source_type === 'reference_screening' ? '参考性筛查' : '本校自建';
+
+  // 维度编辑辅助
+  const addDimension = () => setDimensions([...dimensions, { code: '', title: '' }]);
+  const removeDimension = (idx: number) => setDimensions(dimensions.filter((_, i) => i !== idx));
+  const updateDimension = (idx: number, field: 'code' | 'title', value: string) => {
+    const newDims = [...dimensions];
+    newDims[idx] = { ...newDims[idx], [field]: value };
+    setDimensions(newDims);
+  };
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -190,6 +242,9 @@ export default function QuestionnaireEditor() {
               <Descriptions.Item label="风险规则" span={2}>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.risk_rules || {}, null, 2)}</pre>
               </Descriptions.Item>
+              <Descriptions.Item label="质量规则" span={2}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.quality_rules || {}, null, 2)}</pre>
+              </Descriptions.Item>
             </Descriptions>
           </Space>
         ) : (
@@ -197,6 +252,26 @@ export default function QuestionnaireEditor() {
             <Form.Item label="问卷标题" required><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="请输入问卷标题" /></Form.Item>
             <Form.Item label="问卷说明"><Input.TextArea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="学生填写前的指导语" /></Form.Item>
             <Form.Item label="问卷分类"><Select value={category} onChange={setCategory} options={categories} /></Form.Item>
+            <Form.Item label="适用年级"><Select mode="multiple" value={applicableGrades} onChange={setApplicableGrades} options={gradeOptions} placeholder="选择适用年级（可选）" /></Form.Item>
+
+            <Collapse ghost style={{ marginBottom: 16 }}>
+              <Collapse.Panel header="维度定义" key="dimensions">
+                {dimensions.map((dim, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                    <Input value={dim.code} onChange={e => updateDimension(idx, 'code', e.target.value)} placeholder="维度编码 (如 emotion)" style={{ width: 160 }} />
+                    <Input value={dim.title} onChange={e => updateDimension(idx, 'title', e.target.value)} placeholder="维度名称 (如 情绪状态)" style={{ flex: 1 }} />
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeDimension(idx)} />
+                  </div>
+                ))}
+                <Button type="dashed" onClick={addDimension} block icon={<PlusOutlined />}>添加维度</Button>
+              </Collapse.Panel>
+              <Collapse.Panel header="评分规则 (JSON)" key="scoring">
+                <JsonEditor value={scoringRule} onChange={setScoringRule} placeholder='{"method":"sum","score_types":["single_choice","scale"],"exclude_attention_check":true}' />
+              </Collapse.Panel>
+              <Collapse.Panel header="风险规则 (JSON)" key="risk">
+                <JsonEditor value={riskRules} onChange={setRiskRules} placeholder='{"total_pct_ranges":[{"min":0,"max":29.99,"level":"low"},{"min":30,"max":49.99,"level":"medium"},{"min":50,"max":69.99,"level":"high"},{"min":70,"max":100,"level":"urgent"}]}' />
+              </Collapse.Panel>
+            </Collapse>
           </Form>
         )}
       </Card>
@@ -225,6 +300,8 @@ export default function QuestionnaireEditor() {
                 >
                   <span style={{ color: '#888', fontSize: 13 }}>{questionTypes.find(t => t.value === q.type)?.label}</span>
                   {q.dimension && <span style={{ color: '#4A90D9', fontSize: 13, marginLeft: 12 }}>维度: {dimensionLabels[q.dimension] || q.dimension}</span>}
+                  {q.risk_tag && <span style={{ color: '#FA8C16', fontSize: 13, marginLeft: 12 }}>风险标签: {q.risk_tag}</span>}
+                  {q.is_reverse && <span style={{ color: '#722ED1', fontSize: 13, marginLeft: 12 }}>反向计分</span>}
                   {q.options.length > 0 && <span style={{ color: '#888', fontSize: 13, marginLeft: 12 }}>选项: {q.options.map(o => `${o.content}(${o.score}分)`).join(', ')}</span>}
                 </Card>
               ))}
@@ -264,10 +341,11 @@ export default function QuestionnaireEditor() {
           <Form layout="vertical">
             <Form.Item label="题目标题" required><Input.TextArea value={editingQuestion.title} onChange={e => setEditingQuestion({ ...editingQuestion, title: e.target.value })} rows={2} /></Form.Item>
             <Form.Item label="题目说明"><Input value={editingQuestion.description} onChange={e => setEditingQuestion({ ...editingQuestion, description: e.target.value })} /></Form.Item>
-            <Space style={{ marginBottom: 16 }}>
+            <Space style={{ marginBottom: 16 }} wrap>
               <div><span style={{ fontSize: 12, color: '#666' }}>题型</span><br /><Select value={editingQuestion.type} onChange={v => setEditingQuestion({ ...editingQuestion, type: v })} options={questionTypes} style={{ width: 120 }} /></div>
               <div><span style={{ fontSize: 12, color: '#666' }}>必填</span><br /><Switch checked={editingQuestion.required} onChange={v => setEditingQuestion({ ...editingQuestion, required: v })} /></div>
-              <div><span style={{ fontSize: 12, color: '#666' }}>维度</span><br /><Select value={editingQuestion.dimension || ''} onChange={v => setEditingQuestion({ ...editingQuestion, dimension: v })} options={dimensions.map(d => ({ value: d, label: dimensionLabels[d] }))} style={{ width: 120 }} /></div>
+              <div><span style={{ fontSize: 12, color: '#666' }}>维度</span><br /><Select value={editingQuestion.dimension || ''} onChange={v => setEditingQuestion({ ...editingQuestion, dimension: v })} options={[{ value: '', label: '不设置' }, ...dimensionOptions]} style={{ width: 130 }} /></div>
+              <div><span style={{ fontSize: 12, color: '#666' }}>风险标签</span><br /><Select value={editingQuestion.risk_tag || ''} onChange={v => setEditingQuestion({ ...editingQuestion, risk_tag: v })} options={riskTagOptions} style={{ width: 160 }} /></div>
               <div><span style={{ fontSize: 12, color: '#666' }}>反向计分</span><br /><Switch checked={editingQuestion.is_reverse} onChange={v => setEditingQuestion({ ...editingQuestion, is_reverse: v })} /></div>
               <div><span style={{ fontSize: 12, color: '#666' }}>注意力检测</span><br /><Switch checked={editingQuestion.is_attention_check} onChange={v => setEditingQuestion({ ...editingQuestion, is_attention_check: v })} /></div>
             </Space>
