@@ -1,0 +1,100 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from ..database import get_db
+from ..models.user import User, Grade, Class
+from ..models.task import Task, AnswerSheet
+from ..models.risk import RiskAlert, Intervention, QualityAssessment
+from ..dependencies import require_role
+from ..services.stats_service import school_metrics, target_student_ids
+from ..utils.access_control import teacher_class_ids
+from ..utils.response import APIResponse
+
+router = APIRouter(prefix="/api/v1/dashboard", tags=["看板"])
+
+
+@router.get("/school")
+def school_dashboard(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    school_id = user.school_id
+    metrics = school_metrics(db, school_id)
+    active_tasks = db.query(func.count(Task.id)).filter(Task.school_id == school_id, Task.status.in_(["not_started", "in_progress", "active"])).scalar()
+
+    total_sheets = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.school_id == school_id, AnswerSheet.status == "submitted").scalar()
+    risk_count = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == school_id).scalar()
+    pending_risks = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == school_id, RiskAlert.status == "pending").scalar()
+    pending_interventions = db.query(func.count(Intervention.id)).filter(Intervention.school_id == school_id, Intervention.status.in_(["pending", "processing"])).scalar()
+
+    # 答题质量统计
+    quality_stats = db.query(
+        QualityAssessment.quality_level,
+        func.count(QualityAssessment.id)
+    ).join(AnswerSheet).join(Task).filter(Task.school_id == school_id).group_by(QualityAssessment.quality_level).all()
+    quality_dist = {level: cnt for level, cnt in quality_stats}
+
+    # 风险分布
+    risk_dist = db.query(
+        RiskAlert.risk_level, func.count(RiskAlert.id)
+    ).filter(RiskAlert.school_id == school_id).group_by(RiskAlert.risk_level).all()
+    risk_level_dist = {level: cnt for level, cnt in risk_dist}
+
+    return APIResponse.success({
+        "stats": {
+            "student_count": metrics["student_count"], "teacher_count": metrics["teacher_count"],
+            "class_count": metrics["class_count"], "active_tasks": active_tasks,
+            "total_answer_sheets": metrics["answer_sheet_count"], "risk_count": risk_count,
+            "pending_risks": pending_risks, "pending_interventions": pending_interventions,
+            "completion_rate": metrics["completion_rate"],
+            "valid_answer_rate": metrics["valid_answer_rate"],
+            "intervention_completion_rate": metrics["intervention_completion_rate"],
+        },
+        "quality_distribution": quality_dist,
+        "risk_level_distribution": risk_level_dist,
+    })
+
+
+@router.get("/teacher")
+def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor")), db: Session = Depends(get_db)):
+    class_ids = teacher_class_ids(db, user)
+    my_students = db.query(func.count(User.id)).filter(User.class_id.in_(class_ids), User.role == "student").scalar() if class_ids else 0
+
+    tasks = [t for t in db.query(Task).filter(Task.school_id == user.school_id, Task.status.in_(["not_started", "in_progress", "active"])).all()
+             if set(t.target_ids or []).intersection(class_ids)]
+    expected = sum(len([sid for sid in target_student_ids(db, t) if db.query(User.class_id).filter(User.id == sid).scalar() in class_ids]) for t in tasks)
+    completed = (
+        db.query(func.count(AnswerSheet.id))
+        .join(User, User.id == AnswerSheet.student_id)
+        .filter(User.class_id.in_(class_ids), AnswerSheet.status == "submitted")
+        .scalar()
+        if class_ids else 0
+    )
+    pending_risks = (
+        db.query(func.count(RiskAlert.id))
+        .join(User, User.id == RiskAlert.student_id)
+        .filter(RiskAlert.school_id == user.school_id, RiskAlert.status == "pending", User.class_id.in_(class_ids))
+        .scalar()
+        if class_ids else 0
+    )
+    pending_interventions = db.query(func.count(Intervention.id)).filter(
+        Intervention.teacher_id == user.id,
+        Intervention.status.in_(["pending", "processing", "follow_up", "ongoing"]),
+    ).scalar()
+
+    return APIResponse.success({
+        "stats": {
+            "my_classes": len(class_ids), "my_students": my_students,
+            "active_tasks": len(tasks), "pending_risks": pending_risks,
+            "pending_interventions": pending_interventions,
+            "average_completion_rate": round(completed / max(expected, 1) * 100, 1) if expected else 0,
+            "uncompleted_students": max(expected - completed, 0),
+        }
+    })
+
+
+@router.get("/student")
+def student_dashboard(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    pending_count = db.query(func.count(Task.id)).filter(Task.school_id == user.school_id, Task.status == "active").scalar()
+    completed_count = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.student_id == user.id, AnswerSheet.status == "submitted").scalar()
+
+    return APIResponse.success({
+        "pending_count": pending_count, "completed_count": completed_count,
+    })

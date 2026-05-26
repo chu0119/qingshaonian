@@ -1,0 +1,57 @@
+# 环境变量和密钥
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / 前端
+node_modules/
+**/node_modules/
+dist/
+build/
+.vite/
+.cache/
+
+# 日志
+*.log
+logs/
+
+# 数据库和本地文件
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+tmp/
+temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 测试和临时导出
+exports/
+reports/
+coverage/
