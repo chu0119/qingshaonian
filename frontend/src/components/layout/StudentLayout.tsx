@@ -66,6 +66,14 @@ export default function StudentLayout() {
         <Outlet />
       </Content>
 
+      {/* ICP备案 */}
+      <div style={{ textAlign: 'center', paddingBottom: 16, color: 'rgba(0, 0, 0, 0.3)', fontSize: 12 }}>
+        陕西安楠云芯科技有限公司 &nbsp;
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+          陕ICP备2026008842号-1
+        </a>
+      </div>
+
       <Modal title="修改密码" open={pwdModalOpen} onOk={handleChangePassword} onCancel={() => setPwdModalOpen(false)} destroyOnClose>
         <Form form={pwdForm} layout="vertical">
           <Form.Item name="old_password" label="原密码" rules={[{ required: true }]}><Input.Password /></Form.Item>

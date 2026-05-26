@@ -419,6 +419,14 @@ export default function LoginPage() {
       </div>
     </div>
 
+    {/* ICP备案 */}
+    <div style={{ textAlign: 'center', padding: '12px 0', color: 'rgba(255, 255, 255, 0.35)', fontSize: 12, position: 'absolute', bottom: 12, width: '100%', zIndex: 1 }}>
+      陕西安楠云芯科技有限公司 &nbsp;
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+        陕ICP备2026008842号-1
+      </a>
+    </div>
+
     {/* 忘记密码弹窗 */}
     <Modal title="重置密码" open={forgotOpen} onCancel={() => { setForgotOpen(false); setForgotStep('form'); }}
       footer={null} width={420} destroyOnHidden centered>
