@@ -493,29 +493,36 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
         else:
             current_fast = 0
 
-    # 2. 连续同选项检测（按答案内容而非分值）
-    answers_list = []
+    # 2. 连续同选项检测（按选项ID而非分值）
+    answers_list: list[str | None] = []
     for r in sorted(records, key=lambda x: x.displayed_order):
         ans = r.answer_content
         if isinstance(ans, dict):
-            # 获取选项ID：单选题用selected_option_id，多选题用selected_option_ids
-            val = ans.get("selected_option_id") or ans.get("selected_option_ids") or ans.get("value")
-            answers_list.append(str(val) if val is not None else None)
+            # 单选题用 selected_option_id，多选题用 selected_option_ids 排序后的元组
+            if "selected_option_id" in ans and ans["selected_option_id"] is not None:
+                answers_list.append(str(ans["selected_option_id"]))
+            elif "selected_option_ids" in ans and ans["selected_option_ids"] is not None:
+                answers_list.append(str(sorted(ans["selected_option_ids"])))
+            elif "value" in ans and ans["value"] is not None:
+                answers_list.append(str(ans["value"]))
+            else:
+                answers_list.append(None)
         else:
             answers_list.append(str(ans) if ans is not None else None)
 
     max_consecutive_same = 0
-    current_same = 1
-    for i in range(1, len(answers_list)):
-        if answers_list[i] == answers_list[i - 1]:
-            current_same += 1
-        else:
-            max_consecutive_same = max(max_consecutive_same, current_same)
-            current_same = 1
-    max_consecutive_same = max(max_consecutive_same, current_same)
+    if answers_list:
+        current_same = 1
+        for i in range(1, len(answers_list)):
+            if answers_list[i] is not None and answers_list[i] == answers_list[i - 1]:
+                current_same += 1
+            else:
+                max_consecutive_same = max(max_consecutive_same, current_same)
+                current_same = 1
+        max_consecutive_same = max(max_consecutive_same, current_same)
 
-    # 3. 选项分布
-    score_counts = {}
+    # 3. 选项分布（按分数值统计）
+    score_counts: dict[float, int] = {}
     scores_list = [r.score for r in sorted(records, key=lambda x: x.displayed_order)]
     for s in scores_list:
         score_counts[s] = score_counts.get(s, 0) + 1

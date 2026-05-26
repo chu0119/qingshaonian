@@ -318,6 +318,162 @@ class QuestionnaireBankAndScoringTests(unittest.TestCase):
         self.assertNotEqual(copied_groups[0].question_a_id, q1.id)
         self.assertNotEqual(copied_groups[0].question_b_id, q2.id)
 
+    # --- Quality detection tests ---
+
+    def _build_quality_test_data(self, db, suffix, questions_and_answers):
+        """Helper: build questionnaire + answers for quality tests.
+
+        questions_and_answers: list of (title, options_list, selected_option_index, duration_seconds)
+        """
+        school = School(name=f"质量学校{suffix}", code=f"QL{suffix}")
+        db.add(school)
+        db.flush()
+        questionnaire = Questionnaire(
+            school_id=school.id,
+            title="质量测试问卷",
+            category="custom",
+            status="active",
+            scoring_rule={"score_types": ["single_choice"]},
+            risk_rules={"total_score_ranges": [{"min": 0, "max": 100, "level": "low"}]},
+        )
+        db.add(questionnaire)
+        db.flush()
+
+        question_objs = []
+        for title, option_labels, _, _ in questions_and_answers:
+            q = Question(questionnaire_id=questionnaire.id, title=title, type="single_choice", sort_order=len(question_objs) + 1)
+            db.add(q)
+            db.flush()
+            for idx, label in enumerate(option_labels, start=1):
+                db.add(Option(question_id=q.id, content=label, score=idx - 1, sort_order=idx))
+            question_objs.append(q)
+        db.flush()
+
+        student = User(school_id=school.id, username=f"qual_{suffix}", password_hash="", real_name="学生", role="student")
+        db.add(student)
+        db.flush()
+        task = Task(school_id=school.id, questionnaire_id=questionnaire.id, name="质量任务", target_type="student", target_ids=[student.id], status="in_progress")
+        db.add(task)
+        db.flush()
+        sheet = AnswerSheet(school_id=school.id, task_id=task.id, student_id=student.id, questionnaire_id=questionnaire.id, status="submitted")
+        db.add(sheet)
+        db.flush()
+
+        for idx, (_, _, selected_idx, duration) in enumerate(questions_and_answers):
+            q = question_objs[idx]
+            options = db.query(Option).filter(Option.question_id == q.id).order_by(Option.sort_order).all()
+            selected = options[selected_idx]
+            db.add(AnswerRecord(
+                answer_sheet_id=sheet.id, question_id=q.id, question_type=q.type,
+                answer_content={"selected_option_id": selected.id},
+                displayed_order=idx + 1, duration_seconds=duration,
+            ))
+        db.commit()
+        return sheet
+
+    def test_quality_normal_answers(self):
+        from app.services.scoring_service import calculate_quality
+
+        opts = ["A", "B", "C", "D"]
+        # Varied answers with no pattern: different selections and sufficient time
+        pattern = [0, 2, 1, 3, 0, 3, 1, 2, 0, 1]
+        answers = [(f"题{i}", opts, pattern[i % len(pattern)], 5) for i in range(10)]
+        sheet = self._build_quality_test_data(self.db, self.suffix, answers)
+        # Set realistic total duration
+        sheet.total_duration_seconds = 50
+        self.db.commit()
+        result = calculate_quality(self.db, sheet.id)
+        self.assertEqual(result["quality_level"], "normal", f"Expected normal, got {result}")
+        self.assertGreaterEqual(result["quality_score"], 80)
+
+    def test_quality_consecutive_same_option_detected(self):
+        from app.services.scoring_service import calculate_quality
+
+        opts = ["从不", "很少", "有时", "经常"]
+        # 12 questions all selecting same option (index 3)
+        answers = [(f"题{i}", opts, 3, 3) for i in range(12)]
+        sheet = self._build_quality_test_data(self.db, self.suffix, answers)
+        result = calculate_quality(self.db, sheet.id)
+        self.assertNotEqual(result["quality_level"], "normal")
+        self.assertGreater(len(result["deductions"]), 0)
+
+    def test_quality_fast_answer_detected(self):
+        from app.services.scoring_service import calculate_quality
+
+        opts = ["A", "B", "C", "D"]
+        # All answers are very fast (< 1 second)
+        answers = [(f"题{i}", opts, (i % 4), 0) for i in range(15)]
+        sheet = self._build_quality_test_data(self.db, self.suffix, answers)
+        result = calculate_quality(self.db, sheet.id)
+        self.assertNotEqual(result["quality_level"], "normal")
+
+    def test_quality_attention_check_failure(self):
+        from app.services.scoring_service import calculate_quality
+        from app.models.risk import QualityAssessment
+
+        school = School(name=f"AT{self.suffix}", code=f"AT{self.suffix}")
+        self.db.add(school)
+        self.db.flush()
+        questionnaire = Questionnaire(
+            school_id=school.id, title="AT", category="custom", status="active",
+            scoring_rule={"score_types": ["single_choice"]},
+            risk_rules={"total_score_ranges": [{"min": 0, "max": 100, "level": "low"}]},
+        )
+        self.db.add(questionnaire)
+        self.db.flush()
+
+        q1 = Question(questionnaire_id=questionnaire.id, title="N1", type="single_choice", sort_order=1)
+        q2 = Question(questionnaire_id=questionnaire.id, title="ATT", type="single_choice",
+                       sort_order=2, is_attention_check=True, attention_correct_answer="C3")
+        self.db.add_all([q1, q2])
+        self.db.flush()
+        for idx, label in enumerate(["C0", "C1", "C2", "C3", "C4"], start=1):
+            self.db.add(Option(question_id=q1.id, content=label, score=idx - 1, sort_order=idx))
+            self.db.add(Option(question_id=q2.id, content=label, score=idx - 1, sort_order=idx))
+        self.db.flush()
+
+        student = User(school_id=school.id, username=f"attn_{self.suffix}", password_hash="", real_name="S", role="student")
+        self.db.add(student)
+        self.db.flush()
+        task = Task(school_id=school.id, questionnaire_id=questionnaire.id, name="AT", target_type="student", target_ids=[student.id], status="in_progress")
+        self.db.add(task)
+        self.db.flush()
+        sheet = AnswerSheet(school_id=school.id, task_id=task.id, student_id=student.id, questionnaire_id=questionnaire.id, status="submitted")
+        self.db.add(sheet)
+        self.db.flush()
+
+        # q1: choose C3 (score 3), q2: choose WRONG answer C0 (score 0, expected C3)
+        opt1 = self.db.query(Option).filter(Option.question_id == q1.id, Option.score == 3).first()
+        opt2_wrong = self.db.query(Option).filter(Option.question_id == q2.id, Option.score == 0).first()
+        self.db.add_all([
+            AnswerRecord(answer_sheet_id=sheet.id, question_id=q1.id, question_type=q1.type, answer_content={"selected_option_id": opt1.id}, displayed_order=1, duration_seconds=5),
+            AnswerRecord(answer_sheet_id=sheet.id, question_id=q2.id, question_type=q2.type, answer_content={"selected_option_id": opt2_wrong.id}, displayed_order=2, duration_seconds=5),
+        ])
+        self.db.commit()
+
+        calculate_quality(self.db, sheet.id)
+        self.db.flush()
+        qa = self.db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).first()
+        self.assertIsNotNone(qa)
+        self.assertFalse(qa.attention_passed)
+
+    def test_production_env_never_seeds_school(self):
+        """Verify production env does not auto-create 明德实验学校."""
+        from app.database import seed_all
+        from app.models.user import School
+
+        before = self.db.query(School).filter(School.code == "MINGDE").count()
+        # Temporarily override APP_ENV in the settings module
+        import app.config as config_module
+        original_env = config_module.settings.APP_ENV
+        config_module.settings.APP_ENV = "production"
+        try:
+            seed_all(self.db)
+        finally:
+            config_module.settings.APP_ENV = original_env
+        after = self.db.query(School).filter(School.code == "MINGDE").count()
+        self.assertEqual(before, after)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any
 
 
 class OptionCreate(BaseModel):
@@ -59,6 +59,10 @@ class QuestionnaireCreate(BaseModel):
     description: Optional[str] = ""
     category: Optional[str] = "custom"
     applicable_grades: Optional[str] = ""
+    dimensions: Optional[list[dict[str, Any]]] = None
+    scoring_rule: Optional[dict[str, Any]] = None
+    risk_rules: Optional[dict[str, Any]] = None
+    quality_rules: Optional[dict[str, Any]] = None
 
 
 class QuestionnaireUpdate(BaseModel):
@@ -67,3 +71,7 @@ class QuestionnaireUpdate(BaseModel):
     category: Optional[str] = None
     applicable_grades: Optional[str] = None
     status: Optional[str] = None
+    dimensions: Optional[list[dict[str, Any]]] = None
+    scoring_rule: Optional[dict[str, Any]] = None
+    risk_rules: Optional[dict[str, Any]] = None
+    quality_rules: Optional[dict[str, Any]] = None

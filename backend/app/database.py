@@ -106,15 +106,54 @@ def create_builtin_dictionaries(db):
 
 
 def seed_all(db):
+    from .config import settings as _settings
+
+    env = getattr(_settings, "APP_ENV", "demo").lower()
+
+    # Production: only create the admin account (school/org must be created explicitly).
+    if env == "production":
+        from .models.user import User
+        if _settings.ADMIN_USERNAME and _settings.ADMIN_PASSWORD:
+            user = db.query(User).filter(User.username == _settings.ADMIN_USERNAME).first()
+            if not user:
+                from .utils.password import hash_password
+                db.add(User(
+                    username=_settings.ADMIN_USERNAME,
+                    password_hash=hash_password(_settings.ADMIN_PASSWORD),
+                    real_name="系统管理员",
+                    role="school_admin",
+                    must_change_password=True,
+                ))
+        if _settings.PLATFORM_ADMIN_USERNAME and _settings.PLATFORM_ADMIN_PASSWORD:
+            from .utils.password import hash_password
+            from .models.user import User
+            platform_admin = db.query(User).filter(User.username == _settings.PLATFORM_ADMIN_USERNAME).first()
+            if not platform_admin:
+                db.add(User(
+                    username=_settings.PLATFORM_ADMIN_USERNAME,
+                    password_hash=hash_password(_settings.PLATFORM_ADMIN_PASSWORD),
+                    real_name="平台管理员",
+                    role="platform_admin",
+                    status=True,
+                ))
+        create_builtin_dictionaries(db)
+        db.commit()
+        return
+
+    # Demo / development: create default school, admin, and platform admin.
     school = create_default_school(db)
     create_default_admin(db, school.id)
     create_builtin_dictionaries(db)
-    # 创建平台管理员（仅在环境变量中显式配置时创建）
-    from .utils.password import hash_password
-    from .models.user import User
-    if settings.PLATFORM_ADMIN_USERNAME and settings.PLATFORM_ADMIN_PASSWORD:
-        platform_admin = db.query(User).filter(User.username == settings.PLATFORM_ADMIN_USERNAME).first()
+    if _settings.PLATFORM_ADMIN_USERNAME and _settings.PLATFORM_ADMIN_PASSWORD:
+        from .utils.password import hash_password
+        from .models.user import User
+        platform_admin = db.query(User).filter(User.username == _settings.PLATFORM_ADMIN_USERNAME).first()
         if not platform_admin:
-            db.add(User(username=settings.PLATFORM_ADMIN_USERNAME, password_hash=hash_password(settings.PLATFORM_ADMIN_PASSWORD), real_name="平台管理员",
-                     role="platform_admin", status=True))
+            db.add(User(
+                username=_settings.PLATFORM_ADMIN_USERNAME,
+                password_hash=hash_password(_settings.PLATFORM_ADMIN_PASSWORD),
+                real_name="平台管理员",
+                role="platform_admin",
+                status=True,
+            ))
     db.commit()
