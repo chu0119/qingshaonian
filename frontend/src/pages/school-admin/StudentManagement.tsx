@@ -380,24 +380,25 @@ export default function StudentManagement() {
         onCancel={() => setModalOpen(false)}
         destroyOnClose
         width={560}
+        style={{ maxWidth: '95vw' }}
         okText={editingStudent ? '保存修改' : '确认新增'}
         cancelText="取消"
       >
         <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="student_no" label="学号" rules={[{ required: true, message: '请输入学号' }]}>
                 <Input placeholder="请输入学号" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="real_name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
                 <Input placeholder="请输入姓名" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="username" label="登录账号" rules={[{ required: true, message: '请输入登录账号' }]}>
                 <Input
                   disabled={!!editingStudent}
@@ -405,7 +406,7 @@ export default function StudentManagement() {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               {!editingStudent && (
                 <Form.Item name="password" label="初始密码" tooltip="留空则默认 123456">
                   <Input placeholder="默认 123456" />
@@ -414,7 +415,7 @@ export default function StudentManagement() {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="gender" label="性别">
                 <Select
                   options={[
@@ -424,7 +425,7 @@ export default function StudentManagement() {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="grade_id" label="年级">
                 <Select
                   placeholder="选择年级"
@@ -434,7 +435,7 @@ export default function StudentManagement() {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="class_id" label="班级">
                 <Select
                   placeholder="选择班级"
@@ -442,14 +443,14 @@ export default function StudentManagement() {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="phone" label="手机号">
                 <Input placeholder="请输入手机号" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="status" label="状态">
                 <Select
                   options={[

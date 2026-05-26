@@ -297,6 +297,7 @@ export default function TeacherTasks() {
                 dataSource={taskList}
                 rowKey="id"
                 loading={taskLoading}
+                scroll={{ x: 'max-content' }}
                 pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 条` }}
                 locale={{ emptyText: <Empty description="暂无任务" /> }}
               />
@@ -312,6 +313,7 @@ export default function TeacherTasks() {
         onCancel={() => setCompletionModalOpen(false)}
         footer={null}
         width={700}
+        style={{ maxWidth: '95vw' }}
         destroyOnClose
       >
         {completionLoading ? (
@@ -321,6 +323,7 @@ export default function TeacherTasks() {
             columns={completionColumns}
             dataSource={completionData}
             rowKey={(record) => record.student_id || record.id}
+            scroll={{ x: 'max-content' }}
             pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 条` }}
             locale={{ emptyText: <Empty description="暂无完成数据" /> }}
           />

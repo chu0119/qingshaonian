@@ -98,17 +98,17 @@ export default function QuestionnaireLibrary() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Space>
-          <Select placeholder="分类" allowClear style={{ width: 140 }} value={filters.category || undefined} onChange={v => setFilters(f => ({ ...f, category: v || '' }))}
+          <Select placeholder="分类" allowClear style={{ width: 140, maxWidth: '100%' }} value={filters.category || undefined} onChange={v => setFilters(f => ({ ...f, category: v || '' }))}
             options={Object.entries(categoryLabels).map(([k, v]) => ({ value: k, label: v }))} />
-          <Select placeholder="状态" allowClear style={{ width: 100 }} value={filters.status || undefined} onChange={v => setFilters(f => ({ ...f, status: v || '' }))}
+          <Select placeholder="状态" allowClear style={{ width: 100, maxWidth: '100%' }} value={filters.status || undefined} onChange={v => setFilters(f => ({ ...f, status: v || '' }))}
             options={[{ value: 'draft', label: '草稿' }, { value: 'active', label: '启用' }, { value: 'inactive', label: '停用' }]} />
-          <Input.Search placeholder="搜索" style={{ width: 180 }} value={filters.keyword} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
+          <Input.Search placeholder="搜索" style={{ width: 180, maxWidth: '100%' }} value={filters.keyword} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/school-admin/questionnaires/new')}>新建问卷</Button>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
     </div>
   );

@@ -100,17 +100,17 @@ export default function TeacherManagement() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Space>
           <Select placeholder="教师类型" allowClear style={{ width: 120 }} value={filters.teacher_type || undefined} onChange={v => setFilters(f => ({ ...f, teacher_type: v || '' }))} options={teacherTypes.map(t => ({ value: t.value, label: t.label }))} />
           <Input.Search placeholder="搜索姓名/工号" style={{ width: 180 }} value={filters.keyword} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增教师</Button>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
 
-      <Modal title={editingTeacher ? '编辑教师' : '新增教师'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={520}>
+      <Modal title={editingTeacher ? '编辑教师' : '新增教师'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={520} style={{ maxWidth: '95vw' }}>
         <Form form={form} layout="vertical">
           <Form.Item name="real_name" label="姓名" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="username" label="工号" rules={[{ required: true }]}><Input disabled={!!editingTeacher} /></Form.Item>
@@ -122,7 +122,7 @@ export default function TeacherManagement() {
         </Form>
       </Modal>
 
-      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} onCancel={() => setAssignModalOpen(false)} width={520}>
+      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} onCancel={() => setAssignModalOpen(false)} width={520} style={{ maxWidth: '95vw' }}>
         <Transfer
           dataSource={allClasses.map(c => ({ key: String(c.id), title: `${c.grade_name} ${c.name}` }))}
           targetKeys={assignedKeys}

@@ -724,6 +724,13 @@ export default function DataScreen() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.2; }
         }
+        @media (max-width: 768px) {
+          .stat-row { grid-template-columns: repeat(3, 1fr) !important; }
+          .chart-row-2, .chart-row-3 { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          .stat-row { grid-template-columns: repeat(2, 1fr) !important; }
+        }
       `}</style>
 
       {/* ===== 星空粒子背景 ===== */}

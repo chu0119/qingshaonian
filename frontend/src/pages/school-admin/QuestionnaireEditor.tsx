@@ -222,7 +222,7 @@ export default function QuestionnaireEditor() {
         {isBuiltin && detail ? (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Alert message={detail.disclaimer || '本问卷仅用于学校教育管理和学生关怀场景下的风险关注筛查，结果不作为医学诊断依据。'} type="info" showIcon />
-            <Descriptions bordered size="small" column={2}>
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
               <Descriptions.Item label="问卷名称">{detail.title}</Descriptions.Item>
               <Descriptions.Item label="版本">V{detail.version}</Descriptions.Item>
               <Descriptions.Item label="分类">{categories.find(item => item.value === detail.category)?.label || detail.category}</Descriptions.Item>
@@ -336,7 +336,7 @@ export default function QuestionnaireEditor() {
       )}
 
       {/* 题目编辑Modal */}
-      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen && !isBuiltin} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} width={720} destroyOnHidden>
+      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen && !isBuiltin} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} width={720} style={{ maxWidth: '95vw' }} destroyOnHidden>
         {editingQuestion && (
           <Form layout="vertical">
             <Form.Item label="题目标题" required><Input.TextArea value={editingQuestion.title} onChange={e => setEditingQuestion({ ...editingQuestion, title: e.target.value })} rows={2} /></Form.Item>
@@ -357,7 +357,7 @@ export default function QuestionnaireEditor() {
               <div>
                 <Divider>选项配置</Divider>
                 {editingQuestion.options.map((opt, oi) => (
-                  <div key={oi} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <div key={oi} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ width: 20 }}>{oi + 1}.</span>
                     <Input value={opt.content} onChange={e => updateOption(oi, 'content', e.target.value)} placeholder="选项内容" style={{ flex: 3 }} />
                     <InputNumber value={opt.score} onChange={v => updateOption(oi, 'score', v || 0)} placeholder="分值" style={{ width: 70 }} min={0} />

@@ -72,14 +72,14 @@ export default function MyQuestionnaires() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Typography.Title level={4}>我的问卷</Typography.Title>
         <Space>
-          <Input.Search placeholder="搜索" value={keyword} onChange={e => setKeyword(e.target.value)} onSearch={() => setPage(1)} style={{ width: 200 }} />
+          <Input.Search placeholder="搜索" value={keyword} onChange={e => setKeyword(e.target.value)} onSearch={() => setPage(1)} style={{ width: '100%', maxWidth: 200 }} />
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/teacher/questionnaires/new')}>新建问卷</Button>
         </Space>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }} />
     </div>
   );

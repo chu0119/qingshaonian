@@ -203,17 +203,17 @@ export default function DataReports() {
           {overviewData && (
             <>
               <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small">
                     <Statistic title="学生总数" value={overviewData?.total_students || 0} suffix="人" />
                   </Card>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small">
                     <Statistic title="已完成测评" value={overviewData?.total_completed || 0} suffix="人" />
                   </Card>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small">
                     <Statistic
                       title="整体完成率"
@@ -290,7 +290,7 @@ export default function DataReports() {
           {riskData && (
             <>
               <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={6}>
+                <Col xs={12} sm={6}>
                   <Card size="small" style={{ textAlign: 'center' }}>
                     <Statistic title="风险警报总数" value={riskData?.total || 0} suffix="条" />
                   </Card>
@@ -398,12 +398,12 @@ export default function DataReports() {
           {qualityData && (
             <>
               <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small" style={{ textAlign: 'center' }}>
                     <Statistic title="答卷总数" value={qualityData?.total || 0} suffix="份" />
                   </Card>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small" style={{ textAlign: 'center' }}>
                     <Statistic
                       title="有效答卷率"
@@ -413,7 +413,7 @@ export default function DataReports() {
                     />
                   </Card>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12} md={8}>
                   <Card size="small" style={{ textAlign: 'center' }}>
                     <Statistic
                       title="建议复测人数"

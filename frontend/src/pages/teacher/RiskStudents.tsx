@@ -61,6 +61,7 @@ export default function RiskStudents() {
         dataSource={data}
         columns={columns}
         loading={loading}
+        scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }}
       />
     </div>

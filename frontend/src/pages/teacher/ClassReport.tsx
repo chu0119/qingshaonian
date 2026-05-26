@@ -124,6 +124,7 @@ export default function ClassReport() {
         onCancel={() => setModalOpen(false)}
         footer={null}
         width={700}
+        style={{ maxWidth: '95vw' }}
         destroyOnClose
       >
         {reportLoading ? (

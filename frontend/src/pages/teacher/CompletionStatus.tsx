@@ -56,7 +56,7 @@ export default function CompletionStatus() {
         <span>选择任务：</span>
         <Select
           placeholder="请选择任务"
-          style={{ width: 360 }}
+          style={{ width: '100%', maxWidth: 360 }}
           value={selectedTask}
           onChange={v => setSelectedTask(v)}
           loading={taskLoading}
@@ -73,6 +73,7 @@ export default function CompletionStatus() {
           dataSource={completions}
           columns={columns}
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={false}
         />
       )}

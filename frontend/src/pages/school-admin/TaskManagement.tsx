@@ -191,6 +191,7 @@ export default function TaskManagement() {
         confirmLoading={submitting}
         destroyOnHidden
         width={560}
+        style={{ maxWidth: '95vw' }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
@@ -222,7 +223,7 @@ export default function TaskManagement() {
           <Form.Item name="allow_edit" label="允许提交后修改" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
+          <Space wrap>
             <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked">
               <Switch />
             </Form.Item>
@@ -251,13 +252,14 @@ export default function TaskManagement() {
         onCancel={() => { setDetailOpen(false); setCompletions([]); }}
         destroyOnHidden
         width={800}
+        style={{ maxWidth: '95vw' }}
         footer={null}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col span={6}><Statistic title="已提交" value={completed.length} valueStyle={{ color: '#67C23A' }} loading={detailLoading} /></Col>
-          <Col span={6}><Statistic title="未完成" value={uncompleted.length} valueStyle={{ color: '#FF4D4F' }} loading={detailLoading} /></Col>
-          <Col span={6}><Statistic title="完成率" value={completions.length > 0 ? Math.round(completed.length / completions.length * 100) : 0} suffix="%" loading={detailLoading} /></Col>
-          <Col span={6}><Statistic title="总人数" value={completions.length} loading={detailLoading} /></Col>
+          <Col xs={12} sm={12} md={6}><Statistic title="已提交" value={completed.length} valueStyle={{ color: '#67C23A' }} loading={detailLoading} /></Col>
+          <Col xs={12} sm={12} md={6}><Statistic title="未完成" value={uncompleted.length} valueStyle={{ color: '#FF4D4F' }} loading={detailLoading} /></Col>
+          <Col xs={12} sm={12} md={6}><Statistic title="完成率" value={completions.length > 0 ? Math.round(completed.length / completions.length * 100) : 0} suffix="%" loading={detailLoading} /></Col>
+          <Col xs={12} sm={12} md={6}><Statistic title="总人数" value={completions.length} loading={detailLoading} /></Col>
         </Row>
         <Tabs items={detailTabItems} />
       </Modal>

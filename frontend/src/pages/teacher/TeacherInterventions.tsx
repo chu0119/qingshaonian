@@ -76,9 +76,9 @@ export default function TeacherInterventions() {
         <Typography.Title level={4}>干预记录</Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增</Button>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }} />
-      <Modal title="新增干预记录" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} width={600}>
+      <Modal title="新增干预记录" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} width={600} style={{ maxWidth: '95vw' }}>
         <Form form={form} layout="vertical">
           <Form.Item name="risk_alert_id" hidden><Input /></Form.Item>
           <Form.Item name="student_id" label="选择学生" rules={[{ required: true }]}>
