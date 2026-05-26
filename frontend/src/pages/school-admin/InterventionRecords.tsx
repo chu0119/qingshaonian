@@ -84,6 +84,7 @@ export default function InterventionRecords() {
         confirmLoading={submitting}
         destroyOnHidden
         width={600}
+        style={{ maxWidth: '95vw' }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="student_id" label="选择学生" rules={[{ required: true, message: '请选择学生' }]}>

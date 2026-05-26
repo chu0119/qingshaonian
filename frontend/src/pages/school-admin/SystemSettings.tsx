@@ -769,6 +769,7 @@ export default function SystemSettings() {
                 pagination={false}
                 size="middle"
                 style={{ marginBottom: 20 }}
+                scroll={{ x: 'max-content' }}
               />
               <Form.Item>
                 <Button
@@ -812,7 +813,7 @@ export default function SystemSettings() {
             loading={gradesLoading}
             pagination={false}
             size="middle"
-            locale={{ emptyText: '暂无年级数据，请点击右上角"新增年级"添加' }}
+            scroll={{ x: 'max-content' }}
           />
         </Card>
       ),

@@ -187,6 +187,7 @@ export default function DataReports() {
         pagination={false}
         size="small"
         style={{ margin: '0 24px' }}
+        scroll={{ x: 'max-content' }}
       />
     );
   };
@@ -244,6 +245,7 @@ export default function DataReports() {
                 pagination={false}
                 size="small"
                 locale={{ emptyText: '暂无年级数据' }}
+                scroll={{ x: 'max-content' }}
               />
 
               <Space style={{ marginTop: 16 }}>
@@ -300,7 +302,7 @@ export default function DataReports() {
               <Card title="风险等级分布" size="small" style={{ marginBottom: 16 }}>
                 <Row gutter={[16, 16]}>
                   {(riskData?.by_level || []).map((item: RiskLevelItem) => (
-                    <Col span={12} key={item.level}>
+                    <Col xs={24} sm={12} key={item.level}>
                       <Row align="middle" justify="space-between" style={{ marginBottom: 4 }}>
                         <Col>
                           <Tag color={riskLevelColors[item.level] || '#999'}>{item.label}</Tag>
@@ -330,7 +332,7 @@ export default function DataReports() {
               <Card title="风险处理状态分布" size="small" style={{ marginBottom: 16 }}>
                 <Row gutter={[16, 16]}>
                   {(riskData?.by_status || []).map((item: RiskStatusItem) => (
-                    <Col span={12} key={item.status}>
+                    <Col xs={24} sm={12} key={item.status}>
                       <Row align="middle" justify="space-between" style={{ marginBottom: 4 }}>
                         <Col>
                           <Tag color={riskStatusColors[item.status] || '#999'}>{item.label}</Tag>
@@ -434,7 +436,7 @@ export default function DataReports() {
                       ? Math.round((item.count / total) * 100 * 10) / 10
                       : 0;
                     return (
-                      <Col span={12} key={item.level}>
+                      <Col xs={24} sm={12} key={item.level}>
                         <Row align="middle" justify="space-between" style={{ marginBottom: 4 }}>
                           <Col>
                             <Tag color={info.color}>{info.label}</Tag>
@@ -488,6 +490,7 @@ export default function DataReports() {
             <Table
               rowKey="id"
               dataSource={questionnaires}
+              scroll={{ x: 'max-content' }}
               columns={[
                 { title: '问卷标题', dataIndex: 'title', key: 'title', ellipsis: true },
                 {

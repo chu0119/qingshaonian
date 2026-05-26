@@ -531,6 +531,7 @@ export default function Dashboard() {
             pagination={false}
             size="middle"
             style={{ marginTop: -8 }}
+            scroll={{ x: 'max-content' }}
           />
         )}
       </Card>

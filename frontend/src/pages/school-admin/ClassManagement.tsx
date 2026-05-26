@@ -80,14 +80,14 @@ export default function ClassManagement() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Space>
           <Select placeholder="按年级筛选" allowClear style={{ width: 120 }} value={gradeId} onChange={setGradeId} options={grades.map(g => ({ value: g.value, label: g.label }))} />
           <Button onClick={fetchData}>查询</Button>
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增班级</Button>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }} />
       <Modal title={editingClass ? '编辑班级' : '新增班级'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden>
         <Form form={form} layout="vertical">
