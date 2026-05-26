@@ -91,24 +91,24 @@ export default function LoginPage() {
         </>
       )}
 
-      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', width: '100%' }}>
         <div style={{ width: isMobile ? 72 : 110, height: isMobile ? 72 : 110, borderRadius: isMobile ? 20 : 30, background: 'rgba(0,212,255,0.08)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: `0 auto ${isMobile ? 24 : 40}px`, border: '1px solid rgba(0,212,255,0.25)', boxShadow: '0 0 40px rgba(0,212,255,0.12), 0 8px 32px rgba(0,0,0,0.25)' }}>
           <SafetyOutlined style={{ fontSize: isMobile ? 36 : 54, color: '#00d4ff' }} />
         </div>
 
-        <Title level={1} style={{ color: '#fff', marginBottom: 8, fontSize: isMobile ? 36 : 52, fontWeight: 800, letterSpacing: isMobile ? 6 : 12, fontFamily: "'PingFang SC', 'Microsoft YaHei', sans-serif", textShadow: '0 0 60px rgba(0,212,255,0.3)' }}>
+        <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 800, letterSpacing: isMobile ? 4 : 8, color: '#fff', fontFamily: "'PingFang SC', 'Microsoft YaHei', sans-serif", textShadow: '0 0 60px rgba(0,212,255,0.3)', marginBottom: 8, textAlign: 'center' }}>
           青盾
-        </Title>
+        </div>
 
-        <Text style={{ color: 'rgba(0,212,255,0.85)', fontSize: isMobile ? 14 : 18, letterSpacing: isMobile ? 2 : 6, fontWeight: 500, display: 'block', marginBottom: isMobile ? 24 : 36 }}>
+        <div style={{ color: 'rgba(0,212,255,0.85)', fontSize: isMobile ? 14 : 18, letterSpacing: isMobile ? 1 : 3, fontWeight: 500, marginBottom: isMobile ? 24 : 36, textAlign: 'center' }}>
           青少年风险防范测评管理系统
-        </Text>
+        </div>
 
         <div style={{ width: 100, height: 2, background: 'linear-gradient(90deg, rgba(0,212,255,0), rgba(0,212,255,0.5), rgba(0,212,255,0))', borderRadius: 2, margin: '0 auto 30px' }} />
 
-        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: isMobile ? 14 : 16, letterSpacing: isMobile ? 4 : 8, marginBottom: 12 }}>
+        <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: isMobile ? 14 : 16, letterSpacing: isMobile ? 2 : 4, marginBottom: 12, textAlign: 'center' }}>
           守护青春，预见未来
-        </p>
+        </div>
       </div>
 
       <div style={{ position: isMobile ? 'relative' : 'absolute', bottom: isMobile ? undefined : 48, left: isMobile ? undefined : 60, right: isMobile ? undefined : 60, display: 'flex', flexWrap: 'wrap', gap: 24, zIndex: 1, marginTop: isMobile ? 24 : 0, justifyContent: 'center' }}>
