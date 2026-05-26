@@ -141,7 +141,8 @@ export default function LoginPage() {
         </div>
 
         <div style={{ background: 'rgba(0,20,60,0.5)', backdropFilter: 'blur(20px)', borderRadius: 16, border: '1px solid rgba(0,212,255,0.2)', padding: '36px 28px', boxShadow: '0 0 30px rgba(0,212,255,0.06), 0 4px 24px rgba(0,0,0,0.3)' }}>
-          <Form name="login" onFinish={onFinish} size="large" autoComplete="off">
+          <style>{`.login-form input::placeholder { color: rgba(200,220,240,0.45) !important; } .login-form .ant-input-password-icon { color: rgba(200,220,240,0.6) !important; }`}</style>
+          <Form name="login" className="login-form" onFinish={onFinish} size="large" autoComplete="off">
             <Form.Item name="username" rules={[{ required: true, message: '请输入账号' }]}>
               <Input prefix={<UserOutlined style={{ color: '#5a8aaf' }} />} placeholder="请输入账号"
                 style={{ height: 50, borderRadius: 10, fontSize: 15, background: 'rgba(0,16,40,0.5)', border: '1px solid rgba(0,212,255,0.15)', color: '#e0f0ff' }} />
