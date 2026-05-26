@@ -3,6 +3,11 @@
 Revision ID: 202605260003
 Revises: 202605260003_questionnaire_rule_fields
 Create Date: 2026-05-26 00:30:00
+
+历史兼容迁移。该迁移依赖 202605260003_questionnaire_rule_fields，
+部分字段（code/source_type/disclaimer/dimensions/scoring_rule/risk_rules/
+quality_rules/questions.code）与前置迁移重复，但通过 _add_column_if_missing
+保持幂等——对全新数据库为无操作，对已部署旧库无影响。
 """
 from typing import Sequence, Union
 
