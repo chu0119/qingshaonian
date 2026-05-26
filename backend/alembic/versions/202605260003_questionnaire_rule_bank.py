@@ -1,7 +1,7 @@
 """questionnaire rule bank fields
 
 Revision ID: 202605260003
-Revises: 202605260002
+Revises: 202605260003_questionnaire_rule_fields
 Create Date: 2026-05-26 00:30:00
 """
 from typing import Sequence, Union
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "202605260003"
-down_revision: Union[str, None] = "202605260002"
+down_revision: Union[str, None] = "202605260003_questionnaire_rule_fields"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
