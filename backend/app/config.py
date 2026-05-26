@@ -45,6 +45,11 @@ class Settings(BaseSettings):
 
     # 调试
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    INIT_BUILTIN_QUESTIONNAIRES: bool = os.getenv(
+        "INIT_BUILTIN_QUESTIONNAIRES",
+        "true" if os.getenv("APP_ENV", "demo").lower() in {"demo", "development"} else "false",
+    ).lower() == "true"
+    INIT_DEMO_DATA: bool = os.getenv("INIT_DEMO_DATA", "false").lower() == "true"
 
     # 可选外部服务开关。生产环境只有显式启用时才强制校验密钥。
     SMS_ENABLED: bool = os.getenv("SMS_ENABLED", "false").lower() == "true"

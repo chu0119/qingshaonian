@@ -3,20 +3,33 @@ import client from './client';
 export interface QuestionnaireInfo {
   id: number;
   school_id: number | null;
+  code?: string | null;
   title: string;
   description: string;
   category: string;
   applicable_grades: string;
   is_builtin: boolean;
+  source_type: string;
+  disclaimer: string;
+  dimensions: Array<{ code: string; title: string }>;
+  scoring_rule: Record<string, unknown>;
+  risk_rules: Record<string, unknown>;
+  quality_rules: Record<string, unknown>;
   status: string;
   created_by: number | null;
   question_count: number;
+  version: number;
+  rule_version?: string;
+  locked_after_publish?: boolean;
+  source_questionnaire_id?: number | null;
+  editable?: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
 
 export interface QuestionData {
   id?: number;
+  code?: string | null;
   title: string;
   description?: string;
   type: string;

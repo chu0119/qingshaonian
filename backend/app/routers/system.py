@@ -1,6 +1,7 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from ..config import settings
 from ..database import get_db
 from ..models.user import User
 from ..dependencies import require_role
@@ -154,8 +155,10 @@ def delete_grade(grade_id: int, user: User = Depends(require_role("school_admin"
 
 @router.post("/seed-demo-data")
 def seed_demo(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    seed_demo_data(db)
-    return APIResponse.success(message="演示数据初始化完成")
+    if settings.APP_ENV.lower() not in {"demo", "development"}:
+        raise HTTPException(status_code=403, detail="当前环境不允许初始化演示数据")
+    seeded = seed_demo_data(db, school_id=user.school_id, current_settings=settings)
+    return APIResponse.success({"seeded_school_ids": seeded}, message="演示数据初始化完成")
 
 
 # ===== 短信配置（预留接口） =====

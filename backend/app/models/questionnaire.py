@@ -27,11 +27,18 @@ class QuestionnaireCategory(str, enum.Enum):
 class Questionnaire(Base, TimestampMixin):
     __tablename__ = "questionnaires"
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    code = Column(String(100), nullable=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, default="")
     category = Column(String(50), default="custom")
     applicable_grades = Column(String(200), default="")
     is_builtin = Column(Boolean, default=False)
+    source_type = Column(String(50), default="school_custom")
+    disclaimer = Column(Text, default="")
+    dimensions = Column(JSON, default=list)
+    scoring_rule = Column(JSON, default=dict)
+    risk_rules = Column(JSON, default=dict)
+    quality_rules = Column(JSON, default=dict)
     status = Column(String(20), default="draft")  # draft / active / inactive
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     version = Column(Integer, default=1)
@@ -45,6 +52,7 @@ class Questionnaire(Base, TimestampMixin):
 class Question(Base, TimestampMixin):
     __tablename__ = "questions"
     questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    code = Column(String(100), nullable=True)
     title = Column(Text, nullable=False)
     description = Column(String(500), default="")
     type = Column(String(20), nullable=False, default=QuestionType.SINGLE_CHOICE)

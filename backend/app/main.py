@@ -12,8 +12,8 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_all(db)
-        from .services.seed_service import seed_demo_data
-        seed_demo_data(db)
+        from .services.seed_service import initialize_seed_data
+        initialize_seed_data(db, settings)
     finally:
         db.close()
     yield

@@ -149,124 +149,273 @@ def calculate_scores(db: Session, sheet_id: int) -> dict:
     if not sheet:
         return {}
 
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == sheet.questionnaire_id).first()
     records = db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id == sheet_id).all()
     questions = {q.id: q for q in db.query(Question).filter(Question.questionnaire_id == sheet.questionnaire_id).all()}
+    options_by_question = {
+        question_id: db.query(Option).filter(Option.question_id == question_id).order_by(Option.sort_order).all()
+        for question_id in questions.keys()
+    }
+    scoring_rule = questionnaire.scoring_rule or {} if questionnaire else {}
+    risk_rules = questionnaire.risk_rules or {} if questionnaire else {}
 
     total_score = 0.0
-    dimension_scores = {}
+    total_max_score = 0.0
+    dimension_scores: dict[str, float] = {}
+    dimension_max_scores: dict[str, float] = {}
     triggered_rules = []
     risk_types = set()
-    max_risk_level = "low"
+    risk_type_labels: dict[str, str] = {}
 
     for record in records:
         question = questions.get(record.question_id)
         if not question:
             continue
 
-        answer = record.answer_content
-        score = 0
-
-        if question.type in ("single_choice", "scale"):
-            if isinstance(answer, dict):
-                option_id = answer.get("selected_option_id")
-                option = db.query(Option).filter(Option.id == option_id).first()
-                if option:
-                    score = option.score
-                    if option.is_risk_option:
-                        risk_types.add(question.risk_tag or "general")
-                        triggered_rules.append({"type": "sensitive_option", "question_id": question.id, "option_id": option_id})
-                        max_risk_level = _max_risk(max_risk_level, "high")
-
-        elif question.type == "multi_choice":
-            if isinstance(answer, dict):
-                selected_ids = answer.get("selected_option_ids", [])
-                for oid in selected_ids:
-                    option = db.query(Option).filter(Option.id == oid).first()
-                    if option:
-                        score += option.score
-                        if option.is_risk_option:
-                            risk_types.add(question.risk_tag or "general")
-                            triggered_rules.append({"type": "sensitive_option", "question_id": question.id, "option_id": oid})
-                            max_risk_level = _max_risk(max_risk_level, "high")
-
-        elif question.type == "true_false":
-            if isinstance(answer, dict):
-                score = 5 if answer.get("value") == "true" else 0
-
-        # 反向计分
-        if question.is_reverse:
-            max_opt_score = max((o.score for o in db.query(Option).filter(Option.question_id == question.id).all()), default=5)
-            score = max_opt_score - score
-
+        options = options_by_question.get(question.id, [])
+        score, question_max_score, selected_risk_tags, question_rules = _score_record(question, record.answer_content, options)
         record.score = score
+        triggered_rules.extend(question_rules)
+
+        if question.risk_threshold is not None and score >= question.risk_threshold and question.risk_tag:
+            selected_risk_tags.add(question.risk_tag)
+            triggered_rules.append({
+                "type": "question_threshold",
+                "question_id": question.id,
+                "risk_tag": question.risk_tag,
+                "score": score,
+                "threshold": question.risk_threshold,
+            })
+
+        for risk_tag in selected_risk_tags:
+            risk_types.add(risk_tag)
+
+        if not _should_include_in_score(question, scoring_rule):
+            continue
+
         total_score += score
+        total_max_score += question_max_score
 
         dim = question.dimension or "general"
-        dimension_scores[dim] = dimension_scores.get(dim, 0) + score
+        dimension_scores[dim] = dimension_scores.get(dim, 0.0) + score
+        dimension_max_scores[dim] = dimension_max_scores.get(dim, 0.0) + question_max_score
 
-    # 计算每题理论最高分（根据选项配置），用于归一化到百分制
-    max_score_per_q = 4  # 默认最高分
-    if questions:
-        sample_q = next(iter(questions.values()))
-        sample_opts = db.query(Option).filter(Option.question_id == sample_q.id).all()
-        if sample_opts:
-            opt_scores = [o.score for o in sample_opts]
-            max_score_per_q = max(opt_scores) if opt_scores else 4
+    total_score_pct = round((total_score / total_max_score) * 100, 2) if total_max_score else 0.0
+    dimension_breakdown = _build_dimension_breakdown(questionnaire, dimension_scores, dimension_max_scores)
 
-    # 判定风险等级
-    risk_level = "low"
-    q_count = len(records)
-
-    # 读取系统配置中的阈值，将平均分转换为百分制
-    from ..models.system_config import SystemConfig
-    config = db.query(SystemConfig).filter(SystemConfig.config_key == "risk_levels", SystemConfig.school_id.is_(None)).first()
-    if config:
-        levels = json.loads(config.config_value)
-        avg_score_pct = (total_score / max(q_count * max_score_per_q, 1)) * 100
-        for level_name, level_cfg in levels.items():
-            min_score = level_cfg.get("min_score", level_cfg.get("min", 0))
-            max_score = level_cfg.get("max_score", level_cfg.get("max", 100))
-            if min_score <= avg_score_pct <= max_score:
-                risk_level = level_name
-                break
-    risk_level = _max_risk(risk_level, max_risk_level)
-
-    for dim, dim_score in dimension_scores.items():
-        dim_questions = [q for q in questions.values() if (q.dimension or "general") == dim]
-        dim_max = sum(max((o.score for o in db.query(Option).filter(Option.question_id == q.id).all()), default=max_score_per_q) for q in dim_questions)
-        if dim_max and (dim_score / dim_max) * 100 >= 75:
-            risk_level = _max_risk(risk_level, "high")
-            triggered_rules.append({"type": "dimension_threshold", "dimension": dim, "score": dim_score, "rule_version": "v1"})
-
-    # 生成维度分析
-    dim_analysis = _generate_dimension_analysis(dimension_scores, total_score, q_count, max_score_per_q)
+    risk_level, risk_type_labels, risk_rule_triggers = _resolve_risk_level(
+        db=db,
+        questionnaire=questionnaire,
+        total_score=total_score,
+        total_max_score=total_max_score,
+        total_score_pct=total_score_pct,
+        dimension_breakdown=dimension_breakdown,
+        risk_types=risk_types,
+    )
+    triggered_rules.extend(risk_rule_triggers)
 
     # 保存评分结果
     existing = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet_id).first()
     if existing:
         db.delete(existing)
+        db.flush()
+    dimension_analysis = _generate_dimension_analysis(dimension_breakdown)
+    risk_type = _risk_types_chinese(risk_types, risk_type_labels)
     db.add(ScoringResult(
         answer_sheet_id=sheet_id, total_score=total_score, dimension_scores=dimension_scores,
-        risk_level=risk_level, risk_type=_risk_types_chinese(risk_types),
-        risk_description=_generate_risk_description(risk_level, risk_types),
-        triggered_rules=_dedupe_rules(triggered_rules + dim_analysis),
+        risk_level=risk_level, risk_type=risk_type,
+        risk_description=_generate_risk_description(questionnaire, risk_level, risk_types),
+        triggered_rules=_dedupe_rules(triggered_rules + dimension_analysis),
     ))
+    db.flush()
 
-    return {"total_score": total_score, "dimension_scores": dimension_scores, "risk_level": risk_level}
+    return {
+        "total_score": total_score,
+        "total_max_score": total_max_score,
+        "total_score_pct": total_score_pct,
+        "dimension_scores": dimension_scores,
+        "dimension_breakdown": dimension_breakdown,
+        "risk_level": risk_level,
+        "risk_type": risk_type,
+    }
+
+def _should_include_in_score(question: Question, scoring_rule: dict) -> bool:
+    score_types = set(scoring_rule.get("score_types") or ["single_choice", "multi_choice", "scale", "true_false"])
+    exclude_types = set(scoring_rule.get("exclude_types") or ["fill_blank", "short_answer"])
+    if question.type in exclude_types:
+        return False
+    if scoring_rule.get("exclude_attention_check", True) and question.is_attention_check:
+        return False
+    return question.type in score_types
 
 
-def _risk_types_chinese(risk_types: set) -> str:
+def _score_record(question: Question, answer, options: list[Option]) -> tuple[float, float, set[str], list[dict]]:
+    option_map = {opt.id: opt for opt in options}
+    option_scores = [opt.score for opt in options] or [0]
+    min_score = min(option_scores)
+    max_score = max(option_scores)
+    score = 0.0
+    triggered_rules: list[dict] = []
+    risk_tags: set[str] = set()
+
+    if question.type in ("single_choice", "scale", "true_false"):
+        selected_option_id = answer.get("selected_option_id") if isinstance(answer, dict) else None
+        selected_option = option_map.get(selected_option_id)
+        if selected_option is not None:
+            score = selected_option.score
+            if selected_option.is_risk_option and question.risk_tag:
+                risk_tags.add(question.risk_tag)
+                triggered_rules.append({"type": "sensitive_option", "question_id": question.id, "option_id": selected_option.id, "risk_tag": question.risk_tag})
+        elif question.type == "true_false" and isinstance(answer, dict):
+            truthy = str(answer.get("value", "")).lower() in {"true", "1", "yes"}
+            score = max_score if truthy else min_score
+    elif question.type == "multi_choice":
+        selected_ids = answer.get("selected_option_ids", []) if isinstance(answer, dict) else []
+        selected_options = [option_map[option_id] for option_id in selected_ids if option_id in option_map]
+        score = float(sum(option.score for option in selected_options))
+        for option in selected_options:
+            if option.is_risk_option and question.risk_tag:
+                risk_tags.add(question.risk_tag)
+                triggered_rules.append({"type": "sensitive_option", "question_id": question.id, "option_id": option.id, "risk_tag": question.risk_tag})
+        max_score = float(sum(max(option.score, 0) for option in options))
+    else:
+        max_score = 0.0
+
+    if question.is_reverse and options:
+        score = max_score + min_score - score
+
+    if question.type != "multi_choice":
+        max_score = float(max(option_scores) if option_scores else 0)
+
+    return float(score), float(max_score), risk_tags, triggered_rules
+
+
+def _build_dimension_breakdown(questionnaire: Questionnaire | None, dimension_scores: dict[str, float], dimension_max_scores: dict[str, float]) -> dict[str, dict]:
+    dimension_labels = {
+        item.get("code"): item.get("title")
+        for item in ((questionnaire.dimensions or []) if questionnaire else [])
+        if isinstance(item, dict) and item.get("code")
+    }
+    breakdown: dict[str, dict] = {}
+    for dimension, score in dimension_scores.items():
+        max_score = dimension_max_scores.get(dimension, 0.0)
+        breakdown[dimension] = {
+            "label": dimension_labels.get(dimension, dimension),
+            "score": score,
+            "max_score": max_score,
+            "pct": round((score / max_score) * 100, 2) if max_score else 0.0,
+        }
+    return breakdown
+
+
+def _resolve_risk_level(
+    db: Session,
+    questionnaire: Questionnaire | None,
+    total_score: float,
+    total_max_score: float,
+    total_score_pct: float,
+    dimension_breakdown: dict[str, dict],
+    risk_types: set[str],
+) -> tuple[str, dict[str, str], list[dict]]:
+    risk_rules = questionnaire.risk_rules or {} if questionnaire else {}
+    triggered_rules: list[dict] = []
+    risk_level = "low"
+    risk_type_labels: dict[str, str] = {}
+
+    total_ranges = risk_rules.get("total_score_ranges") or []
+    total_pct_ranges = risk_rules.get("total_pct_ranges") or []
+    dimension_pct_rules = risk_rules.get("dimension_pct_rules") or []
+    risk_tag_rules = risk_rules.get("risk_tag_rules") or {}
+
+    if total_ranges:
+        risk_level = _match_range_level(total_score, total_ranges, "low")
+    elif total_pct_ranges:
+        risk_level = _match_range_level(total_score_pct, total_pct_ranges, "low")
+    else:
+        risk_level = _resolve_default_risk_level(db, total_score_pct)
+
+    for rule in dimension_pct_rules:
+        dimension = rule.get("dimension")
+        min_pct = float(rule.get("min_pct", 0))
+        current = dimension_breakdown.get(dimension)
+        if current and current.get("pct", 0) >= min_pct:
+            rule_level = rule.get("level", "medium")
+            risk_level = _max_risk(risk_level, rule_level)
+            triggered_rules.append({
+                "type": "dimension_threshold",
+                "dimension": dimension,
+                "min_pct": min_pct,
+                "actual_pct": current.get("pct", 0),
+                "level": rule_level,
+                "rule_version": questionnaire.rule_version if questionnaire else "default",
+            })
+
+    for risk_tag in sorted(risk_types):
+        tag_rule = risk_tag_rules.get(risk_tag) or {}
+        if tag_rule:
+            rule_level = tag_rule.get("level", "high")
+            risk_level = _max_risk(risk_level, rule_level)
+            if tag_rule.get("type_label"):
+                risk_type_labels[risk_tag] = tag_rule["type_label"]
+            triggered_rules.append({
+                "type": "risk_tag_rule",
+                "risk_tag": risk_tag,
+                "level": rule_level,
+                "label": tag_rule.get("type_label", ""),
+                "rule_version": questionnaire.rule_version if questionnaire else "default",
+            })
+
+    return risk_level, risk_type_labels, triggered_rules
+
+
+def _resolve_default_risk_level(db: Session, total_score_pct: float) -> str:
+    from ..models.system_config import SystemConfig
+
+    config = db.query(SystemConfig).filter(SystemConfig.config_key == "risk_levels", SystemConfig.school_id.is_(None)).first()
+    if not config or not config.config_value:
+        return "low"
+    levels = json.loads(config.config_value)
+    for level_name, level_cfg in levels.items():
+        min_score = float(level_cfg.get("min_score", level_cfg.get("min", 0)))
+        max_score = float(level_cfg.get("max_score", level_cfg.get("max", 100)))
+        if min_score <= total_score_pct <= max_score:
+            return level_name
+    return "low"
+
+
+def _match_range_level(value: float, ranges: list[dict], default_level: str = "low") -> str:
+    for item in ranges:
+        min_value = float(item.get("min", 0))
+        max_value = float(item.get("max", value))
+        if min_value <= value <= max_value:
+            return item.get("level", default_level)
+    return default_level
+
+
+def _risk_types_chinese(risk_types: set, risk_type_labels: dict[str, str] | None = None) -> str:
     tag_map = {
         "mental_pressure": "心理压力关注信号", "bullying": "校园欺凌关注信号",
         "internet_addiction": "网络使用关注信号", "family_relationship": "家庭关系关注信号",
         "interpersonal": "人际关系关注信号", "academic_pressure": "学业压力关注信号",
         "safety_awareness": "安全意识关注信号", "self_safety": "自我安全关注信号",
         "emotion": "情绪关注信号", "sleep": "睡眠关注信号", "general": "综合关注信号",
+        "internet_use": "网络使用关注信号", "family_support": "家庭支持关注信号",
+        "campus_safety": "校园安全关注信号",
     }
-    return ",".join(tag_map.get(t, t) for t in risk_types) if risk_types else ""
+    labels = []
+    for risk_tag in sorted(risk_types):
+        if risk_type_labels and risk_type_labels.get(risk_tag):
+            labels.append(risk_type_labels[risk_tag])
+        else:
+            labels.append(tag_map.get(risk_tag, risk_tag))
+    return ",".join(dict.fromkeys(labels)) if labels else ""
 
 
-def _generate_risk_description(risk_level: str, risk_types: set) -> str:
+def _generate_risk_description(questionnaire: Questionnaire | None, risk_level: str, risk_types: set) -> str:
+    risk_rules = questionnaire.risk_rules or {} if questionnaire else {}
+    messages = risk_rules.get("messages") or {}
+    if risk_level in messages:
+        return messages[risk_level]
     descriptions = {
         "low": "测评结果暂未发现明显关注信号，建议保持日常关怀和常规教育支持。",
         "medium": "测评结果出现一定关注信号，建议班主任或心理老师适时了解学生近期学习、生活和情绪状态，并结合日常观察进行复核。",
@@ -294,24 +443,15 @@ def _dedupe_rules(rules: list) -> list:
     return deduped
 
 
-def _generate_dimension_analysis(dimension_scores: dict, total_score: float, question_count: int, max_score_per_q: int = 4) -> list:
-    """根据各维度得分生成详细分析"""
-    dim_labels = {
-        "emotion": "情绪状态", "sleep": "睡眠质量", "academic_pressure": "学习压力",
-        "interpersonal": "人际关系", "family_support": "家庭支持",
-        "campus_safety": "校园安全", "internet_use": "网络使用", "self_safety": "自我安全"
-    }
+def _generate_dimension_analysis(dimension_breakdown: dict[str, dict]) -> list:
     analyses = []
-    for dim, score in dimension_scores.items():
-        label = dim_labels.get(dim, dim)
-        max_score = question_count * max_score_per_q
-        ratio = score / max(max_score, 1)
-        if ratio > 0.6:
-            analyses.append({"dimension": dim, "label": label, "level": "偏高", "ratio": round(ratio * 100),
-                             "suggestion": f"「{label}」维度得分偏高，建议教师重点关注该学生在此方面的状况，必要时进行个别访谈。"})
-        elif ratio > 0.4:
-            analyses.append({"dimension": dim, "label": label, "level": "中等", "ratio": round(ratio * 100),
-                             "suggestion": f"「{label}」维度处于中等水平，建议保持关注。"})
+    for dimension, item in dimension_breakdown.items():
+        ratio = item.get("pct", 0)
+        label = item.get("label", dimension)
+        if ratio >= 75:
+            analyses.append({"dimension": dimension, "label": label, "level": "偏高", "ratio": round(ratio), "suggestion": f"「{label}」维度关注信号相对更集中，建议结合班级观察和学生访谈进一步复核。"})
+        elif ratio >= 45:
+            analyses.append({"dimension": dimension, "label": label, "level": "中等", "ratio": round(ratio), "suggestion": f"「{label}」维度出现一定关注信号，建议保持关注并结合日常表现综合判断。"})
     return sorted(analyses, key=lambda x: x["ratio"], reverse=True)
 
 

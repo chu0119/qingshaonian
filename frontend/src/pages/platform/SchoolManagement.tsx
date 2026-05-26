@@ -259,7 +259,7 @@ export default function SchoolManagement() {
                     label: '最近登录',
                     children: (
                       <Table
-                        rowKey={(r) => `${r.username}-${r.login_time}`}
+                        rowKey={(record: any) => `${record.username}-${record.login_time}`}
                         dataSource={detail.recent_logins || []}
                         pagination={false}
                         size="small"

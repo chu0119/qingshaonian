@@ -68,8 +68,6 @@ export default function SystemSettings() {
   const [addingGrade, setAddingGrade] = useState(false);
   const [gradeForm] = Form.useForm();
 
-  // ---- demo data state ----
-
   // ---- screen config state ----
   const [screenConfig, setScreenConfig] = useState<ScreenConfig | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
@@ -426,20 +424,6 @@ export default function SystemSettings() {
       fetchGrades();
     } catch {
       message.error('删除失败，请重试');
-    }
-  };
-
-  // ==================== demo data ====================
-
-  const handleSeedData = async () => {
-    setSeeding(true);
-    try {
-      await seedDemoData();
-      message.success('演示数据初始化完成，请刷新页面查看');
-    } catch {
-      message.error('初始化失败，请重试');
-    } finally {
-      setSeeding(false);
     }
   };
 
@@ -830,66 +814,6 @@ export default function SystemSettings() {
             size="middle"
             locale={{ emptyText: '暂无年级数据，请点击右上角"新增年级"添加' }}
           />
-        </Card>
-      ),
-    },
-    {
-      key: 'demo',
-      label: (
-        <span>
-          <ExperimentOutlined />
-          演示数据管理
-        </span>
-      ),
-      children: (
-        <Card bordered={false} style={{ boxShadow: 'none' }}>
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Alert
-              message="操作须知"
-              description="重新初始化演示数据将清空当前学校的问卷、任务、测评结果等数据，并生成新的演示用数据（包括学生、教师、问卷模板等）。此操作不可恢复，请谨慎执行。"
-              type="error"
-              showIcon
-              style={{ borderRadius: 8 }}
-            />
-
-            <div
-              style={{
-                padding: 20,
-                background: '#fafafa',
-                borderRadius: 10,
-                border: '1px dashed #d9d9d9',
-              }}
-            >
-              <Space direction="vertical" size="small">
-                <Text strong>演示数据包含以下内容：</Text>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  - 示例学生账号（约 50 名，覆盖多个年级和班级）
-                </Text>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  - 示例教师账号（班主任、心理老师等角色）
-                </Text>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  - 标准问卷模板（青少年心理健康评估量表等）
-                </Text>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  - 模拟测评结果和风险数据
-                </Text>
-              </Space>
-            </div>
-
-            <Popconfirm
-              title="确定要重新初始化演示数据吗？"
-              description="此操作将清空现有数据并重新生成演示数据，不可恢复。"
-              onConfirm={handleSeedData}
-              okText="确定执行"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-            >
-              <Button type="primary" danger loading={seeding} size="large" icon={<DatabaseOutlined />}>
-                重新初始化演示数据
-              </Button>
-            </Popconfirm>
-          </Space>
         </Card>
       ),
     },

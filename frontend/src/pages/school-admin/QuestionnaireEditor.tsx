@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Tabs, Switch, InputNumber, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Switch, InputNumber, Popconfirm, Alert, Descriptions, Tag } from 'antd';
+import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, CopyOutlined } from '@ant-design/icons';
 import {
-  getQuestionnaire, createQuestionnaire, updateQuestionnaire,
+  getQuestionnaire, createQuestionnaire, updateQuestionnaire, copyQuestionnaire,
   addQuestion, updateQuestion, deleteQuestion,
   addContradiction, deleteContradiction,
   type QuestionData, type OptionData, type ContradictionGroupData, type QuestionnaireDetail,
@@ -43,6 +43,7 @@ export default function QuestionnaireEditor() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [detail, setDetail] = useState<QuestionnaireDetail | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('custom');
@@ -55,15 +56,25 @@ export default function QuestionnaireEditor() {
   const [cgModalOpen, setCgModalOpen] = useState(false);
   const [cgForm] = Form.useForm();
 
+  const isBuiltin = Boolean(detail?.is_builtin);
+
   useEffect(() => {
     if (!isNew && qid) {
       setLoading(true);
       getQuestionnaire(qid).then(d => {
+        setDetail(d);
         setTitle(d.title); setDescription(d.description); setCategory(d.category); setStatus(d.status);
         setQuestions(d.questions || []); setContradictions(d.contradiction_groups || []);
       }).finally(() => setLoading(false));
     }
   }, [qid, isNew]);
+
+  const handleCopyBuiltin = async () => {
+    if (!qid) return;
+    const res = await copyQuestionnaire(qid);
+    message.success('已复制为可编辑副本');
+    navigate(`${rolePrefix}/questionnaires/${res.data.id}/edit`);
+  };
 
   const handleSaveBase = async () => {
     setSaving(true);
@@ -145,25 +156,54 @@ export default function QuestionnaireEditor() {
   };
 
   const needsOptionsType = (type: string) => ['single_choice', 'multi_choice', 'scale'].includes(type);
+  const sourceTypeLabel = detail?.source_type === 'standard_like' ? '参考标准结构' : detail?.source_type === 'reference_screening' ? '参考性筛查' : '本校自建';
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <Card loading={loading} title={isNew ? '新建问卷' : '编辑问卷'}
+      <Card loading={loading} title={isNew ? '新建问卷' : isBuiltin ? '内置问卷预览' : '编辑问卷'}
         extra={<Space>
-          <Button icon={<SaveOutlined />} onClick={handleSaveBase} loading={saving}>保存基本信息</Button>
-          {!isNew && <Button onClick={() => setStatus(s => s === 'active' ? 'inactive' : 'active')}>{status === 'active' ? '切换为停用' : '切换为启用'}</Button>}
+          {!isBuiltin && <Button icon={<SaveOutlined />} onClick={handleSaveBase} loading={saving}>保存基本信息</Button>}
+          {!isNew && isBuiltin && <Button icon={<CopyOutlined />} type="primary" onClick={handleCopyBuiltin}>复制为副本</Button>}
+          {!isNew && !isBuiltin && <Button onClick={() => setStatus(s => s === 'active' ? 'inactive' : 'active')}>{status === 'active' ? '切换为停用' : '切换为启用'}</Button>}
         </Space>}
       >
-        <Form layout="vertical">
-          <Form.Item label="问卷标题" required><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="请输入问卷标题" /></Form.Item>
-          <Form.Item label="问卷说明"><Input.TextArea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="学生填写前的指导语" /></Form.Item>
-          <Form.Item label="问卷分类"><Select value={category} onChange={setCategory} options={categories} /></Form.Item>
-        </Form>
+        {isBuiltin && detail ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert message={detail.disclaimer || '本问卷仅用于学校教育管理和学生关怀场景下的风险关注筛查，结果不作为医学诊断依据。'} type="info" showIcon />
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="问卷名称">{detail.title}</Descriptions.Item>
+              <Descriptions.Item label="版本">V{detail.version}</Descriptions.Item>
+              <Descriptions.Item label="分类">{categories.find(item => item.value === detail.category)?.label || detail.category}</Descriptions.Item>
+              <Descriptions.Item label="来源类型">{sourceTypeLabel}</Descriptions.Item>
+              <Descriptions.Item label="适用年级" span={2}>{detail.applicable_grades || '-'}</Descriptions.Item>
+              <Descriptions.Item label="题目数量">{detail.question_count}</Descriptions.Item>
+              <Descriptions.Item label="状态">{status === 'active' ? '启用' : status}</Descriptions.Item>
+              <Descriptions.Item label="问卷说明" span={2}>{detail.description || '暂无说明'}</Descriptions.Item>
+              <Descriptions.Item label="维度定义" span={2}>
+                <Space wrap>
+                  {detail.dimensions?.length ? detail.dimensions.map(item => <Tag key={item.code}>{item.title}</Tag>) : '暂无'}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="评分规则" span={2}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.scoring_rule || {}, null, 2)}</pre>
+              </Descriptions.Item>
+              <Descriptions.Item label="风险规则" span={2}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.risk_rules || {}, null, 2)}</pre>
+              </Descriptions.Item>
+            </Descriptions>
+          </Space>
+        ) : (
+          <Form layout="vertical">
+            <Form.Item label="问卷标题" required><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="请输入问卷标题" /></Form.Item>
+            <Form.Item label="问卷说明"><Input.TextArea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="学生填写前的指导语" /></Form.Item>
+            <Form.Item label="问卷分类"><Select value={category} onChange={setCategory} options={categories} /></Form.Item>
+          </Form>
+        )}
       </Card>
 
       {!isNew && (
         <Card title={`题目列表 (${questions.length} 题)`} style={{ marginTop: 16 }}
-          extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAddQuestion}>添加题目</Button>}
+          extra={!isBuiltin ? <Button type="primary" icon={<PlusOutlined />} onClick={openAddQuestion}>添加题目</Button> : null}
         >
           {questions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无题目，点击上方按钮添加</div>
@@ -171,8 +211,8 @@ export default function QuestionnaireEditor() {
             <div>
               {questions.map((q, idx) => (
                 <Card key={q.id || idx} size="small" style={{ marginBottom: 8 }}
-                  title={<span>{idx + 1}. {q.title?.substring(0, 60)}{q.is_attention_check ? <span style={{ color: '#FA8C16', marginLeft: 8 }}>[注意力检测]</span> : ''}</span>}
-                  extra={
+                  title={<span>{idx + 1}. {q.title?.substring(0, 60)}{q.is_attention_check ? <span style={{ color: '#FA8C16', marginLeft: 8 }}>[注意力检测]</span> : ''}{q.code ? <span style={{ color: '#999', marginLeft: 8 }}>({q.code})</span> : null}</span>}
+                  extra={!isBuiltin ? (
                     <Space>
                       <Button size="small" icon={<ArrowUpOutlined />} disabled={idx === 0} onClick={() => moveQuestion(idx, -1)} />
                       <Button size="small" icon={<ArrowDownOutlined />} disabled={idx === questions.length - 1} onClick={() => moveQuestion(idx, 1)} />
@@ -181,7 +221,7 @@ export default function QuestionnaireEditor() {
                         <Button size="small" danger icon={<DeleteOutlined />} />
                       </Popconfirm>
                     </Space>
-                  }
+                  ) : null}
                 >
                   <span style={{ color: '#888', fontSize: 13 }}>{questionTypes.find(t => t.value === q.type)?.label}</span>
                   {q.dimension && <span style={{ color: '#4A90D9', fontSize: 13, marginLeft: 12 }}>维度: {dimensionLabels[q.dimension] || q.dimension}</span>}
@@ -195,7 +235,7 @@ export default function QuestionnaireEditor() {
 
       {!isNew && (
         <Card title={`矛盾题组 (${contradictions.length} 组)`} style={{ marginTop: 16 }}
-          extra={<Button icon={<PlusOutlined />} onClick={() => { cgForm.resetFields(); setCgModalOpen(true); }}>添加矛盾题组</Button>}
+          extra={!isBuiltin ? <Button icon={<PlusOutlined />} onClick={() => { cgForm.resetFields(); setCgModalOpen(true); }}>添加矛盾题组</Button> : null}
         >
           {contradictions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>暂未设置矛盾题组</div>
@@ -206,9 +246,11 @@ export default function QuestionnaireEditor() {
               return (
                 <div key={cg.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
                   <span>题目A: {qa?.title?.substring(0, 30) || cg.question_a_id} ↔ 题目B: {qb?.title?.substring(0, 30) || cg.question_b_id} ({relationTypeLabels[cg.relation_type] || cg.relation_type})</span>
-                  <Popconfirm title="确定删除？" onConfirm={() => handleDeleteCg(cg.id!, idx)}>
-                    <Button size="small" danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
+                  {!isBuiltin ? (
+                    <Popconfirm title="确定删除？" onConfirm={() => handleDeleteCg(cg.id!, idx)}>
+                      <Button size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  ) : null}
                 </div>
               );
             })
@@ -217,7 +259,7 @@ export default function QuestionnaireEditor() {
       )}
 
       {/* 题目编辑Modal */}
-      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} width={720} destroyOnHidden>
+      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen && !isBuiltin} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} width={720} destroyOnHidden>
         {editingQuestion && (
           <Form layout="vertical">
             <Form.Item label="题目标题" required><Input.TextArea value={editingQuestion.title} onChange={e => setEditingQuestion({ ...editingQuestion, title: e.target.value })} rows={2} /></Form.Item>
@@ -253,7 +295,7 @@ export default function QuestionnaireEditor() {
       </Modal>
 
       {/* 矛盾题组Modal */}
-      <Modal title="添加矛盾题组" open={cgModalOpen} onOk={saveContradiction} onCancel={() => setCgModalOpen(false)}>
+      <Modal title="添加矛盾题组" open={cgModalOpen && !isBuiltin} onOk={saveContradiction} onCancel={() => setCgModalOpen(false)}>
         <Form form={cgForm} layout="vertical">
           <Form.Item name="question_a_id" label="题目A" rules={[{ required: true }]}>
             <Select options={questions.map(q => ({ value: q.id, label: `${q.title?.substring(0, 40)}` }))} />
