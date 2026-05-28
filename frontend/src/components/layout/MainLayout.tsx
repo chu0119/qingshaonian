@@ -56,9 +56,10 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'key-students', icon: <IdcardOutlined />, label: '重点关注学生', path: '/platform/key-students' },
     { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },
-    { key: 'sms', icon: <MessageOutlined />, label: '短信通知', path: '/platform/sms' },
-    { key: 'audit', icon: <AuditOutlined />, label: '日志审计', path: '/platform/audit' },
-    { key: 'screen', icon: <FundOutlined />, label: '数据大屏', path: '/platform/screen' },
+    { key: 'screen', icon: <FundOutlined />, label: '区域数据大屏', path: '/platform/screen' },
+    { key: 'ai-analysis', icon: <RobotOutlined />, label: 'AI 研判分析', path: '/platform/ai-analysis' },
+    { key: 'notifications', icon: <MessageOutlined />, label: '通知与短信', path: '/platform/notifications' },
+    { key: 'audit-logs', icon: <AuditOutlined />, label: '日志审计', path: '/platform/audit-logs' },
     { key: 'settings', icon: <SettingOutlined />, label: '系统管理', path: '/platform/settings' },
   ],
   counselor: [
@@ -143,7 +144,9 @@ export default function MainLayout() {
         <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #1677ff, #4096ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(22,119,255,0.4)', flexShrink: 0 }}>
           <SafetyOutlined style={{ fontSize: 20, color: '#fff' }} />
         </div>
-        <span style={{ fontSize: 17, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', letterSpacing: 1 }}>青盾</span>
+        <span style={{ fontSize: 17, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', letterSpacing: 1 }}>
+          {user.role === 'platform_admin' ? '青盾 · 公安监管端' : '青盾'}
+        </span>
       </div>
     </div>
   );

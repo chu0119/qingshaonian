@@ -6,10 +6,10 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models.user import User, School, Grade, Class
 from ..models.task import Task, AnswerSheet
-from ..models.risk import RiskAlert, Intervention
+from ..models.risk import RiskAlert, Intervention, ScoringResult, QualityAssessment
 from ..models.audit import LoginLog, OperationLog
 from ..models.questionnaire import Questionnaire
-from ..models.external import SMSLog
+from ..models.external import SMSLog, AIAnalysisLog
 from ..dependencies import require_role
 from ..utils.response import APIResponse
 from ..utils.password import hash_password
@@ -633,4 +633,143 @@ def platform_send_sms(
     if not sms_sent:
         return APIResponse.success({"message": "短信发送失败", "reason": failure_reason, "sms_sent": False}, message="发送失败")
     return APIResponse.success({"message": "短信发送成功", "sms_sent": True}, message="发送成功")
+
+
+# ============ 风险预警详情 ============
+
+@router.get("/risks/{alert_id}")
+def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    alert = db.query(RiskAlert).filter(RiskAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="风险预警不存在")
+    student = db.query(User).filter(User.id == alert.student_id).first()
+    school = db.query(School).filter(School.id == alert.school_id).first()
+    sr = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == alert.answer_sheet_id).first()
+    qa = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == alert.answer_sheet_id).first()
+    interventions = db.query(Intervention).filter(Intervention.risk_alert_id == alert.id).all()
+    log_operation(db, user, request, module="platform_risk", action="view_detail",
+                  object_type="risk_alert", object_id=alert_id, object_name=student.real_name if student else "")
+    return APIResponse.success({
+        "id": alert.id, "risk_level": alert.risk_level, "risk_type": alert.risk_type or "",
+        "status": alert.status, "trigger_method": alert.trigger_method or "",
+        "student_name": student.real_name if student else "", "student_id": alert.student_id,
+        "school_name": school.name if school else "", "school_id": alert.school_id,
+        "total_score": sr.total_score if sr else 0, "dimension_scores": sr.dimension_scores if sr else {},
+        "quality_level": qa.quality_level if qa else "", "quality_score": qa.quality_score if qa else 0,
+        "interventions": [{"id": iv.id, "method": iv.method, "status": iv.status, "content": iv.content or "",
+            "created_at": iv.created_at.isoformat() if iv.created_at else None} for iv in interventions],
+        "created_at": alert.created_at.isoformat() if alert.created_at else None,
+    })
+
+
+# ============ 重点关注学生档案 ============
+
+@router.get("/key-students/{student_id}")
+def platform_student_profile(student_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    alerts = db.query(RiskAlert).filter(RiskAlert.student_id == student_id).order_by(RiskAlert.id.desc()).all()
+    interventions = db.query(Intervention).filter(Intervention.student_id == student_id).order_by(Intervention.id.desc()).all()
+    scores = db.query(ScoringResult).join(AnswerSheet).filter(AnswerSheet.student_id == student_id).order_by(ScoringResult.id.desc()).all()
+    qas = db.query(QualityAssessment).join(AnswerSheet).filter(AnswerSheet.student_id == student_id).all()
+    log_operation(db, user, request, module="platform_student", action="view_profile",
+                  object_type="student", object_id=student_id, object_name=student.real_name)
+    return APIResponse.success({
+        "student_id": student.id, "student_name": student.real_name,
+        "school_name": student.school.name if student.school else "",
+        "grade": student.grade.name if student.grade else "", "class": student.class_.name if student.class_ else "",
+        "alerts": [{"id": a.id, "risk_level": a.risk_level, "risk_type": a.risk_type or "", "status": a.status,
+            "created_at": a.created_at.isoformat() if a.created_at else None} for a in alerts],
+        "interventions": [{"id": iv.id, "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+            "created_at": iv.created_at.isoformat() if iv.created_at else None} for iv in interventions],
+        "scores": [{"total_score": s.total_score, "risk_level": s.risk_level, "dimension_scores": s.dimension_scores or {},
+            "created_at": s.created_at.isoformat() if s.created_at else None} for s in scores],
+        "quality": [{"level": q.quality_level, "score": q.quality_score, "validity": q.validity} for q in qas],
+    })
+
+
+# ============ 超期干预 ============
+
+@router.get("/interventions/overdue")
+def platform_overdue_interventions(user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    from datetime import datetime, timedelta, timezone
+    tz = timezone(timedelta(hours=8))
+    deadline = datetime.now(tz) - timedelta(days=7)
+    items = db.query(Intervention).filter(
+        Intervention.status.in_(["pending", "in_progress", "follow_up"]),
+        Intervention.created_at < deadline,
+    ).order_by(Intervention.created_at).limit(50).all()
+    return APIResponse.success({"items": [{
+        "id": iv.id, "student_id": iv.student_id, "school_id": iv.school_id,
+        "status": iv.status, "created_at": iv.created_at.isoformat() if iv.created_at else None,
+    } for iv in items], "total": len(items)})
+
+
+# ============ 督办提醒 ============
+
+@router.post("/interventions/{intervention_id}/remind")
+def platform_remind_intervention(intervention_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    iv = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not iv:
+        raise HTTPException(status_code=404, detail="干预记录不存在")
+    log_operation(db, user, request, module="platform_supervision", action="remind",
+                  object_type="intervention", object_id=intervention_id, detail=f"school_id={iv.school_id}")
+    return APIResponse.success(message="督办提醒已发送")
+
+
+# ============ AI 研判 ============
+
+@router.get("/ai-logs")
+def platform_ai_logs(page: int = Query(1), page_size: int = Query(20), user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    q = db.query(AIAnalysisLog).order_by(AIAnalysisLog.id.desc())
+    total = q.count()
+    items = q.offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({"items": [{
+        "id": l.id, "analysis_type": l.analysis_type, "model_name": l.model_name or "", "status": l.status or "",
+        "duration_ms": l.duration_ms or 0, "user_role": l.user_role or "", "error_message": l.error_message or "",
+        "created_at": l.created_at.isoformat() if l.created_at else None,
+    } for l in items], "total": total, "page": page, "page_size": page_size})
+
+
+@router.post("/ai-analysis/regional")
+def platform_ai_regional(data: dict | None = None, request: Request = None, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    summary = platform_summary(db)
+    schools = summary.get("completion_rankings", [])[:5]
+    risks = summary.get("risk_rankings", [])[:5]
+    prompt = f"""区域风险态势研判报告:
+接入学校{summary.get('school_total',0)}所, 学生{summary.get('student_total',0)}人, 风险预警{summary.get('risk_alert_total',0)}条, 待处理{summary.get('pending_risk_total',0)}条。
+学校完成率排名: {', '.join(f"{s['name']}: {s.get('completion_rate',0)}%" for s in schools)}。
+风险排名: {', '.join(f"{s['name']}: {s.get('risk_count',0)}条" for s in risks)}。
+请生成教育管理部门视角的区域风险防范态势研判。"""
+    return APIResponse.success({"analysis": prompt, "configured": False})
+
+
+# ============ 审计日志增强 ============
+
+@router.get("/audit/login-logs")
+def platform_login_logs(page: int = Query(1), page_size: int = Query(20), school_id: int | None = Query(None),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    q = db.query(LoginLog).order_by(LoginLog.id.desc())
+    if school_id: q = q.filter(LoginLog.school_id == school_id)
+    total = q.count()
+    items = q.offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({"items": [{
+        "id": l.id, "username": l.username, "user_role": l.user_role, "school_id": l.school_id,
+        "login_time": l.login_time.isoformat() if l.login_time else None,
+        "login_ip": l.login_ip or "", "result": l.result, "failure_reason": l.failure_reason or "",
+    } for l in items], "total": total, "page": page, "page_size": page_size})
+
+
+@router.get("/audit/export-logs")
+def platform_export_logs(page: int = Query(1), page_size: int = Query(20),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    q = db.query(OperationLog).filter(OperationLog.action.ilike("%export%")).order_by(OperationLog.id.desc())
+    total = q.count()
+    items = q.offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({"items": [{
+        "id": l.id, "operator_name": l.operator_name, "operator_role": l.operator_role,
+        "module": l.module, "action": l.action, "object_name": l.object_name,
+        "created_at": l.created_at.isoformat() if l.created_at else None,
+    } for l in items], "total": total, "page": page, "page_size": page_size})
 
