@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
 from ..models.user import User, Grade, Class
 from ..models.task import Task, AnswerSheet
 from ..models.risk import RiskAlert, Intervention, QualityAssessment
-from ..dependencies import require_role
+from ..dependencies import require_role, get_effective_school_id
 from ..services.stats_service import school_metrics, target_student_ids
 from ..utils.access_control import teacher_class_ids
 from ..utils.response import APIResponse
@@ -14,8 +14,8 @@ router = APIRouter(prefix="/api/v1/dashboard", tags=["看板"])
 
 
 @router.get("/school")
-def school_dashboard(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    school_id = user.school_id
+def school_dashboard(request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    school_id = get_effective_school_id(request, user)
     metrics = school_metrics(db, school_id)
     active_tasks = db.query(func.count(Task.id)).filter(Task.school_id == school_id, Task.status.in_(["not_started", "in_progress", "active"])).scalar()
 
@@ -55,9 +55,10 @@ def school_dashboard(user: User = Depends(require_role("school_admin")), db: Ses
 @router.get("/teacher")
 def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor")), db: Session = Depends(get_db)):
     class_ids = teacher_class_ids(db, user)
+    _sid = getattr(user, '_effective_school_id', None) or user.school_id
     my_students = db.query(func.count(User.id)).filter(User.class_id.in_(class_ids), User.role == "student").scalar() if class_ids else 0
 
-    tasks = [t for t in db.query(Task).filter(Task.school_id == user.school_id, Task.status.in_(["not_started", "in_progress", "active"])).all()
+    tasks = [t for t in db.query(Task).filter(Task.school_id == _sid, Task.status.in_(["not_started", "in_progress", "active"])).all()
              if set(t.target_ids or []).intersection(class_ids)]
     expected = sum(len([sid for sid in target_student_ids(db, t) if db.query(User.class_id).filter(User.id == sid).scalar() in class_ids]) for t in tasks)
     completed = (
@@ -70,7 +71,7 @@ def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor"))
     pending_risks = (
         db.query(func.count(RiskAlert.id))
         .join(User, User.id == RiskAlert.student_id)
-        .filter(RiskAlert.school_id == user.school_id, RiskAlert.status == "pending", User.class_id.in_(class_ids))
+        .filter(RiskAlert.school_id == _sid, RiskAlert.status == "pending", User.class_id.in_(class_ids))
         .scalar()
         if class_ids else 0
     )
@@ -92,7 +93,8 @@ def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor"))
 
 @router.get("/student")
 def student_dashboard(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
-    pending_count = db.query(func.count(Task.id)).filter(Task.school_id == user.school_id, Task.status == "active").scalar()
+    _sid = getattr(user, '_effective_school_id', None) or user.school_id
+    pending_count = db.query(func.count(Task.id)).filter(Task.school_id == _sid, Task.status == "active").scalar()
     completed_count = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.student_id == user.id, AnswerSheet.status == "submitted").scalar()
 
     return APIResponse.success({

@@ -66,6 +66,26 @@ def _ensure_task_fillable(task: Task) -> None:
         raise ValueError("任务已截止")
 
 
+def _compute_display_index(sheet: AnswerSheet, question_id: int, answer_content: dict | None) -> int:
+    """后端根据 option_orders 计算选项显示位置，不信任前端传入值。"""
+    if not answer_content or not isinstance(answer_content, dict):
+        return 0
+    selected_id = answer_content.get("selected_option_id")
+    if not selected_id:
+        selected_ids = answer_content.get("selected_option_ids") or []
+        selected_id = selected_ids[0] if selected_ids else None
+    if not selected_id:
+        return 0
+    option_orders = sheet.option_orders or {}
+    order_list = option_orders.get(str(question_id)) or []
+    if not order_list:
+        return 0
+    try:
+        return order_list.index(int(selected_id))
+    except (ValueError, TypeError):
+        return 0
+
+
 def save_progress(db: Session, sheet_id: int, answers: list[dict]):
     sheet = db.query(AnswerSheet).filter(AnswerSheet.id == sheet_id).first()
     if not sheet or sheet.status != "in_progress":
@@ -79,7 +99,8 @@ def save_progress(db: Session, sheet_id: int, answers: list[dict]):
         content = ans.get("answer_content")
         duration = ans.get("duration_seconds", 0)
         displayed_order = ans.get("displayed_order", 0)
-        selected_display_index = ans.get("selected_display_index", 0)
+        # 后端计算可信显示位置
+        display_idx = _compute_display_index(sheet, question_id, content)
         question = db.query(Question).filter(Question.id == question_id).first()
         if not question:
             continue
@@ -92,13 +113,13 @@ def save_progress(db: Session, sheet_id: int, answers: list[dict]):
         if existing:
             existing.answer_content = content
             existing.duration_seconds = duration
-            existing.selected_display_index = selected_display_index
+            existing.selected_display_index = display_idx
         else:
             db.add(AnswerRecord(
                 answer_sheet_id=sheet_id, question_id=question_id,
                 question_type=question.type, answer_content=content,
                 duration_seconds=duration, displayed_order=displayed_order,
-                selected_display_index=selected_display_index,
+                selected_display_index=display_idx,
             ))
     db.commit()
 

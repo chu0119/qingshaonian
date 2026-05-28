@@ -14,9 +14,9 @@ router = APIRouter(prefix="/api/v1/questionnaires", tags=["问卷管理"])
 
 def _get_accessible_questionnaire(db: Session, qid: int, user: User, writable: bool = False) -> Questionnaire:
     q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
-    if not q or (q.school_id not in (None, user.school_id) and not q.is_builtin):
+    if not q or (q.school_id not in (None, (getattr(user, '_effective_school_id', None) or user.school_id)) and not q.is_builtin):
         raise HTTPException(status_code=404, detail="问卷不存在")
-    if writable and (q.is_builtin or q.school_id != user.school_id):
+    if writable and (q.is_builtin or q.school_id != (getattr(user, '_effective_school_id', None) or user.school_id)):
         raise HTTPException(status_code=403, detail="内置问卷或其他学校问卷不可直接修改，请先复制")
     return q
 
@@ -28,13 +28,13 @@ def list_questionnaires(
     user: User = Depends(require_role("school_admin", "teacher")),
     db: Session = Depends(get_db),
 ):
-    result = qs.list_questionnaires(db, user.school_id, page, page_size, category, status, keyword)
+    result = qs.list_questionnaires(db, (getattr(user, '_effective_school_id', None) or user.school_id), page, page_size, category, status, keyword)
     return APIResponse.success(result)
 
 
 @router.post("")
 def create_questionnaire(data: QuestionnaireCreate, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
-    q = qs.create_questionnaire(db, data, user.id, user.school_id)
+    q = qs.create_questionnaire(db, data, user.id, (getattr(user, '_effective_school_id', None) or user.school_id))
     log_operation(db, user, request, module="questionnaire", action="create", object_type="questionnaire", object_id=q.id, object_name=q.title)
     return APIResponse.success({"id": q.id}, message="问卷创建成功")
 
@@ -75,7 +75,7 @@ def delete_questionnaire(qid: int, request: Request, user: User = Depends(requir
 def copy_questionnaire(qid: int, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
     try:
         _get_accessible_questionnaire(db, qid, user)
-        q = qs.copy_questionnaire(db, qid, user.id, user.school_id)
+        q = qs.copy_questionnaire(db, qid, user.id, (getattr(user, '_effective_school_id', None) or user.school_id))
         log_operation(db, user, request, module="questionnaire", action="copy", object_type="questionnaire", object_id=q.id, object_name=q.title, detail=f"source={qid}")
         return APIResponse.success({"id": q.id}, message="复制成功")
     except ValueError as e:

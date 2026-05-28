@@ -20,7 +20,7 @@ def list_classes(
     user: User = Depends(require_role("school_admin", "teacher")),
     db: Session = Depends(get_db),
 ):
-    school_id = user.school_id
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     if user.role in ("teacher", "counselor"):
         result = {"items": class_service.get_my_classes(db, user.id), "total": 0, "page": page, "page_size": page_size, "total_pages": 1}
         result["total"] = len(result["items"])
@@ -31,10 +31,10 @@ def list_classes(
 
 @router.post("")
 def create_class(data: ClassCreate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    grade = db.query(Grade).filter(Grade.id == data.grade_id, Grade.school_id == user.school_id).first()
+    grade = db.query(Grade).filter(Grade.id == data.grade_id, Grade.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not grade:
         raise HTTPException(status_code=403, detail="年级不属于当前学校")
-    c = class_service.create_class(db, user.school_id, data)
+    c = class_service.create_class(db, (getattr(user, '_effective_school_id', None) or user.school_id), data)
     log_operation(db, user, request, module="class", action="create", object_type="class", object_id=c.id, object_name=c.name)
     return APIResponse.success({"id": c.id}, message="班级创建成功")
 
@@ -72,11 +72,11 @@ def get_class(class_id: int, user: User = Depends(require_role("school_admin", "
 @router.put("/{class_id}")
 def update_class(class_id: int, data: ClassUpdate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     try:
-        klass = db.query(ClassModel).filter(ClassModel.id == class_id, ClassModel.school_id == user.school_id).first()
+        klass = db.query(ClassModel).filter(ClassModel.id == class_id, ClassModel.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
         if not klass:
             raise HTTPException(status_code=404, detail="班级不存在")
         if data.grade_id:
-            grade = db.query(Grade).filter(Grade.id == data.grade_id, Grade.school_id == user.school_id).first()
+            grade = db.query(Grade).filter(Grade.id == data.grade_id, Grade.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
             if not grade:
                 raise HTTPException(status_code=403, detail="年级不属于当前学校")
         c = class_service.update_class(db, class_id, data)
@@ -88,7 +88,7 @@ def update_class(class_id: int, data: ClassUpdate, request: Request, user: User 
 
 @router.delete("/{class_id}")
 def delete_class(class_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    klass = db.query(ClassModel).filter(ClassModel.id == class_id, ClassModel.school_id == user.school_id).first()
+    klass = db.query(ClassModel).filter(ClassModel.id == class_id, ClassModel.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not klass:
         raise HTTPException(status_code=404, detail="班级不存在")
     class_name = klass.name

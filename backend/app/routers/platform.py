@@ -158,26 +158,35 @@ def enable_school(school_id: int, request: Request, user: User = Depends(require
 
 @router.post("/schools/{school_id}/enter")
 def enter_school(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
-    """平台管理员模拟进入学校后台"""
+    """平台管理员以代入模式进入学校后台——JWT 保留平台身份并附加 school_context_id。"""
     school = db.query(School).filter(School.id == school_id).first()
     if not school:
         raise HTTPException(status_code=404, detail="学校不存在")
-    admin = db.query(User).filter(
-        User.school_id == school_id,
-        User.role == "school_admin",
-        User.status == True,
-    ).first()
-    if not admin:
-        raise HTTPException(status_code=400, detail="该学校暂无启用的管理员账号，请先创建")
-    token = create_access_token({"user_id": admin.id, "role": admin.role})
-    return APIResponse.success({"access_token": token, "user": {
-        "id": admin.id, "school_id": admin.school_id, "username": admin.username,
-        "real_name": admin.real_name, "role": admin.role,
-        "teacher_type": admin.teacher_type, "gender": admin.gender or "",
-        "phone": admin.phone or "", "student_no": admin.student_no or "",
-        "grade_id": admin.grade_id, "class_id": admin.class_id,
-        "must_change_password": admin.must_change_password,
-    }})
+    # 签发代入 token：保持平台管理员身份 + school_context_id
+    token = create_access_token({
+        "user_id": user.id,
+        "role": "platform_admin",
+        "school_context_id": school_id,
+        "acting_as": "school_view",
+    })
+    return APIResponse.success({
+        "access_token": token,
+        "user": {
+            "id": user.id,
+            "school_id": user.school_id,
+            "username": user.username,
+            "real_name": user.real_name,
+            "role": "platform_admin",
+            "teacher_type": user.teacher_type,
+            "gender": user.gender or "",
+            "phone": user.phone or "",
+            "student_no": user.student_no or "",
+            "grade_id": user.grade_id,
+            "class_id": user.class_id,
+            "must_change_password": user.must_change_password,
+        },
+        "school_context": {"id": school.id, "name": school.name},
+    })
 
 
 @router.delete("/schools/{school_id}/force")

@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/student", tags=["学生端"])
 
 @router.get("/tasks/pending")
 def pending_tasks(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
-    tasks = db.query(Task).filter(Task.status.in_(["not_started", "in_progress", "active"]), Task.school_id == user.school_id).all()
+    tasks = db.query(Task).filter(Task.status.in_(["not_started", "in_progress", "active"]), Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).all()
     items = []
     for t in tasks:
         if not task_matches_student(user, t):

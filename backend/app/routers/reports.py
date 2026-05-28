@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/reports", tags=["报表"])
 
 @router.get("/school-overview")
 def school_overview(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    school_id = user.school_id
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     grades = db.query(Grade).filter(Grade.school_id == school_id).all()
     grade_data = []
     total_students = 0
@@ -63,7 +63,7 @@ def school_overview(user: User = Depends(require_role("school_admin")), db: Sess
 
 @router.get("/risk-summary")
 def risk_summary(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    school_id = user.school_id
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     total = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == school_id).scalar()
 
     by_level = db.query(RiskAlert.risk_level, func.count(RiskAlert.id)).filter(

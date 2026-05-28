@@ -88,7 +88,7 @@ def task_quality_stats(task_id: int, user: User = Depends(require_role("school_a
 @router.get("/statistics/school")
 def school_quality_stats(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.task import Task, AnswerSheet
-    task_ids = [t.id for t in db.query(Task).filter(Task.school_id == user.school_id).all()]
+    task_ids = [t.id for t in db.query(Task).filter(Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).all()]
     if not task_ids:
         return APIResponse.success({"total": 0})
 

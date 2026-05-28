@@ -29,13 +29,13 @@ def list_students(
         if class_id and class_id not in allowed:
             raise HTTPException(status_code=403, detail="无权限访问该班级")
         class_ids = [class_id] if class_id else list(allowed)
-    result = user_service.list_users(db, user.school_id, "student", page, page_size, grade_id, class_id, keyword, class_ids=class_ids)
+    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "student", page, page_size, grade_id, class_id, keyword, class_ids=class_ids)
     return APIResponse.success(result)
 
 
 @router.post("/students")
 def create_student(data: UserCreate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    data.school_id = user.school_id
+    data.school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     data.role = "student"
     if data.class_id and not can_access_class(db, user, data.class_id):
         raise HTTPException(status_code=403, detail="班级不属于当前学校")
@@ -49,7 +49,7 @@ def create_student(data: UserCreate, request: Request, user: User = Depends(requ
 @router.post("/students/import")
 def import_students(request: Request, file: UploadFile = File(...), user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     content = file.file.read()
-    result = user_service.import_students_from_excel(db, user.school_id, content)
+    result = user_service.import_students_from_excel(db, (getattr(user, '_effective_school_id', None) or user.school_id), content)
     log_operation(
         db,
         user,
@@ -75,7 +75,7 @@ def download_template(user: User = Depends(require_role("school_admin"))):
 
 @router.get("/students/export")
 def export_students(request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    result = user_service.list_users(db, user.school_id, "student", page=1, page_size=10000)
+    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "student", page=1, page_size=10000)
     log_operation(db, user, request, module="student", action="export", object_type="student_list", detail=f"count={len(result['items'])}")
     return APIResponse.success(result["items"])
 
@@ -97,7 +97,7 @@ def get_student(student_id: int, user: User = Depends(require_role("school_admin
 @router.put("/students/{student_id}")
 def update_student(student_id: int, data: UserUpdate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     try:
-        student = db.query(User).filter(User.id == student_id, User.school_id == user.school_id, User.role == "student").first()
+        student = db.query(User).filter(User.id == student_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id), User.role == "student").first()
         if not student:
             raise HTTPException(status_code=404, detail="学生不存在")
         if data.class_id and not can_access_class(db, user, data.class_id):
@@ -111,7 +111,7 @@ def update_student(student_id: int, data: UserUpdate, request: Request, user: Us
 
 @router.delete("/students/{student_id}")
 def delete_student(student_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    student = db.query(User).filter(User.id == student_id, User.school_id == user.school_id, User.role == "student").first()
+    student = db.query(User).filter(User.id == student_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id), User.role == "student").first()
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
     student_name = student.real_name
@@ -122,7 +122,7 @@ def delete_student(student_id: int, request: Request, user: User = Depends(requi
 
 @router.put("/students/{student_id}/change-class")
 def change_student_class(student_id: int, request: Request, class_id: int = Query(...), user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    student = db.query(User).filter(User.id == student_id, User.school_id == user.school_id, User.role == "student").first()
+    student = db.query(User).filter(User.id == student_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id), User.role == "student").first()
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
     if not can_access_class(db, user, class_id):
@@ -142,9 +142,9 @@ def list_teachers(
     user: User = Depends(require_role("school_admin")),
     db: Session = Depends(get_db),
 ):
-    result = user_service.list_users(db, user.school_id, "teacher", page, page_size, keyword=keyword, teacher_type=teacher_type)
+    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "teacher", page, page_size, keyword=keyword, teacher_type=teacher_type)
     # 也包含心理老师
-    counselors = user_service.list_users(db, user.school_id, "counselor", page, page_size, keyword=keyword)
+    counselors = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "counselor", page, page_size, keyword=keyword)
     result["items"].extend(counselors["items"])
     result["total"] += counselors["total"]
     result["total_pages"] = max((result["total"] + page_size - 1) // page_size, 1)
@@ -153,7 +153,10 @@ def list_teachers(
 
 @router.post("/teachers")
 def create_teacher(data: UserCreate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    data.school_id = user.school_id
+    if data.role and data.role not in ("teacher", "counselor"):
+        raise HTTPException(status_code=400, detail="教师角色只能为 teacher 或 counselor")
+    data.role = data.role or "teacher"
+    data.school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     u = user_service.create_user(db, data)
     log_operation(db, user, request, module="teacher", action="create", object_type="user", object_id=u.id, object_name=u.real_name)
     return APIResponse.success({"id": u.id}, message="教师创建成功")
@@ -162,7 +165,7 @@ def create_teacher(data: UserCreate, request: Request, user: User = Depends(requ
 @router.get("/teachers/{teacher_id}")
 def get_teacher(teacher_id: int, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     try:
-        teacher = db.query(User).filter(User.id == teacher_id, User.school_id == user.school_id).first()
+        teacher = db.query(User).filter(User.id == teacher_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
         if not teacher or teacher.role not in ("teacher", "counselor"):
             raise HTTPException(status_code=404, detail="教师不存在")
         info = user_service.get_user_info(db, teacher_id)
@@ -174,7 +177,7 @@ def get_teacher(teacher_id: int, user: User = Depends(require_role("school_admin
 @router.put("/teachers/{teacher_id}")
 def update_teacher(teacher_id: int, data: UserUpdate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     try:
-        teacher = db.query(User).filter(User.id == teacher_id, User.school_id == user.school_id).first()
+        teacher = db.query(User).filter(User.id == teacher_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
         if not teacher or teacher.role not in ("teacher", "counselor"):
             raise HTTPException(status_code=404, detail="教师不存在")
         updated = user_service.update_user(db, teacher_id, data)
@@ -186,7 +189,7 @@ def update_teacher(teacher_id: int, data: UserUpdate, request: Request, user: Us
 
 @router.delete("/teachers/{teacher_id}")
 def delete_teacher(teacher_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    teacher = db.query(User).filter(User.id == teacher_id, User.school_id == user.school_id).first()
+    teacher = db.query(User).filter(User.id == teacher_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not teacher or teacher.role not in ("teacher", "counselor"):
         raise HTTPException(status_code=404, detail="教师不存在")
     teacher_name = teacher.real_name
@@ -197,10 +200,10 @@ def delete_teacher(teacher_id: int, request: Request, user: User = Depends(requi
 
 @router.put("/teachers/{teacher_id}/assign-classes")
 def assign_classes(teacher_id: int, request: Request, class_ids: list[int] = [], user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    teacher = db.query(User).filter(User.id == teacher_id, User.school_id == user.school_id).first()
+    teacher = db.query(User).filter(User.id == teacher_id, User.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not teacher or teacher.role not in ("teacher", "counselor"):
         raise HTTPException(status_code=404, detail="教师不存在")
-    count = db.query(Class).filter(Class.id.in_(class_ids), Class.school_id == user.school_id).count() if class_ids else 0
+    count = db.query(Class).filter(Class.id.in_(class_ids), Class.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).count() if class_ids else 0
     if count != len(set(class_ids)):
         raise HTTPException(status_code=403, detail="包含不属于当前学校的班级")
     user_service.assign_teacher_classes(db, teacher_id, class_ids)

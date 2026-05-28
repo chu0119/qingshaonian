@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/v1/risks", tags=["风险预警"])
 @router.get("")
 def list_risks(page: int = Query(1), page_size: int = Query(20), status: str = Query(""),
                user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
-    q = db.query(RiskAlert).filter(RiskAlert.school_id == user.school_id)
+    q = db.query(RiskAlert).filter(RiskAlert.school_id == (getattr(user, '_effective_school_id', None) or user.school_id))
     if status:
         q = q.filter(RiskAlert.status == status)
     all_alerts = q.order_by(RiskAlert.id.desc()).all()
@@ -46,7 +46,7 @@ def list_risks(page: int = Query(1), page_size: int = Query(20), status: str = Q
 
 @router.get("/{alert_id}")
 def get_risk_detail(alert_id: int, request: Request, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
-    alert = db.query(RiskAlert).filter(RiskAlert.id == alert_id, RiskAlert.school_id == user.school_id).first()
+    alert = db.query(RiskAlert).filter(RiskAlert.id == alert_id, RiskAlert.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not alert:
         raise HTTPException(status_code=404, detail="预警不存在")
     student = db.query(User).filter(User.id == alert.student_id).first()

@@ -22,7 +22,7 @@ def list_sms_templates(user: User = Depends(require_role("platform_admin", "scho
 def list_sms_logs(user: User = Depends(require_role("platform_admin", "school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     q = db.query(SMSLog)
     if user.role != "platform_admin":
-        q = q.filter(SMSLog.school_id == user.school_id)
+        q = q.filter(SMSLog.school_id == (getattr(user, '_effective_school_id', None) or user.school_id))
     if user.role in ("teacher", "counselor"):
         q = q.filter(SMSLog.sender_id == user.id)
     logs = q.order_by(SMSLog.id.desc()).limit(100).all()
@@ -50,7 +50,7 @@ def send_sms(data: dict, request: Request, user: User = Depends(require_role("pl
     recipient = db.query(User).filter(User.id == int(recipient_id)).first()
     if not recipient:
         raise HTTPException(status_code=404, detail="接收人不存在")
-    if user.role != "platform_admin" and recipient.school_id != user.school_id:
+    if user.role != "platform_admin" and recipient.school_id != (getattr(user, '_effective_school_id', None) or user.school_id):
         raise HTTPException(status_code=403, detail="不能给其他学校人员发送短信")
     if user.role in ("teacher", "counselor") and not (recipient.id == user.id or can_access_student(db, user, recipient)):
         raise HTTPException(status_code=403, detail="无权限给该人员发送短信")
@@ -70,7 +70,7 @@ def retry_sms(log_id: int, request: Request, user: User = Depends(require_role("
     recipient = db.query(User).filter(User.id == old.recipient_user_id).first()
     if not recipient:
         raise HTTPException(status_code=404, detail="接收人不存在")
-    if user.role != "platform_admin" and old.school_id != user.school_id:
+    if user.role != "platform_admin" and old.school_id != (getattr(user, '_effective_school_id', None) or user.school_id):
         raise HTTPException(status_code=403, detail="无权限重试该短信")
     if user.role in ("teacher", "counselor") and old.sender_id != user.id:
         raise HTTPException(status_code=403, detail="无权限重试该短信")

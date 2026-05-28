@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/interventions", tags=["干预记录"])
 @router.get("")
 def list_interventions(page: int = Query(1), page_size: int = Query(20), status: str = Query(""),
                        user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
-    q = db.query(Intervention).filter(Intervention.school_id == user.school_id)
+    q = db.query(Intervention).filter(Intervention.school_id == (getattr(user, '_effective_school_id', None) or user.school_id))
     if user.role in ("teacher", "counselor"):
         q = q.filter(Intervention.teacher_id == user.id)
     if status:
@@ -47,7 +47,7 @@ def create_intervention(data: dict, request: Request, user: User = Depends(requi
         raise HTTPException(status_code=403, detail="无权限访问该学生")
     risk_alert_id = data.get("risk_alert_id")
     if risk_alert_id:
-        alert = db.query(RiskAlert).filter(RiskAlert.id == risk_alert_id, RiskAlert.school_id == user.school_id).first()
+        alert = db.query(RiskAlert).filter(RiskAlert.id == risk_alert_id, RiskAlert.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
         if not alert or alert.student_id != student_id:
             raise HTTPException(status_code=403, detail="预警不属于该学生")
 
@@ -59,7 +59,7 @@ def create_intervention(data: dict, request: Request, user: User = Depends(requi
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
 
     inv = Intervention(
-        school_id=user.school_id, student_id=student_id,
+        school_id=(getattr(user, '_effective_school_id', None) or user.school_id), student_id=student_id,
         risk_alert_id=risk_alert_id, teacher_id=user.id,
         intervention_time=parse_dt(data.get("intervention_time")) or datetime.now(),
         method=data.get("method", "other"), content=data.get("content", ""),
@@ -77,7 +77,7 @@ def create_intervention(data: dict, request: Request, user: User = Depends(requi
 
 @router.put("/{intervention_id}")
 def update_intervention(intervention_id: int, data: dict, request: Request, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
-    inv = db.query(Intervention).filter(Intervention.id == intervention_id, Intervention.school_id == user.school_id).first()
+    inv = db.query(Intervention).filter(Intervention.id == intervention_id, Intervention.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not inv:
         raise HTTPException(status_code=404, detail="干预记录不存在")
     if user.role in ("teacher", "counselor") and inv.teacher_id != user.id:

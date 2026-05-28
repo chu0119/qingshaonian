@@ -24,7 +24,6 @@ export default function SchoolManagement() {
   const [enteringSchool, setEnteringSchool] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [resetForm] = Form.useForm();
-  const setAuth = useAuthStore(s => s.setAuth);
   const savePlatformSession = useAuthStore(s => s.savePlatformSession);
 
   const fetchData = useCallback(async () => {

@@ -76,7 +76,14 @@ export default function MainLayout() {
 
   if (!user) return null;
 
-  const effectiveRole = user.role;
+  // 代入模式下：按 URL 前缀选择菜单，而不是 user.role
+  let effectiveRole = user.role;
+  if (isImpersonating) {
+    if (location.pathname.startsWith('/teacher/')) effectiveRole = 'teacher';
+    else if (location.pathname.startsWith('/counselor/')) effectiveRole = 'counselor';
+    else if (location.pathname.startsWith('/student/')) effectiveRole = 'student';
+    else if (location.pathname.startsWith('/school-admin/')) effectiveRole = 'school_admin';
+  }
   const menuItems = menuConfigs[effectiveRole] || [];
   const currentKey = menuItems.find((item) => location.pathname.startsWith(item.path))?.key || 'dashboard';
 
@@ -96,7 +103,7 @@ export default function MainLayout() {
   };
 
   const userMenuItems: MenuProps['items'] = [
-    { key: 'info', label: (<div style={{ padding: '4px 0' }}><div style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{user.real_name}</div><div style={{ fontSize: 12, color: '#8c8c8c' }}>{roleLabels[user.role] || user.role}</div></div>), disabled: true },
+    { key: 'info', label: (<div style={{ padding: '4px 0' }}><div style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{user.real_name}</div><div style={{ fontSize: 12, color: '#8c8c8c' }}>{isImpersonating ? '平台管理员' : (roleLabels[user.role] || user.role)}</div></div>), disabled: true },
     { type: 'divider' as const },
     { key: 'changePassword', icon: <KeyOutlined />, label: '修改密码' },
     { type: 'divider' as const },
@@ -184,7 +191,7 @@ export default function MainLayout() {
               {!isMobile && (
                 <div style={{ lineHeight: 1.3 }}>
                   <div style={{ fontSize: 14, fontWeight: 500, color: '#262626' }}>{user.real_name}</div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>{roleLabels[user.role] || ''}</div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>{isImpersonating ? '平台管理员' : (roleLabels[user.role] || '')}</div>
                 </div>
               )}
             </div>

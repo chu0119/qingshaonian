@@ -96,8 +96,18 @@ def change_password(request: ChangePasswordRequest, user: User = Depends(get_cur
 
 
 @router.put("/reset-password/{user_id}")
-def reset_password(user_id: int, request: ResetPasswordRequest, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    auth_service.reset_user_password(db, user_id, request.new_password)
+def reset_password(user_id: int, request_data: ResetPasswordRequest, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.role == "platform_admin":
+        raise HTTPException(status_code=403, detail="不能重置平台管理员密码")
+    if target.school_id != user.school_id:
+        raise HTTPException(status_code=403, detail="只能重置本校用户密码")
+    auth_service.reset_user_password(db, user_id, request_data.new_password)
+    log_operation(db, user=user, request=request, module="auth", action="reset_password",
+                  object_type="user", object_id=user_id, object_name=target.real_name,
+                  detail=f"operator_school={user.school_id}")
     return APIResponse.success(message="密码重置成功")
 
 

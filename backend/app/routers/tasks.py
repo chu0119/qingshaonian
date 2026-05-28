@@ -34,7 +34,7 @@ def list_tasks(
     user: User = Depends(require_role("school_admin", "teacher")),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Task).filter(Task.school_id == user.school_id)
+    q = db.query(Task).filter(Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id))
     if status:
         q = q.filter(Task.status == status)
     if user.role in ("teacher", "counselor"):
@@ -83,7 +83,7 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
     if not questionnaire_id:
         raise HTTPException(status_code=400, detail="问卷ID不能为空")
     qnr = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
-    if qnr and not (qnr.school_id == user.school_id or qnr.is_builtin):
+    if qnr and not (qnr.school_id == (getattr(user, '_effective_school_id', None) or user.school_id) or qnr.is_builtin):
         qnr = None
     if not qnr:
         raise HTTPException(status_code=404, detail="问卷不存在或无权限访问")
@@ -95,7 +95,7 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
         if target_type != "class" or not set(target_ids).issubset(allowed_classes):
             raise HTTPException(status_code=403, detail="只能向自己负责的班级发布任务")
     elif target_type == "class":
-        count = db.query(Class).filter(Class.id.in_(target_ids), Class.school_id == user.school_id).count() if target_ids else 0
+        count = db.query(Class).filter(Class.id.in_(target_ids), Class.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).count() if target_ids else 0
         if count != len(set(target_ids)):
             raise HTTPException(status_code=403, detail="包含不属于本校的班级")
 
@@ -113,7 +113,7 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
         status_value = "in_progress"
     published_at = datetime.now() if status_value != "draft" else None
     task = Task(
-        school_id=user.school_id, questionnaire_id=questionnaire_id,
+        school_id=(getattr(user, '_effective_school_id', None) or user.school_id), questionnaire_id=questionnaire_id,
         name=data.get("name", ""), target_type=target_type,
         target_ids=target_ids, start_time=parse_dt(data.get("start_time")),
         end_time=parse_dt(data.get("end_time")), shuffle_questions=data.get("shuffle_questions", False),
@@ -227,7 +227,7 @@ def extend_task(task_id: int, data: dict, request: Request, user: User = Depends
 
 @router.post("/{task_id}/archive")
 def archive_task(task_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    task = db.query(Task).filter(Task.id == task_id, Task.school_id == user.school_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     task.status = "archived"

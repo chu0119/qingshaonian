@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/system", tags=["系统设置"])
 @router.get("/school-info")
 def get_school_info(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import School
-    school = db.query(School).filter(School.id == user.school_id).first()
+    school = db.query(School).filter(School.id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if school:
         return APIResponse.success({
             "id": school.id,
@@ -32,7 +32,7 @@ ALLOWED_SCHOOL_FIELDS = {"name", "address", "phone"}
 @router.put("/school-info")
 def update_school_info(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import School
-    school = db.query(School).filter(School.id == user.school_id).first()
+    school = db.query(School).filter(School.id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not school:
         raise HTTPException(status_code=404, detail="学校信息不存在")
     for k, v in data.items():
@@ -109,7 +109,7 @@ def update_risk_config(data: dict, user: User = Depends(require_role("school_adm
 def get_grades_for_admin(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import Grade
     grades = db.query(Grade).filter(
-        Grade.school_id == user.school_id,
+        Grade.school_id == (getattr(user, '_effective_school_id', None) or user.school_id),
         Grade.status == True
     ).order_by(Grade.sort_order).all()
     return APIResponse.success([{"id": g.id, "name": g.name, "sort_order": g.sort_order} for g in grades])
@@ -122,14 +122,14 @@ def create_grade(data: dict, user: User = Depends(require_role("school_admin")),
     if not name:
         raise HTTPException(status_code=400, detail="年级名称不能为空")
     existing = db.query(Grade).filter(
-        Grade.school_id == user.school_id,
+        Grade.school_id == (getattr(user, '_effective_school_id', None) or user.school_id),
         Grade.name == name,
         Grade.status == True,
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"年级「{name}」已存在")
     grade = Grade(
-        school_id=user.school_id,
+        school_id=(getattr(user, '_effective_school_id', None) or user.school_id),
         name=name,
         sort_order=data.get("sort_order", 0),
     )
@@ -144,7 +144,7 @@ def delete_grade(grade_id: int, user: User = Depends(require_role("school_admin"
     from ..models.user import Grade
     grade = db.query(Grade).filter(
         Grade.id == grade_id,
-        Grade.school_id == user.school_id,
+        Grade.school_id == (getattr(user, '_effective_school_id', None) or user.school_id),
     ).first()
     if not grade:
         raise HTTPException(status_code=404, detail="年级不存在")
@@ -157,7 +157,7 @@ def delete_grade(grade_id: int, user: User = Depends(require_role("school_admin"
 def seed_demo(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     if settings.APP_ENV.lower() not in {"demo", "development"}:
         raise HTTPException(status_code=403, detail="当前环境不允许初始化演示数据")
-    seeded = seed_demo_data(db, school_id=user.school_id, current_settings=settings)
+    seeded = seed_demo_data(db, school_id=(getattr(user, '_effective_school_id', None) or user.school_id), current_settings=settings)
     return APIResponse.success({"seeded_school_ids": seeded}, message="演示数据初始化完成")
 
 
