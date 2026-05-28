@@ -78,12 +78,11 @@ export default function SchoolManagement() {
         localStorage.setItem('platform_school_name', school.name);
       }
       const result = await enterSchool(schoolId);
-      setAuth(result.user, result.access_token);
+      // 直接写 localStorage，不用 setAuth 避免触发当前页面重渲染导致 403
+      localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('access_token', result.access_token);
       message.success('已切换到学校视角');
-      // 用 setTimeout 确保 token 已持久化后再跳转，避免闪现无权限
-      setTimeout(() => {
-        window.location.replace('/school-admin/dashboard');
-      }, 100);
+      window.location.replace('/school-admin/dashboard');
     } catch (err: any) {
       message.error(err?.response?.data?.detail || '进入失败');
     } finally {
