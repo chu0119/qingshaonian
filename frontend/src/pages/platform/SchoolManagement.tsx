@@ -71,6 +71,11 @@ export default function SchoolManagement() {
   const handleEnterSchool = async (schoolId: number) => {
     setEnteringSchool(schoolId);
     try {
+      const school = data.find((s: any) => s.id === schoolId);
+      setAuth.savePlatformSession();
+      if (school) {
+        localStorage.setItem('platform_school_name', school.name);
+      }
       const result = await enterSchool(schoolId);
       setAuth(result.user, result.access_token);
       message.success('已切换到学校视角');

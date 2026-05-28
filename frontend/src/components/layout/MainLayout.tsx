@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Button, Dropdown, Avatar, Drawer, Modal, Form, Input, message, Typography } from 'antd';
+import { Layout, Menu, Button, Dropdown, Avatar, Drawer, Modal, Form, Input, message, Typography, Alert } from 'antd';
 import {
   DashboardOutlined, TeamOutlined, UserOutlined, FileTextOutlined,
   AlertOutlined, SettingOutlined, BarChartOutlined,
@@ -72,6 +72,9 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const isImpersonating = useAuthStore(s => s.hasPlatformSession && s.hasPlatformSession());
+  const platformSchoolName = useAuthStore(s => s.platformSchoolName());
+  const restorePlatformSession = useAuthStore(s => s.restorePlatformSession);
 
   if (!user) return null;
 
@@ -189,6 +192,24 @@ export default function MainLayout() {
             </div>
           </Dropdown>
         </Header>
+
+        {isImpersonating && (
+          <Alert
+            type="info"
+            showIcon
+            message={
+              <span>当前通过平台管理员视角查看 <b>{platformSchoolName}</b> 的数据</span>
+            }
+            action={
+              <Button size="small" type="primary" onClick={() => {
+                restorePlatformSession();
+                window.location.href = '/platform/dashboard';
+              }}>← 返回平台管理</Button>
+            }
+            style={{ margin: isMobile ? '12px 8px 0' : '20px 24px 0', borderRadius: 8 }}
+            closable
+          />
+        )}
 
         <Content style={{ margin: isMobile ? '12px 8px' : '20px 24px 24px', padding: isMobile ? 16 : 24, background: '#ffffff', borderRadius: 12, minHeight: 280, boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
           <Outlet />
