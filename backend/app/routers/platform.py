@@ -2,7 +2,7 @@ import json
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func
 from ..database import get_db
 from ..models.user import User, School, Grade, Class
 from ..models.task import Task, AnswerSheet
@@ -381,14 +381,18 @@ def platform_risk_alerts(
         q = q.filter(User.real_name.contains(keyword))
     total = q.count()
     items = q.order_by(RiskAlert.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    students = {u.id: u for u in db.query(User).filter(User.id.in_([a.student_id for a in items])).all()} if items else {}
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([a.school_id for a in items])).all()) if items else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
     return APIResponse.success({
         "items": [{
-            "id": a.id, "student_id": a.student_id, "student_name": a.student.real_name if a.student else "",
-            "school_id": a.school_id, "school_name": a.school.name if a.school else "",
+            "id": a.id, "student_id": a.student_id, "student_name": students.get(a.student_id).real_name if students.get(a.student_id) else "",
+            "school_id": a.school_id, "school_name": school_names.get(a.school_id, ""),
             "risk_level": a.risk_level, "risk_type": a.risk_type or "",
             "status": a.status, "created_at": a.created_at.isoformat() if a.created_at else None,
-            "student_grade": (a.student.grade.name if a.student and a.student.grade else ""),
-            "student_class": (a.student.class_.name if a.student and a.student.class_ else ""),
+            "student_grade": grade_names.get(students[a.student_id].grade_id, "") if a.student_id in students else "",
+            "student_class": class_names.get(students[a.student_id].class_id, "") if a.student_id in students else "",
         } for a in items],
         "total": total, "page": page, "page_size": page_size,
     })
@@ -409,9 +413,13 @@ def platform_key_students(
         q = q.filter(RiskAlert.risk_level == risk_level)
     total = q.count()
     alerts = q.order_by(
-        func.field(RiskAlert.risk_level, "urgent", "high"),
+        case((RiskAlert.risk_level == "urgent", 0), (RiskAlert.risk_level == "high", 1), else_=2),
         RiskAlert.id.desc()
     ).offset((page - 1) * page_size).limit(page_size).all()
+    students = {u.id: u for u in db.query(User).filter(User.id.in_([a.student_id for a in alerts])).all()} if alerts else {}
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([a.school_id for a in alerts])).all()) if alerts else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
 
     def _latest_score(student_id):
         sr = db.query(ScoringResult).join(AnswerSheet).filter(
@@ -425,10 +433,10 @@ def platform_key_students(
     return APIResponse.success({
         "items": [{
             **{k: v for k, v in a.__dict__.items() if not k.startswith("_")},
-            "student_name": a.student.real_name if a.student else "",
-            "school_name": a.school.name if a.school else "",
-            "student_grade": (a.student.grade.name if a.student and a.student.grade else ""),
-            "student_class": (a.student.class_.name if a.student and a.student.class_ else ""),
+            "student_name": students.get(a.student_id).real_name if students.get(a.student_id) else "",
+            "school_name": school_names.get(a.school_id, ""),
+            "student_grade": grade_names.get(students[a.student_id].grade_id, "") if a.student_id in students else "",
+            "student_class": class_names.get(students[a.student_id].class_id, "") if a.student_id in students else "",
             "latest_score": _latest_score(a.student_id),
             "created_at": a.created_at.isoformat() if a.created_at else None,
         } for a in alerts],
@@ -450,10 +458,11 @@ def platform_tasks(
         q = q.filter(Task.status == status)
     total = q.count()
     tasks = q.order_by(Task.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([t.school_id for t in tasks])).all()) if tasks else {}
     return APIResponse.success({
         "items": [{
             "id": t.id, "name": t.name, "school_id": t.school_id,
-            "school_name": t.school.name if t.school else "",
+            "school_name": school_names.get(t.school_id, ""),
             "status": t.status, "questionnaire_title": (t.questionnaire.title if t.questionnaire else ""),
             "created_by_name": (t.created_by_user.real_name if hasattr(t, 'created_by_user') and t.created_by_user else ""),
             "start_time": t.start_time.isoformat() if t.start_time else None,
@@ -478,12 +487,15 @@ def platform_interventions(
         q = q.filter(Intervention.status == status)
     total = q.count()
     items = q.order_by(Intervention.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    student_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.student_id for iv in items])).all()) if items else {}
+    teacher_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.teacher_id for iv in items if iv.teacher_id])).all()) if items else {}
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([iv.school_id for iv in items])).all()) if items else {}
     return APIResponse.success({
         "items": [{
             "id": iv.id, "student_id": iv.student_id, "school_id": iv.school_id,
-            "student_name": iv.student.real_name if iv.student else "",
-            "school_name": iv.school.name if iv.school else "",
-            "teacher_name": iv.teacher.real_name if iv.teacher else "",
+            "student_name": student_names.get(iv.student_id, ""),
+            "school_name": school_names.get(iv.school_id, ""),
+            "teacher_name": teacher_names.get(iv.teacher_id, ""),
             "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
             "need_follow_up": iv.need_follow_up,
             "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,

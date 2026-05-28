@@ -102,12 +102,13 @@ def reset_password(user_id: int, request_data: ResetPasswordRequest, request: Re
         raise HTTPException(status_code=404, detail="用户不存在")
     if target.role == "platform_admin":
         raise HTTPException(status_code=403, detail="不能重置平台管理员密码")
-    if target.school_id != user.school_id:
+    effective_school_id = getattr(user, '_effective_school_id', None) or user.school_id
+    if target.school_id != effective_school_id:
         raise HTTPException(status_code=403, detail="只能重置本校用户密码")
     auth_service.reset_user_password(db, user_id, request_data.new_password)
     log_operation(db, user=user, request=request, module="auth", action="reset_password",
                   object_type="user", object_id=user_id, object_name=target.real_name,
-                  detail=f"operator_school={user.school_id}")
+                  detail=f"operator_school={effective_school_id}")
     return APIResponse.success(message="密码重置成功")
 
 
