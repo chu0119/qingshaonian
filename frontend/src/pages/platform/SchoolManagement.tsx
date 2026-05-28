@@ -80,7 +80,10 @@ export default function SchoolManagement() {
       const result = await enterSchool(schoolId);
       setAuth(result.user, result.access_token);
       message.success('已切换到学校视角');
-      window.location.href = '/school-admin/dashboard';
+      // 用 setTimeout 确保 token 已持久化后再跳转，避免闪现无权限
+      setTimeout(() => {
+        window.location.replace('/school-admin/dashboard');
+      }, 100);
     } catch (err: any) {
       message.error(err?.response?.data?.detail || '进入失败');
     } finally {
