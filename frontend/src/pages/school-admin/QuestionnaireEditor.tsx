@@ -8,6 +8,7 @@ import {
   addContradiction, deleteContradiction,
   type QuestionData, type OptionData, type ContradictionGroupData, type QuestionnaireDetail,
 } from '../../api/questionnaires';
+import { getDictGrades } from '../../api/users';
 
 const questionTypes = [
   { value: 'single_choice', label: '单选题' }, { value: 'multi_choice', label: '多选题' },
@@ -31,10 +32,6 @@ const categories = [
   { value: 'internet_addiction', label: '网络沉迷评估' }, { value: 'family_relationship', label: '家庭关系调查' },
   { value: 'safety_awareness', label: '安全意识测评' }, { value: 'interpersonal', label: '人际关系测评' },
   { value: 'academic_pressure', label: '学业压力测评' }, { value: 'custom', label: '综合' },
-];
-const gradeOptions = [
-  { value: '初一', label: '初一' }, { value: '初二', label: '初二' }, { value: '初三', label: '初三' },
-  { value: '高一', label: '高一' }, { value: '高二', label: '高二' }, { value: '高三', label: '高三' },
 ];
 
 const emptyOption = (): OptionData => ({ content: '', score: 0, sort_order: 0, is_risk_option: false });
@@ -76,6 +73,7 @@ export default function QuestionnaireEditor() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('custom');
   const [applicableGrades, setApplicableGrades] = useState<string[]>([]);
+  const [gradeOptions, setGradeOptions] = useState<{ value: string; label: string }[]>([]);
   const [status, setStatus] = useState('draft');
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [contradictions, setContradictions] = useState<ContradictionGroupData[]>([]);
@@ -91,6 +89,12 @@ export default function QuestionnaireEditor() {
   const [riskRules, setRiskRules] = useState<Record<string, unknown>>({});
 
   const isBuiltin = Boolean(detail?.is_builtin);
+
+  useEffect(() => {
+    getDictGrades()
+      .then(items => setGradeOptions(items.map(g => ({ value: g.label, label: g.label }))))
+      .catch(() => setGradeOptions([]));
+  }, []);
 
   useEffect(() => {
     if (!isNew && qid) {
@@ -252,7 +256,7 @@ export default function QuestionnaireEditor() {
             <Form.Item label="问卷标题" required><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="请输入问卷标题" /></Form.Item>
             <Form.Item label="问卷说明"><Input.TextArea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="学生填写前的指导语" /></Form.Item>
             <Form.Item label="问卷分类"><Select value={category} onChange={setCategory} options={categories} /></Form.Item>
-            <Form.Item label="适用年级"><Select mode="multiple" value={applicableGrades} onChange={setApplicableGrades} options={gradeOptions} placeholder="选择适用年级（可选）" /></Form.Item>
+            <Form.Item label="适用年级"><Select mode="multiple" value={applicableGrades} onChange={setApplicableGrades} options={gradeOptions} placeholder={gradeOptions.length ? '选择适用年级（可选）' : '请先在系统设置中配置年级'} disabled={!gradeOptions.length} /></Form.Item>
 
             <Collapse ghost style={{ marginBottom: 16 }}>
               <Collapse.Panel header="维度定义" key="dimensions">

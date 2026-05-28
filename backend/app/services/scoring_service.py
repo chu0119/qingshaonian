@@ -6,7 +6,7 @@ from ..models.task import Task, AnswerSheet, AnswerRecord
 from ..models.questionnaire import Question, Option, ContradictionGroup, Questionnaire
 from ..models.risk import ScoringResult, QualityAssessment, RiskAlert
 from ..models.user import User
-from ..utils.access_control import task_matches_student
+from ..utils.access_control import task_is_answerable, task_matches_student
 
 tz = timezone(timedelta(hours=8))
 
@@ -24,6 +24,12 @@ def start_answer(db: Session, task_id: int, student_id: int) -> AnswerSheet:
     if existing:
         if existing.status == "submitted" and not task.allow_edit:
             raise ValueError("本次问卷已提交，不能重复提交")
+        if existing.status == "submitted" and task.allow_edit:
+            existing.status = "in_progress"
+            existing.started_at = datetime.now(tz)
+            existing.submitted_at = None
+            db.commit()
+            db.refresh(existing)
         return existing
 
     questions = db.query(Question).filter(Question.questionnaire_id == task.questionnaire_id).order_by(Question.sort_order).all()
@@ -53,17 +59,19 @@ def start_answer(db: Session, task_id: int, student_id: int) -> AnswerSheet:
 
 
 def _ensure_task_fillable(task: Task) -> None:
-    now = datetime.now()
     if task.status in ("closed", "archived"):
         raise ValueError("任务已关闭")
-    if task.status in ("draft", "not_started", "pending"):
+    if task.status in ("draft", "pending"):
         raise ValueError("任务尚未开始")
     if task.status in ("ended", "expired"):
         raise ValueError("任务已截止")
-    if task.start_time and task.start_time > now:
+    if not task_is_answerable(task):
+        now = datetime.now()
+        if task.start_time and task.start_time > now:
+            raise ValueError("任务尚未开始")
+        if task.end_time and task.end_time < now:
+            raise ValueError("任务已截止")
         raise ValueError("任务尚未开始")
-    if task.end_time and task.end_time < now:
-        raise ValueError("任务已截止")
 
 
 def _compute_display_index(sheet: AnswerSheet, question_id: int, answer_content: dict | None) -> int:

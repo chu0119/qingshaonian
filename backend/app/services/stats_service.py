@@ -14,6 +14,14 @@ DONE_RISK_STATUSES = ("completed", "closed", "resolved")
 ACTIVE_TASK_STATUSES = ("not_started", "in_progress")
 
 
+def target_snapshot_student_ids(task: Task) -> list[int]:
+    snapshot = task.target_snapshot or {}
+    ids = snapshot.get("student_ids")
+    if task.status != "draft" and isinstance(ids, list):
+        return [int(sid) for sid in ids if str(sid).isdigit()]
+    return []
+
+
 def school_metrics(db: Session, school_id: int) -> dict:
     students = db.query(func.count(User.id)).filter(User.school_id == school_id, User.role == "student").scalar() or 0
     teachers = db.query(func.count(User.id)).filter(User.school_id == school_id, User.role.in_(["teacher", "counselor"])).scalar() or 0
@@ -30,7 +38,7 @@ def school_metrics(db: Session, school_id: int) -> dict:
     sms_sends = db.query(func.count(SMSLog.id)).filter(SMSLog.school_id == school_id).scalar() or 0
 
     expected = 0
-    for task in db.query(Task).filter(Task.school_id == school_id, Task.status != "draft").all():
+    for task in db.query(Task).filter(Task.school_id == school_id, Task.status.notin_(["draft", "archived"])).all():
         expected += len(target_student_ids(db, task))
     completed = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.school_id == school_id, AnswerSheet.status == "submitted").scalar() or sheets
     valid = (
@@ -70,6 +78,9 @@ def school_metrics(db: Session, school_id: int) -> dict:
 
 
 def target_student_ids(db: Session, task: Task) -> list[int]:
+    snapshot_ids = target_snapshot_student_ids(task)
+    if snapshot_ids:
+        return snapshot_ids
     q = db.query(User.id).filter(User.school_id == task.school_id, User.role == "student", User.status == True)
     target_ids = task.target_ids or []
     if task.target_type == "grade":

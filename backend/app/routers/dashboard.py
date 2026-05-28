@@ -7,7 +7,7 @@ from ..models.task import Task, AnswerSheet
 from ..models.risk import RiskAlert, Intervention, QualityAssessment
 from ..dependencies import require_role, get_effective_school_id
 from ..services.stats_service import school_metrics, target_student_ids
-from ..utils.access_control import teacher_class_ids
+from ..utils.access_control import effective_task_status, teacher_class_ids
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["看板"])
@@ -94,7 +94,7 @@ def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor"))
 @router.get("/student")
 def student_dashboard(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
     _sid = getattr(user, '_effective_school_id', None) or user.school_id
-    pending_count = db.query(func.count(Task.id)).filter(Task.school_id == _sid, Task.status == "active").scalar()
+    pending_count = sum(1 for task in db.query(Task).filter(Task.school_id == _sid, Task.status.in_(["not_started", "in_progress", "active"])).all() if effective_task_status(task) in ("not_started", "in_progress"))
     completed_count = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.student_id == user.id, AnswerSheet.status == "submitted").scalar()
 
     return APIResponse.success({

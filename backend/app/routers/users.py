@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models.user import Class, User
+from ..models.user import Class, TeacherClass, User
 from ..schemas.user import UserCreate, UserUpdate
 from ..dependencies import get_current_user, require_role
 from ..services import user_service
@@ -196,6 +196,26 @@ def delete_teacher(teacher_id: int, request: Request, user: User = Depends(requi
     user_service.delete_user(db, teacher_id)
     log_operation(db, user, request, module="teacher", action="delete", object_type="user", object_id=teacher_id, object_name=teacher_name)
     return APIResponse.success(message="教师删除成功")
+
+
+@router.get("/teachers/{teacher_id}/assigned-classes")
+def get_teacher_assigned_classes(teacher_id: int, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    school_id = getattr(user, '_effective_school_id', None) or user.school_id
+    teacher = db.query(User).filter(User.id == teacher_id, User.school_id == school_id).first()
+    if not teacher or teacher.role not in ("teacher", "counselor"):
+        raise HTTPException(status_code=404, detail="教师不存在")
+    assigned = {
+        row[0] for row in db.query(TeacherClass.class_id)
+        .join(Class, Class.id == TeacherClass.class_id)
+        .filter(TeacherClass.teacher_id == teacher_id, Class.school_id == school_id)
+        .all()
+    }
+    direct = {
+        row[0] for row in db.query(Class.id)
+        .filter(Class.school_id == school_id, (Class.head_teacher_id == teacher_id) | (Class.counselor_id == teacher_id))
+        .all()
+    }
+    return APIResponse.success(sorted(assigned | direct))
 
 
 @router.put("/teachers/{teacher_id}/assign-classes")

@@ -83,6 +83,11 @@ export async function assignTeacherClasses(teacherId: number, classIds: number[]
   return res.data;
 }
 
+export async function getTeacherAssignedClasses(teacherId: number) {
+  const res = await client.get(`/users/teachers/${teacherId}/assigned-classes`);
+  return res.data.data as number[];
+}
+
 export async function getDictGrades() {
   const res = await client.get('/common/dict/grades');
   return res.data.data as { value: number; label: string }[];

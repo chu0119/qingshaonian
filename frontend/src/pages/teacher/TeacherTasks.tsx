@@ -18,6 +18,7 @@ export default function TeacherTasks() {
   const [classes, setClasses] = useState<any[]>([]);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionErrors, setOptionErrors] = useState<{ classes?: string; questionnaires?: string }>({});
 
   useEffect(() => {
     if (activeTab === 'tasks') {
@@ -31,18 +32,18 @@ export default function TeacherTasks() {
 
   const fetchPublishOptions = async () => {
     setOptionsLoading(true);
-    try {
-      const [classRes, qRes] = await Promise.all([
-        client.get('/classes/my'),
-        client.get('/questionnaires', { params: { page: 1, page_size: 100 } }),
-      ]);
-      setClasses(classRes.data.data || []);
-      setQuestionnaires(qRes.data.data?.items || qRes.data.data || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取可发布范围失败');
-    } finally {
-      setOptionsLoading(false);
-    }
+    const [classRes, qRes] = await Promise.allSettled([
+      client.get('/classes/my'),
+      client.get('/questionnaires', { params: { page: 1, page_size: 100 } }),
+    ]);
+    const errors: { classes?: string; questionnaires?: string } = {};
+    if (classRes.status === 'fulfilled') setClasses(classRes.value.data.data || []);
+    else { setClasses([]); errors.classes = '负责班级加载失败，请重试'; }
+    if (qRes.status === 'fulfilled') setQuestionnaires(qRes.value.data.data?.items || qRes.value.data.data || []);
+    else { setQuestionnaires([]); errors.questionnaires = '问卷加载失败，请重试'; }
+    setOptionErrors(errors);
+    if (errors.classes || errors.questionnaires) message.error('获取可发布范围失败');
+    setOptionsLoading(false);
   };
 
   const fetchTasks = async () => {
@@ -115,6 +116,8 @@ export default function TeacherTasks() {
       default: return <Tag>{status || '-'}</Tag>;
     }
   };
+
+  const publishBlockedReason = optionErrors.questionnaires || optionErrors.classes || (!optionsLoading && questionnaires.length === 0 ? '暂无可发布问卷' : '') || (!optionsLoading && classes.length === 0 ? '暂无负责班级' : '');
 
   const taskColumns = [
     {
@@ -223,13 +226,19 @@ export default function TeacherTasks() {
           children: (
             <Card style={{ maxWidth: 600 }}>
               <Form form={form} layout="vertical">
+                {publishBlockedReason && (
+                  <Button size="small" onClick={fetchPublishOptions} loading={optionsLoading} style={{ marginBottom: 12 }}>
+                    {publishBlockedReason}，点击重试
+                  </Button>
+                )}
                 <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
                   <Input placeholder="如：初一年级心理健康筛查" />
                 </Form.Item>
                 <Form.Item name="questionnaire_id" label="选择问卷" rules={[{ required: true, message: '请选择问卷' }]}>
                   <Select
                     loading={optionsLoading}
-                    placeholder="请选择可发布的问卷"
+                    placeholder={optionErrors.questionnaires || (questionnaires.length ? '请选择可发布的问卷' : '暂无可发布问卷')}
+                    disabled={!!optionErrors.questionnaires || questionnaires.length === 0}
                     showSearch
                     optionFilterProp="label"
                     options={questionnaires.map((q) => ({ value: q.id, label: q.title || q.name }))}
@@ -239,7 +248,8 @@ export default function TeacherTasks() {
                   <Select
                     mode="multiple"
                     loading={optionsLoading}
-                    placeholder="请选择你负责的班级"
+                    placeholder={optionErrors.classes || (classes.length ? '请选择你负责的班级' : '暂无负责班级')}
+                    disabled={!!optionErrors.classes || classes.length === 0}
                     options={classes.map((c) => ({ value: c.id, label: c.grade_name ? `${c.grade_name} ${c.name}` : c.name }))}
                   />
                 </Form.Item>
@@ -275,6 +285,7 @@ export default function TeacherTasks() {
                   icon={<SendOutlined />}
                   onClick={handlePublish}
                   loading={publishLoading}
+                  disabled={!!publishBlockedReason}
                   block
                 >
                   发布任务

@@ -27,6 +27,7 @@ export default function TaskManagement() {
   const [classes, setClasses] = useState<any[]>([]);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionErrors, setOptionErrors] = useState<{ classes?: string; questionnaires?: string }>({});
   const [form] = Form.useForm();
 
   const fetchData = useCallback(async () => {
@@ -44,24 +45,23 @@ export default function TaskManagement() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  useEffect(() => {
-    const fetchPublishOptions = async () => {
-      setOptionsLoading(true);
-      try {
-        const [classRes, qRes] = await Promise.all([
-          client.get('/classes', { params: { page: 1, page_size: 200 } }),
-          client.get('/questionnaires', { params: { page: 1, page_size: 100 } }),
-        ]);
-        setClasses(classRes.data.data?.items || []);
-        setQuestionnaires(qRes.data.data?.items || qRes.data.data || []);
-      } catch (err: any) {
-        message.error(err?.response?.data?.message || '获取发布选项失败');
-      } finally {
-        setOptionsLoading(false);
-      }
-    };
-    fetchPublishOptions();
+  const fetchPublishOptions = useCallback(async () => {
+    setOptionsLoading(true);
+    const [classRes, qRes] = await Promise.allSettled([
+      client.get('/classes', { params: { page: 1, page_size: 200 } }),
+      client.get('/questionnaires', { params: { page: 1, page_size: 100 } }),
+    ]);
+    const errors: { classes?: string; questionnaires?: string } = {};
+    if (classRes.status === 'fulfilled') setClasses(classRes.value.data.data?.items || []);
+    else { setClasses([]); errors.classes = '班级加载失败，请重试'; }
+    if (qRes.status === 'fulfilled') setQuestionnaires(qRes.value.data.data?.items || qRes.value.data.data || []);
+    else { setQuestionnaires([]); errors.questionnaires = '问卷加载失败，请重试'; }
+    setOptionErrors(errors);
+    if (errors.classes || errors.questionnaires) message.error('发布任务所需数据加载失败');
+    setOptionsLoading(false);
   }, []);
+
+  useEffect(() => { fetchPublishOptions(); }, [fetchPublishOptions]);
 
   const handlePublish = async () => {
     try {
@@ -93,6 +93,8 @@ export default function TaskManagement() {
       setSubmitting(false);
     }
   };
+
+  const publishBlockedReason = optionErrors.questionnaires || optionErrors.classes || (!optionsLoading && questionnaires.length === 0 ? '暂无可发布问卷' : '') || (!optionsLoading && classes.length === 0 ? '暂无可发布班级' : '');
 
   const viewDetail = async (task: any) => {
     setSelectedTask(task);
@@ -187,6 +189,7 @@ export default function TaskManagement() {
         title="发布问卷任务"
         open={modalOpen}
         onOk={handlePublish}
+        okButtonProps={{ disabled: !!publishBlockedReason }}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         confirmLoading={submitting}
         destroyOnHidden
@@ -194,13 +197,19 @@ export default function TaskManagement() {
         style={{ maxWidth: '95vw' }}
       >
         <Form form={form} layout="vertical">
+          {publishBlockedReason && (
+            <Button size="small" onClick={fetchPublishOptions} loading={optionsLoading} style={{ marginBottom: 12 }}>
+              {publishBlockedReason}，点击重试
+            </Button>
+          )}
           <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
             <Input placeholder="如：初一年级心理健康筛查" />
           </Form.Item>
           <Form.Item name="questionnaire_id" label="选择问卷" rules={[{ required: true, message: '请选择问卷' }]}>
             <Select
               loading={optionsLoading}
-              placeholder="请选择问卷"
+              placeholder={optionErrors.questionnaires || (questionnaires.length ? '请选择问卷' : '暂无可发布问卷')}
+              disabled={!!optionErrors.questionnaires || questionnaires.length === 0}
               showSearch
               optionFilterProp="label"
               options={questionnaires.map((q) => ({ value: q.id, label: q.title || q.name }))}
@@ -210,7 +219,8 @@ export default function TaskManagement() {
             <Select
               mode="multiple"
               loading={optionsLoading}
-              placeholder="请选择班级"
+              placeholder={optionErrors.classes || (classes.length ? '请选择班级' : '暂无可发布班级')}
+              disabled={!!optionErrors.classes || classes.length === 0}
               options={classes.map((c) => ({ value: c.id, label: c.grade_name ? `${c.grade_name} ${c.name}` : c.name }))}
             />
           </Form.Item>

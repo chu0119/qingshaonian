@@ -9,7 +9,7 @@ from ..models.questionnaire import Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services.audit_service import log_operation
 from ..services.stats_service import target_student_ids
-from ..utils.access_control import can_access_task, teacher_class_ids
+from ..utils.access_control import can_access_task, effective_school_id, effective_task_status, teacher_class_ids
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["任务管理"])
@@ -18,20 +18,54 @@ OPEN_TASK_STATUSES = {"not_started", "in_progress", "active"}
 
 
 def _effective_status(task: Task) -> str:
-    now = datetime.now()
-    if task.status in ("draft", "closed", "archived"):
-        return task.status
-    if task.end_time and task.end_time < now:
-        return "ended"
-    if task.start_time and task.start_time > now:
-        return "not_started"
-    return "in_progress"
+    return effective_task_status(task)
+
+
+def _task_target_student_ids(db: Session, task: Task) -> list[int]:
+    snapshot = task.target_snapshot or {}
+    if task.status != "draft" and isinstance(snapshot.get("student_ids"), list):
+        return [int(sid) for sid in snapshot["student_ids"] if str(sid).isdigit()]
+    return target_student_ids(db, task)
+
+
+def _visible_student_ids(db: Session, user: User, task: Task) -> list[int]:
+    ids = set(_task_target_student_ids(db, task))
+    if user.role in ("teacher", "counselor"):
+        class_ids = teacher_class_ids(db, user)
+        if not class_ids:
+            return []
+        visible = {sid for (sid,) in db.query(User.id).filter(User.id.in_(ids), User.class_id.in_(class_ids), User.role == "student").all()} if ids else set()
+        return list(visible)
+    return list(ids)
+
+
+def _validate_target_ids(db: Session, school_id: int, target_type: str, target_ids: list[int]) -> list[int]:
+    unique_ids = list(dict.fromkeys(target_ids))
+    if target_type == "all":
+        return []
+    if not unique_ids:
+        raise HTTPException(status_code=400, detail="请选择任务对象")
+    if target_type == "class":
+        count = db.query(Class).filter(Class.id.in_(unique_ids), Class.school_id == school_id).count()
+        if count != len(unique_ids):
+            raise HTTPException(status_code=403, detail="包含不属于本校的班级")
+    elif target_type == "grade":
+        count = db.query(Grade).filter(Grade.id.in_(unique_ids), Grade.school_id == school_id).count()
+        if count != len(unique_ids):
+            raise HTTPException(status_code=403, detail="包含不属于本校的年级")
+    elif target_type == "student":
+        count = db.query(User).filter(User.id.in_(unique_ids), User.school_id == school_id, User.role == "student").count()
+        if count != len(unique_ids):
+            raise HTTPException(status_code=403, detail="包含不属于本校的学生")
+    else:
+        raise HTTPException(status_code=400, detail="任务对象类型无效")
+    return unique_ids
 
 
 @router.get("")
 def list_tasks(
     page: int = Query(1), page_size: int = Query(20), status: str = Query(""),
-    user: User = Depends(require_role("school_admin", "teacher")),
+    user: User = Depends(require_role("school_admin", "teacher", "counselor")),
     db: Session = Depends(get_db),
 ):
     q = db.query(Task).filter(Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id))
@@ -53,7 +87,7 @@ def list_tasks(
         if user.role in ("teacher", "counselor"):
             completed_q = completed_q.join(User, User.id == AnswerSheet.student_id).filter(User.class_id.in_(teacher_class_ids(db, user)))
         completed = completed_q.scalar()
-        expected = len(target_student_ids(db, t))
+        expected = len(_visible_student_ids(db, user, t)) if user.role in ("teacher", "counselor") else len(_task_target_student_ids(db, t))
         items.append({
             "id": t.id, "name": t.name, "questionnaire_id": t.questionnaire_id,
             "questionnaire_title": qnr.title if qnr else "", "target_type": t.target_type,
@@ -79,11 +113,12 @@ def list_tasks(
 
 @router.post("")
 def create_task(data: dict, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    school_id = effective_school_id(user)
     questionnaire_id = data.get("questionnaire_id")
     if not questionnaire_id:
         raise HTTPException(status_code=400, detail="问卷ID不能为空")
     qnr = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
-    if qnr and not (qnr.school_id == (getattr(user, '_effective_school_id', None) or user.school_id) or qnr.is_builtin):
+    if qnr and not (qnr.school_id == school_id or qnr.is_builtin):
         qnr = None
     if not qnr:
         raise HTTPException(status_code=404, detail="问卷不存在或无权限访问")
@@ -94,10 +129,9 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
         allowed_classes = teacher_class_ids(db, user)
         if target_type != "class" or not set(target_ids).issubset(allowed_classes):
             raise HTTPException(status_code=403, detail="只能向自己负责的班级发布任务")
-    elif target_type == "class":
-        count = db.query(Class).filter(Class.id.in_(target_ids), Class.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).count() if target_ids else 0
-        if count != len(set(target_ids)):
-            raise HTTPException(status_code=403, detail="包含不属于本校的班级")
+        target_ids = list(dict.fromkeys(target_ids))
+    else:
+        target_ids = _validate_target_ids(db, school_id, target_type, target_ids)
 
     def parse_dt(value):
         if not value:
@@ -113,7 +147,7 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
         status_value = "in_progress"
     published_at = datetime.now() if status_value != "draft" else None
     task = Task(
-        school_id=(getattr(user, '_effective_school_id', None) or user.school_id), questionnaire_id=questionnaire_id,
+        school_id=school_id, questionnaire_id=questionnaire_id,
         name=data.get("name", ""), target_type=target_type,
         target_ids=target_ids, start_time=parse_dt(data.get("start_time")),
         end_time=parse_dt(data.get("end_time")), shuffle_questions=data.get("shuffle_questions", False),
@@ -133,13 +167,16 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
 
 
 @router.get("/{task_id}")
-def get_task(task_id: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+def get_task(task_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not can_access_task(db, user, task):
         raise HTTPException(status_code=404, detail="任务不存在")
     qnr = db.query(Questionnaire).filter(Questionnaire.id == task.questionnaire_id).first()
-    completed = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.task_id == task_id, AnswerSheet.status == "submitted").scalar()
-    total_students = len(target_student_ids(db, task))
+    completed_q = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.task_id == task_id, AnswerSheet.status == "submitted")
+    if user.role in ("teacher", "counselor"):
+        completed_q = completed_q.join(User, User.id == AnswerSheet.student_id).filter(User.id.in_(_visible_student_ids(db, user, task)))
+    completed = completed_q.scalar() or 0
+    total_students = len(_visible_student_ids(db, user, task))
     return APIResponse.success({
         "id": task.id, "name": task.name, "questionnaire_title": qnr.title if qnr else "",
         "description": task.description,
@@ -155,7 +192,7 @@ def get_task(task_id: int, user: User = Depends(require_role("school_admin", "te
 
 
 @router.get("/{task_id}/completion")
-def task_completion(task_id: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+def task_completion(task_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not can_access_task(db, user, task):
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -164,7 +201,7 @@ def task_completion(task_id: int, user: User = Depends(require_role("school_admi
         sheets_q = sheets_q.join(User, User.id == AnswerSheet.student_id).filter(User.class_id.in_(teacher_class_ids(db, user)))
     sheets = sheets_q.all()
     submitted_student_ids = {s.student_id for s in sheets if s.status == "submitted"}
-    target_students_q = db.query(User).filter(User.id.in_(target_student_ids(db, task)), User.role == "student")
+    target_students_q = db.query(User).filter(User.id.in_(_visible_student_ids(db, user, task)), User.role == "student")
     if user.role in ("teacher", "counselor"):
         target_students_q = target_students_q.filter(User.class_id.in_(teacher_class_ids(db, user)))
     target_students = target_students_q.all()
@@ -237,18 +274,19 @@ def archive_task(task_id: int, request: Request, user: User = Depends(require_ro
 
 
 @router.get("/{task_id}/uncompleted")
-def task_uncompleted(task_id: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+def task_uncompleted(task_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     completion = task_completion(task_id, user, db).data
     return APIResponse.success([row for row in completion if row["status"] != "submitted"])
 
 
 @router.get("/{task_id}/statistics")
-def task_statistics(task_id: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+def task_statistics(task_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not can_access_task(db, user, task):
         raise HTTPException(status_code=404, detail="任务不存在")
-    total = len(target_student_ids(db, task))
-    submitted = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.task_id == task_id, AnswerSheet.status == "submitted").scalar() or 0
+    visible_ids = _visible_student_ids(db, user, task)
+    total = len(visible_ids)
+    submitted = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.task_id == task_id, AnswerSheet.student_id.in_(visible_ids), AnswerSheet.status == "submitted").scalar() or 0
     return APIResponse.success({
         "expected_count": total,
         "completed_count": submitted,

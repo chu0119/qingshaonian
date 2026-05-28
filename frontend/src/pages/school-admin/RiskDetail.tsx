@@ -139,7 +139,7 @@ export default function RiskDetail() {
           <Card title="操作" style={{ marginTop: 16 }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Button type="primary" block icon={<EditOutlined />}
-                onClick={() => navigate('/school-admin/interventions', { state: { student_id: detail.student_id, risk_alert_id: detail.id } })}>
+                onClick={() => navigate(`/school-admin/interventions?student_id=${detail.student_id}&risk_alert_id=${detail.id}`)}>
                 新增干预记录
               </Button>
               <Button block icon={<RobotOutlined />} onClick={() => setAiOpen(true)}

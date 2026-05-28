@@ -7,7 +7,7 @@ from ..models.task import Task, AnswerSheet, AnswerRecord
 from ..models.questionnaire import Question, Option, Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services import scoring_service
-from ..utils.access_control import task_matches_student
+from ..utils.access_control import effective_task_status, task_is_answerable, task_matches_student
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/student", tags=["学生端"])
@@ -18,7 +18,7 @@ def pending_tasks(user: User = Depends(require_role("student")), db: Session = D
     tasks = db.query(Task).filter(Task.status.in_(["not_started", "in_progress", "active"]), Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).all()
     items = []
     for t in tasks:
-        if not task_matches_student(user, t):
+        if not _student_task_visible(user, t):
             continue
         sheet = db.query(AnswerSheet).filter(AnswerSheet.task_id == t.id, AnswerSheet.student_id == user.id).first()
         qnr = db.query(Questionnaire).filter(Questionnaire.id == t.questionnaire_id).first()
@@ -69,15 +69,23 @@ def get_answer_sheet(sheet_id: int, user: User = Depends(require_role("student")
     return _format_sheet_for_student(db, sheet)
 
 
+def _student_task_visible(student: User, task: Task) -> bool:
+    if task.school_id != student.school_id or task.status in ("draft", "closed", "archived"):
+        return False
+    target_ids = set(task.target_ids or [])
+    if task.target_type == "all":
+        return True
+    if task.target_type == "grade":
+        return bool(student.grade_id and student.grade_id in target_ids)
+    if task.target_type == "class":
+        return bool(student.class_id and student.class_id in target_ids)
+    if task.target_type == "student":
+        return student.id in target_ids
+    return False
+
+
 def _student_can_answer(task: Task) -> bool:
-    now = datetime.now()
-    if task.status not in ("in_progress", "active"):
-        return False
-    if task.start_time and task.start_time > now:
-        return False
-    if task.end_time and task.end_time < now:
-        return False
-    return True
+    return task_is_answerable(task)
 
 
 def _format_sheet_for_student(db: Session, sheet: AnswerSheet):

@@ -5,10 +5,31 @@ from ..config import settings
 from ..database import get_db
 from ..models.user import User
 from ..dependencies import require_role
+from ..utils.access_control import effective_school_id
 from ..services.seed_service import seed_demo_data
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/system", tags=["系统设置"])
+
+
+def _scoped_configs(db: Session, keys: list[str], school_id: int):
+    from ..models.system_config import SystemConfig
+    configs = db.query(SystemConfig).filter(SystemConfig.config_key.in_(keys), SystemConfig.school_id.in_([school_id, None])).all()
+    result = {}
+    for c in configs:
+        if c.config_key not in result or c.school_id == school_id:
+            result[c.config_key] = c
+    return list(result.values())
+
+
+def _upsert_school_config(db: Session, school_id: int, key: str, value, description: str):
+    from ..models.system_config import SystemConfig
+    config = db.query(SystemConfig).filter(SystemConfig.config_key == key, SystemConfig.school_id == school_id).first()
+    config_value = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+    if config:
+        config.config_value = config_value
+    else:
+        db.add(SystemConfig(school_id=school_id, config_key=key, config_value=config_value, description=description))
 
 
 @router.get("/school-info")
@@ -52,10 +73,8 @@ def update_school_info(data: dict, user: User = Depends(require_role("school_adm
 @router.get("/risk-config")
 def get_risk_config(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.system_config import SystemConfig
-    configs = db.query(SystemConfig).filter(
-        SystemConfig.config_key.in_(["risk_levels", "quality_levels", "fast_answer_threshold", "consecutive_same_threshold"]),
-        SystemConfig.school_id.is_(None)
-    ).all()
+    school_id = effective_school_id(user)
+    configs = _scoped_configs(db, ["risk_levels", "quality_levels", "fast_answer_threshold", "consecutive_same_threshold"], school_id)
 
     # If no risk configs exist, return sensible defaults
     if not configs:
@@ -83,24 +102,11 @@ def get_risk_config(user: User = Depends(require_role("school_admin")), db: Sess
 @router.put("/risk-config")
 def update_risk_config(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.system_config import SystemConfig
+    school_id = effective_school_id(user)
     updated = []
     for key, value in data.items():
-        config = db.query(SystemConfig).filter(
-            SystemConfig.config_key == key,
-            SystemConfig.school_id.is_(None)
-        ).first()
-        if config:
-            config.config_value = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
-            updated.append(key)
-        else:
-            new_config = SystemConfig(
-                school_id=None,
-                config_key=key,
-                config_value=json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value,
-                description=key,
-            )
-            db.add(new_config)
-            updated.append(key)
+        _upsert_school_config(db, school_id, key, value, key)
+        updated.append(key)
     db.commit()
     return APIResponse.success(message=f"配置已更新: {', '.join(updated)}" if updated else "无配置需要更新")
 
@@ -176,10 +182,8 @@ def get_sms_config(user: User = Depends(require_role("school_admin")), db: Sessi
     """获取短信配置（预留，当前不实际发送短信）"""
     from ..models.system_config import SystemConfig
 
-    configs = db.query(SystemConfig).filter(
-        SystemConfig.config_key.in_(SMS_CONFIG_KEYS),
-        SystemConfig.school_id.is_(None),
-    ).all()
+    school_id = effective_school_id(user)
+    configs = _scoped_configs(db, SMS_CONFIG_KEYS, school_id)
 
     config_map: dict = {**SMS_CONFIG_DEFAULTS}
     for c in configs:
@@ -198,27 +202,14 @@ def update_sms_config(data: dict, user: User = Depends(require_role("school_admi
     """保存短信配置（预留，仅做数据存储不实际发送）"""
     from ..models.system_config import SystemConfig
 
+    school_id = effective_school_id(user)
     updated = []
     for key in SMS_CONFIG_KEYS:
         if key not in data:
             continue
         value = str(data[key]) if data[key] is not None else ""
-        config = db.query(SystemConfig).filter(
-            SystemConfig.config_key == key,
-            SystemConfig.school_id.is_(None),
-        ).first()
-        if config:
-            config.config_value = value
-            updated.append(key)
-        else:
-            new_config = SystemConfig(
-                school_id=None,
-                config_key=key,
-                config_value=value,
-                description=f"短信配置 - {key}",
-            )
-            db.add(new_config)
-            updated.append(key)
+        _upsert_school_config(db, school_id, key, value, f"短信配置 - {key}")
+        updated.append(key)
 
     db.commit()
     if updated:
@@ -240,10 +231,8 @@ def get_screen_config(user: User = Depends(require_role("school_admin")), db: Se
     """获取数据大屏配置"""
     from ..models.system_config import SystemConfig
 
-    configs = db.query(SystemConfig).filter(
-        SystemConfig.config_key.in_(SCREEN_CONFIG_KEYS),
-        SystemConfig.school_id.is_(None),
-    ).all()
+    school_id = effective_school_id(user)
+    configs = _scoped_configs(db, SCREEN_CONFIG_KEYS, school_id)
 
     config_map: dict = {**SCREEN_CONFIG_DEFAULTS}
     for c in configs:
@@ -260,27 +249,14 @@ def update_screen_config(data: dict, user: User = Depends(require_role("school_a
     """保存数据大屏配置"""
     from ..models.system_config import SystemConfig
 
+    school_id = effective_school_id(user)
     updated = []
     for key in SCREEN_CONFIG_KEYS:
         if key not in data:
             continue
         value = str(data[key]) if data[key] is not None else ""
-        config = db.query(SystemConfig).filter(
-            SystemConfig.config_key == key,
-            SystemConfig.school_id.is_(None),
-        ).first()
-        if config:
-            config.config_value = value
-            updated.append(key)
-        else:
-            new_config = SystemConfig(
-                school_id=None,
-                config_key=key,
-                config_value=value,
-                description=f"数据大屏配置 - {key}",
-            )
-            db.add(new_config)
-            updated.append(key)
+        _upsert_school_config(db, school_id, key, value, f"数据大屏配置 - {key}")
+        updated.append(key)
 
     db.commit()
     if updated:

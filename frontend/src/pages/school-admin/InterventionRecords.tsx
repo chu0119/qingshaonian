@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Table, Tag, Button, Modal, Form, Input, Select, Switch, message, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import StudentSelect from '../../components/common/StudentSelect';
@@ -20,6 +21,7 @@ export default function InterventionRecords() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -36,6 +38,14 @@ export default function InterventionRecords() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  useEffect(() => {
+    const studentId = Number(searchParams.get('student_id'));
+    const riskAlertId = Number(searchParams.get('risk_alert_id'));
+    if (!studentId) return;
+    form.setFieldsValue({ student_id: studentId, risk_alert_id: riskAlertId || undefined, method: 'student_talk', status: 'processing' });
+    setModalOpen(true);
+  }, [form, searchParams]);
+
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
@@ -43,6 +53,7 @@ export default function InterventionRecords() {
       await client.post('/interventions', values);
       message.success('创建成功');
       setModalOpen(false);
+      setSearchParams({});
       form.resetFields();
       fetchData();
     } catch (err: any) {
@@ -80,7 +91,7 @@ export default function InterventionRecords() {
         title="新增干预记录"
         open={modalOpen}
         onOk={handleCreate}
-        onCancel={() => { setModalOpen(false); form.resetFields(); }}
+        onCancel={() => { setModalOpen(false); setSearchParams({}); form.resetFields(); }}
         confirmLoading={submitting}
         destroyOnHidden
         width={600}
@@ -89,6 +100,9 @@ export default function InterventionRecords() {
         <Form form={form} layout="vertical">
           <Form.Item name="student_id" label="选择学生" rules={[{ required: true, message: '请选择学生' }]}>
             <StudentSelect placeholder="输入姓名或学号搜索学生" />
+          </Form.Item>
+          <Form.Item name="risk_alert_id" hidden>
+            <Input />
           </Form.Item>
           <Form.Item name="method" label="干预方式" rules={[{ required: true, message: '请选择干预方式' }]} initialValue="student_talk">
             <Select options={Object.entries(methodLabels).map(([k, v]) => ({ value: k, label: v }))} />

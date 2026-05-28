@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { getClasses, createClass, updateClass, deleteClass, type ClassInfo } from '../../api/classes';
-import { getDictGrades } from '../../api/users';
+import { getDictGrades, getTeachers, type UserInfo } from '../../api/users';
 
 export default function ClassManagement() {
   const [data, setData] = useState<ClassInfo[]>([]);
@@ -14,6 +14,7 @@ export default function ClassManagement() {
   const [editingClass, setEditingClass] = useState<ClassInfo | null>(null);
   const [form] = Form.useForm();
   const [grades, setGrades] = useState<{ value: number; label: string }[]>([]);
+  const [teachers, setTeachers] = useState<UserInfo[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -29,7 +30,10 @@ export default function ClassManagement() {
   }, [page, gradeId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { getDictGrades().then(setGrades); }, []);
+  useEffect(() => {
+    getDictGrades().then(setGrades);
+    getTeachers({ page: 1, page_size: 10000 }).then(res => setTeachers(res.items || []));
+  }, []);
 
   const openCreate = () => {
     setEditingClass(null);
@@ -78,6 +82,9 @@ export default function ClassManagement() {
     },
   ];
 
+  const teacherOptions = teachers.map(t => ({ value: t.id, label: `${t.real_name}（${t.username}）` }));
+  const counselorOptions = teachers.filter(t => t.role === 'counselor' || t.teacher_type === 'counselor').map(t => ({ value: t.id, label: `${t.real_name}（${t.username}）` }));
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
@@ -97,8 +104,12 @@ export default function ClassManagement() {
           <Form.Item name="name" label="班级名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="head_teacher_id" label="班主任ID"><Input placeholder="暂用手动输入" /></Form.Item>
-          <Form.Item name="counselor_id" label="心理老师ID"><Input placeholder="暂用手动输入" /></Form.Item>
+          <Form.Item name="head_teacher_id" label="班主任">
+            <Select allowClear showSearch placeholder="请选择班主任" options={teacherOptions} optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name="counselor_id" label="心理老师">
+            <Select allowClear showSearch placeholder="请选择心理老师" options={counselorOptions.length ? counselorOptions : teacherOptions} optionFilterProp="label" />
+          </Form.Item>
           <Form.Item name="status" label="状态">
             <Select options={[{ value: true, label: '启用' }, { value: false, label: '停用' }]} />
           </Form.Item>

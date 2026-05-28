@@ -1,7 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Select, Space, Spin, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+
+interface StudentOption {
+  value: number;
+  label: React.ReactNode;
+}
 
 interface Props {
   value?: number;
@@ -13,9 +18,32 @@ interface Props {
 // 防抖搜索学生
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
+function toStudentOption(s: any): StudentOption {
+  return {
+    value: s.id,
+    label: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space>
+          <UserOutlined />
+          <span style={{ fontWeight: 500 }}>{s.real_name}</span>
+          <span style={{ color: '#888', fontSize: 12 }}>{s.student_no}</span>
+        </Space>
+        <span style={{ color: '#4A90D9', fontSize: 12 }}>{s.grade_name} {s.class_name}</span>
+      </div>
+    ),
+  };
+}
+
 export default function StudentSelect({ value, onChange, placeholder, style }: Props) {
-  const [options, setOptions] = useState<{ value: number; label: React.ReactNode }[]>([]);
+  const [options, setOptions] = useState<StudentOption[]>([]);
   const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!value || options.some(item => item.value === value)) return;
+    client.get(`/users/students/${value}`)
+      .then(res => setOptions(prev => prev.some(item => item.value === value) ? prev : [toStudentOption(res.data.data), ...prev]))
+      .catch(() => {});
+  }, [value, options]);
 
   const handleSearch = useCallback((keyword: string) => {
     if (!keyword || keyword.length < 1) { setOptions([]); return; }
@@ -25,19 +53,7 @@ export default function StudentSelect({ value, onChange, placeholder, style }: P
       try {
         const res = await client.get('/users/students', { params: { keyword, page_size: 20 } });
         const students = res.data.data?.items || [];
-        setOptions(students.map((s: any) => ({
-          value: s.id,
-          label: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Space>
-                <UserOutlined />
-                <span style={{ fontWeight: 500 }}>{s.real_name}</span>
-                <span style={{ color: '#888', fontSize: 12 }}>{s.student_no}</span>
-              </Space>
-              <span style={{ color: '#4A90D9', fontSize: 12 }}>{s.grade_name} {s.class_name}</span>
-            </div>
-          ),
-        })));
+        setOptions(students.map(toStudentOption));
       } catch { setOptions([]); }
       finally { setSearching(false); }
     }, 300);

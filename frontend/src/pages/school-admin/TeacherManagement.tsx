@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, Transfer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getDictGrades, getDictTeacherTypes, assignTeacherClasses, type UserInfo } from '../../api/users';
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getDictTeacherTypes, assignTeacherClasses, getTeacherAssignedClasses, type UserInfo } from '../../api/users';
 import { getClasses, type ClassInfo } from '../../api/classes';
 
 export default function TeacherManagement() {
@@ -18,6 +18,7 @@ export default function TeacherManagement() {
   const [teacherTypes, setTeacherTypes] = useState<{ value: string; label: string }[]>([]);
   const [allClasses, setAllClasses] = useState<ClassInfo[]>([]);
   const [assignedKeys, setAssignedKeys] = useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -61,10 +62,19 @@ export default function TeacherManagement() {
     }
   };
 
-  const openAssign = (record: UserInfo) => {
+  const openAssign = async (record: UserInfo) => {
     setAssignTeacherId(record.id);
     setAssignedKeys([]);
     setAssignModalOpen(true);
+    setAssignLoading(true);
+    try {
+      const classIds = await getTeacherAssignedClasses(record.id);
+      setAssignedKeys(classIds.map(String));
+    } catch {
+      message.error('获取已分配班级失败');
+    } finally {
+      setAssignLoading(false);
+    }
   };
   const handleAssign = async () => {
     if (assignTeacherId) {
@@ -122,7 +132,7 @@ export default function TeacherManagement() {
         </Form>
       </Modal>
 
-      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} onCancel={() => setAssignModalOpen(false)} width={520} style={{ maxWidth: '95vw' }}>
+      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} okButtonProps={{ disabled: assignLoading }} confirmLoading={assignLoading} onCancel={() => setAssignModalOpen(false)} width={520} style={{ maxWidth: '95vw' }}>
         <Transfer
           dataSource={allClasses.map(c => ({ key: String(c.id), title: `${c.grade_name} ${c.name}` }))}
           targetKeys={assignedKeys}
