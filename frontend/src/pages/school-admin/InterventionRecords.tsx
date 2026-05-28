@@ -5,11 +5,11 @@ import StudentSelect from '../../components/common/StudentSelect';
 import client from '../../api/client';
 
 const methodLabels: Record<string, string> = {
-  student_talk: '学生谈话', teacher_communication: '班主任沟通', counselor_guidance: '心理老师辅导',
-  family_school: '家校沟通', home_visit: '家访', referral: '转介专业机构', observation: '持续观察', other: '其他',
+  student_talk: '学生谈话', teacher_communication: '班主任沟通', counselor_guidance: '心理老师辅导', counselor_counsel: '心理老师辅导',
+  family_school: '家校沟通', parent_communication: '家校沟通', home_visit: '家访', referral: '转介专业机构', observation: '持续观察', other: '其他',
 };
 const statusLabels: Record<string, string> = {
-  pending: '待处理', viewed: '已查看', processing: '处理中', ongoing: '持续跟进', completed: '已完成', closed: '已关闭',
+  pending: '待处理', viewed: '已查看', in_progress: '处理中', processing: '处理中', follow_up: '持续跟进', ongoing: '持续跟进', completed: '已完成', closed: '已关闭',
 };
 
 export default function InterventionRecords() {

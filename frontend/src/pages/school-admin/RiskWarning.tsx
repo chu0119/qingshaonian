@@ -6,7 +6,7 @@ import client from '../../api/client';
 
 const riskColors: Record<string, string> = { low: 'blue', medium: 'orange', high: 'red', urgent: '#CF1322' };
 const riskLabels: Record<string, string> = { low: '低风险', medium: '中风险', high: '高风险', urgent: '紧急风险' };
-const statusLabels: Record<string, string> = { pending: '待处理', viewed: '已查看', processing: '处理中', ongoing: '持续跟进', completed: '已完成', closed: '已关闭' };
+const statusLabels: Record<string, string> = { pending: '待处理', viewed: '已查看', in_progress: '处理中', processing: '处理中', follow_up: '持续跟进', ongoing: '持续跟进', completed: '已完成', closed: '已关闭' };
 
 export default function RiskWarning() {
   const navigate = useNavigate();
