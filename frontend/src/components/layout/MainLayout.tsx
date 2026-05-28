@@ -6,7 +6,8 @@ import {
   AlertOutlined, SettingOutlined, BarChartOutlined,
   LogoutOutlined, KeyOutlined, MenuOutlined,
   BankOutlined, SafetyOutlined, ScheduleOutlined, CheckSquareOutlined, ContactsOutlined,
-  FundOutlined,
+  FundOutlined, AuditOutlined, MessageOutlined, RobotOutlined, EyeOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { changePassword } from '../../api/auth';
@@ -49,10 +50,16 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'reports', icon: <BarChartOutlined />, label: '班级报告', path: '/teacher/reports' },
   ],
   platform_admin: [
-    { key: 'dashboard', icon: <DashboardOutlined />, label: '平台首页', path: '/platform/dashboard' },
-    { key: 'schools', icon: <BankOutlined />, label: '学校管理', path: '/platform/schools' },
-    { key: 'screen', icon: <FundOutlined />, label: '平台大屏', path: '/platform/screen' },
-    { key: 'settings', icon: <SettingOutlined />, label: '平台设置', path: '/platform/settings' },
+    { key: 'dashboard', icon: <DashboardOutlined />, label: '监管首页', path: '/platform/dashboard' },
+    { key: 'schools', icon: <BankOutlined />, label: '学校监管', path: '/platform/schools' },
+    { key: 'risks', icon: <AlertOutlined />, label: '风险预警中心', path: '/platform/risks' },
+    { key: 'key-students', icon: <IdcardOutlined />, label: '重点关注学生', path: '/platform/key-students' },
+    { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
+    { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },
+    { key: 'sms', icon: <MessageOutlined />, label: '短信通知', path: '/platform/sms' },
+    { key: 'audit', icon: <AuditOutlined />, label: '日志审计', path: '/platform/audit' },
+    { key: 'screen', icon: <FundOutlined />, label: '数据大屏', path: '/platform/screen' },
+    { key: 'settings', icon: <SettingOutlined />, label: '系统管理', path: '/platform/settings' },
   ],
   counselor: [
     { key: 'dashboard', icon: <DashboardOutlined />, label: '心理老师首页', path: '/counselor/dashboard' },

@@ -7,7 +7,9 @@ from ..database import get_db
 from ..models.user import User, School, Grade, Class
 from ..models.task import Task, AnswerSheet
 from ..models.risk import RiskAlert, Intervention
-from ..models.audit import LoginLog
+from ..models.audit import LoginLog, OperationLog
+from ..models.questionnaire import Questionnaire
+from ..models.external import SMSLog
 from ..dependencies import require_role
 from ..utils.response import APIResponse
 from ..utils.password import hash_password
@@ -356,3 +358,279 @@ def update_platform_settings(data: dict, user: User = Depends(require_role("plat
                 db.add(SystemConfig(config_key=config_key, config_value=value, description=f"平台设置 - {field}"))
     db.commit()
     return APIResponse.success(message="平台设置保存成功")
+
+
+# ============ 公安监管端 API ============
+
+@router.get("/risk-alerts")
+def platform_risk_alerts(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), risk_level: str = Query(""),
+    status: str = Query(""), keyword: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """平台风险预警中心——跨校风险列表"""
+    q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id)
+    if school_id:
+        q = q.filter(RiskAlert.school_id == school_id)
+    if risk_level:
+        q = q.filter(RiskAlert.risk_level == risk_level)
+    if status:
+        q = q.filter(RiskAlert.status == status)
+    if keyword:
+        q = q.filter(User.real_name.contains(keyword))
+    total = q.count()
+    items = q.order_by(RiskAlert.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "items": [{
+            "id": a.id, "student_id": a.student_id, "student_name": a.student.real_name if a.student else "",
+            "school_id": a.school_id, "school_name": a.school.name if a.school else "",
+            "risk_level": a.risk_level, "risk_type": a.risk_type or "",
+            "status": a.status, "created_at": a.created_at.isoformat() if a.created_at else None,
+            "student_grade": (a.student.grade.name if a.student and a.student.grade else ""),
+            "student_class": (a.student.class_.name if a.student and a.student.class_ else ""),
+        } for a in items],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.get("/key-students")
+def platform_key_students(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), risk_level: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """重点学生——高风险/紧急风险学生详情"""
+    q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id).filter(
+        RiskAlert.risk_level.in_(["high", "urgent"]))
+    if school_id:
+        q = q.filter(RiskAlert.school_id == school_id)
+    if risk_level:
+        q = q.filter(RiskAlert.risk_level == risk_level)
+    total = q.count()
+    alerts = q.order_by(
+        func.field(RiskAlert.risk_level, "urgent", "high"),
+        RiskAlert.id.desc()
+    ).offset((page - 1) * page_size).limit(page_size).all()
+
+    def _latest_score(student_id):
+        sr = db.query(ScoringResult).join(AnswerSheet).filter(
+            AnswerSheet.student_id == student_id).order_by(ScoringResult.id.desc()).first()
+        if sr:
+            int_count = db.query(func.count(Intervention.id)).filter(
+                Intervention.student_id == student_id).scalar() or 0
+            return {"total_score": sr.total_score, "risk_type": sr.risk_type or "", "intervention_count": int_count}
+        return {"total_score": 0, "risk_type": "", "intervention_count": 0}
+
+    return APIResponse.success({
+        "items": [{
+            **{k: v for k, v in a.__dict__.items() if not k.startswith("_")},
+            "student_name": a.student.real_name if a.student else "",
+            "school_name": a.school.name if a.school else "",
+            "student_grade": (a.student.grade.name if a.student and a.student.grade else ""),
+            "student_class": (a.student.class_.name if a.student and a.student.class_ else ""),
+            "latest_score": _latest_score(a.student_id),
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        } for a in alerts],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.get("/tasks")
+def platform_tasks(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), status: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """测评任务监管——跨校任务列表"""
+    q = db.query(Task).join(School, School.id == Task.school_id)
+    if school_id:
+        q = q.filter(Task.school_id == school_id)
+    if status:
+        q = q.filter(Task.status == status)
+    total = q.count()
+    tasks = q.order_by(Task.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "items": [{
+            "id": t.id, "name": t.name, "school_id": t.school_id,
+            "school_name": t.school.name if t.school else "",
+            "status": t.status, "questionnaire_title": (t.questionnaire.title if t.questionnaire else ""),
+            "created_by_name": (t.created_by_user.real_name if hasattr(t, 'created_by_user') and t.created_by_user else ""),
+            "start_time": t.start_time.isoformat() if t.start_time else None,
+            "end_time": t.end_time.isoformat() if t.end_time else None,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        } for t in tasks],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.get("/interventions")
+def platform_interventions(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), status: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """干预督办——跨校干预记录列表"""
+    q = db.query(Intervention).join(User, User.id == Intervention.student_id).join(School, School.id == Intervention.school_id)
+    if school_id:
+        q = q.filter(Intervention.school_id == school_id)
+    if status:
+        q = q.filter(Intervention.status == status)
+    total = q.count()
+    items = q.order_by(Intervention.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "items": [{
+            "id": iv.id, "student_id": iv.student_id, "school_id": iv.school_id,
+            "student_name": iv.student.real_name if iv.student else "",
+            "school_name": iv.school.name if iv.school else "",
+            "teacher_name": iv.teacher.real_name if iv.teacher else "",
+            "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+            "need_follow_up": iv.need_follow_up,
+            "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,
+            "next_follow_up_time": iv.next_follow_up_time.isoformat() if iv.next_follow_up_time else None,
+            "created_at": iv.created_at.isoformat() if iv.created_at else None,
+        } for iv in items],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.put("/interventions/{intervention_id}/urge")
+def platform_urge_intervention(
+    intervention_id: int, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """干预督办——督促学校处理"""
+    iv = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not iv:
+        raise HTTPException(status_code=404, detail="干预记录不存在")
+    iv.status = "follow_up"
+    iv.need_follow_up = True
+    db.commit()
+    log_operation(db, user, request, module="platform_supervision", action="urge_intervention",
+                  object_type="intervention", object_id=intervention_id, object_name=str(iv.student_id),
+                  detail=f"school_id={iv.school_id}")
+    return APIResponse.success(message="已督促学校处理")
+
+
+@router.get("/audit-logs")
+def platform_audit_logs(
+    page: int = Query(1), page_size: int = Query(20),
+    module: str = Query(""), action: str = Query(""),
+    operator_role: str = Query(""), keyword: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """操作日志审计"""
+    q = db.query(OperationLog)
+    if module:
+        q = q.filter(OperationLog.module == module)
+    if action:
+        q = q.filter(OperationLog.action == action)
+    if operator_role:
+        q = q.filter(OperationLog.operator_role == operator_role)
+    if keyword:
+        q = q.filter(
+            OperationLog.operator_name.contains(keyword) |
+            OperationLog.module.contains(keyword) |
+            OperationLog.action.contains(keyword)
+        )
+    total = q.count()
+    items = q.order_by(OperationLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "items": [{
+            "id": log.id, "module": log.module, "action": log.action,
+            "operator_name": log.operator_name, "operator_role": log.operator_role,
+            "object_type": log.object_type, "object_id": log.object_id,
+            "object_name": log.object_name, "result": log.result,
+            "detail": log.detail or "", "ip": log.ip or "",
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        } for log in items],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+# ============ 短信中心 ============
+
+@router.get("/sms-logs")
+def platform_sms_logs(
+    page: int = Query(1), page_size: int = Query(20),
+    status: str = Query(""), keyword: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """公安监管端短信日志——跨校短信发送记录"""
+    q = db.query(SMSLog)
+    if status:
+        q = q.filter(SMSLog.status == status)
+    if keyword:
+        q = q.filter(SMSLog.phone.contains(keyword))
+    total = q.count()
+    items = q.order_by(SMSLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "items": [{
+            "id": s.id, "recipient_name": s.recipient_name, "phone": s.phone or "",
+            "sms_type": s.sms_type or "", "status": s.status or "",
+            "failure_reason": s.failure_reason or "", "school_id": s.school_id,
+            "sent_at": s.sent_at.isoformat() if s.sent_at else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        } for s in items],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.post("/send-sms")
+def platform_send_sms(
+    data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """公安监管端发送催办短信"""
+    phone = (data.get("phone") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not phone or len(phone) < 11:
+        raise HTTPException(status_code=400, detail="请输入正确的手机号")
+    if not content:
+        raise HTTPException(status_code=400, detail="请输入短信内容")
+
+    sms_sent = False
+    failure_reason = ""
+    from ..models.system_config import SystemConfig
+    sms_url_config = db.query(SystemConfig).filter(
+        SystemConfig.config_key == "sms_api_url", SystemConfig.school_id.is_(None)).first()
+    sms_key_config = db.query(SystemConfig).filter(
+        SystemConfig.config_key == "sms_app_key", SystemConfig.school_id.is_(None)).first()
+    sms_url = settings.SMS_API_URL or (sms_url_config.config_value if sms_url_config else "")
+    sms_key = settings.SMS_APP_KEY or (sms_key_config.config_value if sms_key_config else "")
+
+    if sms_url and sms_key:
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.post(
+                    sms_url,
+                    json={"phone": phone, "content": content},
+                    headers={"Authorization": f"Bearer {sms_key}"},
+                )
+                sms_sent = resp.status_code == 200
+                if not sms_sent:
+                    failure_reason = f"短信服务返回 HTTP {resp.status_code}"
+        except Exception as exc:
+            failure_reason = str(exc)[:300]
+    else:
+        failure_reason = "短信服务暂未配置"
+
+    status = "sent" if sms_sent else ("not_configured" if not sms_url else "failed")
+    db.add(SMSLog(
+        recipient_name="", phone=phone,
+        school_id=None, sms_type="platform_urge",
+        template_code="manual", content=content,
+        status=status, failure_reason=failure_reason,
+        sender_id=user.id, sent_at=func.now(),
+    ))
+    db.commit()
+
+    log_operation(db, user, request, module="platform_sms", action="send",
+                  object_type="sms", object_id=phone[-4:],
+                  result="success" if sms_sent else "failure",
+                  detail=f"status={status};content_len={len(content)}")
+
+    if not sms_sent:
+        return APIResponse.success({"message": "短信发送失败", "reason": failure_reason, "sms_sent": False}, message="发送失败")
+    return APIResponse.success({"message": "短信发送成功", "sms_sent": True}, message="发送成功")
+
