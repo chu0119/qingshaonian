@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, message, Popconfirm, Tag, Space, Typography, Card, Row, Col, Statistic, Descriptions, Progress, Tabs, Switch, Empty } from 'antd';
-import { PlusOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, EyeOutlined, BankOutlined, TeamOutlined, UserOutlined, AlertOutlined, FileTextOutlined, KeyOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, EyeOutlined, BankOutlined, TeamOutlined, UserOutlined, AlertOutlined, FileTextOutlined, KeyOutlined, LoginOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+import { enterSchool } from '../../api/auth';
+import { useAuthStore } from '../../stores/authStore';
 
 const riskLabels: Record<string, string> = { low: '低风险', medium: '中风险', high: '高风险', urgent: '紧急风险' };
 const riskColors: Record<string, string> = { low: '#1890FF', medium: '#FA8C16', high: '#FF4D4F', urgent: '#CF1322' };
@@ -19,8 +21,10 @@ export default function SchoolManagement() {
   const [editing, setEditing] = useState<any>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<any>(null);
+  const [enteringSchool, setEnteringSchool] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [resetForm] = Form.useForm();
+  const setAuth = useAuthStore(s => s.setAuth);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -64,6 +68,20 @@ export default function SchoolManagement() {
     } catch (err: any) { message.error(err?.response?.data?.detail || '操作失败'); }
   };
 
+  const handleEnterSchool = async (schoolId: number) => {
+    setEnteringSchool(schoolId);
+    try {
+      const result = await enterSchool(schoolId);
+      setAuth(result.user, result.access_token);
+      message.success('已切换到学校视角');
+      window.location.href = '/school-admin/dashboard';
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '进入失败');
+    } finally {
+      setEnteringSchool(null);
+    }
+  };
+
   const toggleStatus = async (s: any) => {
     if (s.status) {
       await client.delete(`/platform/schools/${s.id}`); message.success('已停用');
@@ -99,10 +117,12 @@ export default function SchoolManagement() {
     { title: '学生', dataIndex: 'student_count', key: 'student_count', width: 60, align: 'right' as const },
     { title: '教师', dataIndex: 'teacher_count', key: 'teacher_count', width: 60, align: 'right' as const },
     { title: '状态', dataIndex: 'status', key: 'status', width: 70, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '正常' : '停用'}</Tag> },
-    { title: '操作', key: 'action', width: 280, render: (_: any, r: any) => (
+    { title: '操作', key: 'action', width: 380, render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+          <Button size="small" icon={<LoginOutlined />} loading={enteringSchool === r.id} onClick={() => handleEnterSchool(r.id)}
+            style={{ color: '#1677ff', borderColor: '#1677ff' }}>进入后台</Button>
           <Popconfirm title={r.status ? '确定停用该学校？' : '确定启用该学校？'} onConfirm={() => toggleStatus(r)}>
             <Button size="small" icon={r.status ? <StopOutlined /> : <CheckCircleOutlined />} danger={r.status}>
               {r.status ? '停用' : '启用'}

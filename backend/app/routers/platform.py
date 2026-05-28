@@ -1,3 +1,5 @@
+import json
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,6 +11,7 @@ from ..models.audit import LoginLog
 from ..dependencies import require_role
 from ..utils.response import APIResponse
 from ..utils.password import hash_password
+from ..utils.jwt import create_access_token
 from ..config import settings
 from ..services.audit_service import log_operation
 from ..services.stats_service import platform_summary, recent_school_activity, school_metrics
@@ -151,6 +154,30 @@ def enable_school(school_id: int, request: Request, user: User = Depends(require
     log_operation(db, user=user, request=request, module="platform_school", action="enable",
                   object_type="school", object_id=school.id, object_name=school.name, result="success")
     return APIResponse.success(message="学校已启用")
+
+
+@router.post("/schools/{school_id}/enter")
+def enter_school(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """平台管理员模拟进入学校后台"""
+    school = db.query(School).filter(School.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="学校不存在")
+    admin = db.query(User).filter(
+        User.school_id == school_id,
+        User.role == "school_admin",
+        User.status == True,
+    ).first()
+    if not admin:
+        raise HTTPException(status_code=400, detail="该学校暂无启用的管理员账号，请先创建")
+    token = create_access_token({"user_id": admin.id, "role": admin.role})
+    return APIResponse.success({"access_token": token, "user": {
+        "id": admin.id, "school_id": admin.school_id, "username": admin.username,
+        "real_name": admin.real_name, "role": admin.role,
+        "teacher_type": admin.teacher_type, "gender": admin.gender or "",
+        "phone": admin.phone or "", "student_no": admin.student_no or "",
+        "grade_id": admin.grade_id, "class_id": admin.class_id,
+        "must_change_password": admin.must_change_password,
+    }})
 
 
 @router.delete("/schools/{school_id}/force")

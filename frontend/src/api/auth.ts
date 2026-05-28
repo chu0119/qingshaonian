@@ -20,3 +20,8 @@ export async function resetPassword(user_id: number, new_password: string) {
   const res = await client.put(`/auth/reset-password/${user_id}`, { new_password });
   return res.data;
 }
+
+export async function enterSchool(school_id: number): Promise<LoginResponse> {
+  const res = await client.post(`/platform/schools/${school_id}/enter`);
+  return res.data.data;
+}
