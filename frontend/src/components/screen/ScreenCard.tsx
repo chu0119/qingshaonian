@@ -1,45 +1,42 @@
-import { useState, useEffect } from 'react';
 import { theme } from './screenTheme';
-
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const h = () => setM(window.innerWidth < 768);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-  return m;
-}
 
 interface Props {
   title?: string;
   children: React.ReactNode;
   style?: React.CSSProperties;
+  bodyStyle?: React.CSSProperties;
 }
 
-export default function ScreenCard({ title, children, style }: Props) {
-  const isMobile = useIsMobile();
+export default function ScreenCard({ title, children, style, bodyStyle }: Props) {
   return (
     <div style={{
       background: theme.cardBg,
       border: `1px solid ${theme.border}`,
+      boxShadow: 'inset 0 0 24px rgba(0,184,240,0.04), 0 12px 30px rgba(0,0,0,0.24)',
       borderRadius: theme.radius,
-      padding: isMobile ? '12px 10px' : '16px 18px',
+      padding: 'clamp(10px, 0.78vw, 16px)',
       overflow: 'hidden',
-      display: 'flex', flexDirection: 'column',
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0,
       ...style,
     }}>
       {title && (
         <div style={{
-          color: theme.cyan, fontSize: isMobile ? 13 : 14, fontWeight: 600,
-          marginBottom: isMobile ? 8 : 12,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          color: theme.cyan,
+          fontSize: 'clamp(12px, 0.73vw, 14px)',
+          fontWeight: 600,
+          marginBottom: 8,
+          letterSpacing: 0.5,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
           flexShrink: 0,
         }}>
           {title}
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', ...bodyStyle }}>
         {children}
       </div>
     </div>

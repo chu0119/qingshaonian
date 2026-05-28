@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Typography } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { theme } from './screenTheme';
 
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 768);
+export function useScreenMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
   useEffect(() => {
-    const h = () => setM(window.innerWidth < 768);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
-  return m;
+
+  return isMobile;
 }
 
 interface Props {
@@ -22,65 +24,68 @@ interface Props {
 }
 
 export default function ScreenShell({ title, subtitle, updatedAt, onBack, children }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [time, setTime] = useState(new Date());
   const [fs, setFs] = useState(false);
-  const isMobile = useIsMobile();
+  const isMobile = useScreenMobile();
 
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    const h = () => setFs(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', h);
-    return () => document.removeEventListener('fullscreenchange', h);
+    const onFullscreenChange = () => setFs(document.fullscreenElement === rootRef.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
   const toggleFs = async () => {
-    if (document.fullscreenElement) {
+    if (document.fullscreenElement === rootRef.current) {
       await document.exitFullscreen();
-    } else {
-      await document.documentElement.requestFullscreen();
+      return;
     }
+    await rootRef.current?.requestFullscreen();
   };
 
-  const dt = `${time.getFullYear()}-${String(time.getMonth()+1).padStart(2,'0')}-${String(time.getDate()).padStart(2,'0')}`;
-  const tm = `${String(time.getHours()).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}:${String(time.getSeconds()).padStart(2,'0')}`;
+  const dt = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
+  const tm = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}:${String(time.getSeconds()).padStart(2, '0')}`;
 
   return (
-    <div style={{ minHeight: '100vh', background: `linear-gradient(180deg, ${theme.bg} 0%, #0a1a33 100%)`, color: theme.text, overflow: 'auto' }}>
-      {/* frozen stars bg - deterministic */}
+    <div ref={rootRef} style={{ minHeight: '100vh', background: `radial-gradient(circle at 50% 0%, rgba(0,184,240,0.12), transparent 34%), linear-gradient(180deg, ${theme.bg} 0%, #07162c 100%)`, color: theme.text, overflow: 'auto' }}>
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
         <Stars />
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, padding: isMobile ? '12px 8px' : '20px 28px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: isMobile ? 12 : 20 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Typography.Title level={isMobile ? 5 : 3} style={{ color: '#fff', margin: 0, letterSpacing: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: isMobile ? '12px 10px 16px' : '14px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', alignItems: 'start', gap: 10, marginBottom: isMobile ? 12 : 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {onBack && <Button size="small" ghost icon={<ArrowLeftOutlined />} onClick={onBack} style={{ borderColor: theme.border, color: theme.textDim }}>返回</Button>}
+          </div>
+          <div style={{ minWidth: 0, textAlign: isMobile ? 'left' : 'center' }}>
+            <Typography.Title level={isMobile ? 5 : 3} style={{ color: '#fff', margin: 0, letterSpacing: isMobile ? 1 : 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 0 18px rgba(0,184,240,0.35)' }}>
               {title}
             </Typography.Title>
-            {subtitle && <div style={{ color: theme.textDim, fontSize: isMobile ? 12 : 14, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>}
-            <div style={{ color: theme.textDim, fontSize: 12, marginTop: 4 }}>{dt} {tm}{updatedAt ? ` · 数据: ${updatedAt}` : ''}</div>
+            {subtitle && <div style={{ color: theme.textDim, fontSize: isMobile ? 12 : 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</div>}
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <Button size="small" ghost icon={<FullscreenOutlined />} onClick={toggleFs} style={{ borderColor: theme.border, color: theme.textDim }}>
-              {fs ? '退出' : '全屏'}
-            </Button>
-            {onBack && <Button size="small" ghost icon={<ArrowLeftOutlined />} onClick={onBack} style={{ borderColor: theme.border, color: theme.textDim }}>返回</Button>}
+          <div style={{ display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end', alignItems: 'center', gap: 8, color: theme.textDim, fontSize: 12 }}>
+            <span>{dt} {tm}{updatedAt ? ` · 数据: ${updatedAt}` : ''}</span>
+            {!isMobile && (
+              <Button size="small" ghost icon={fs ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={toggleFs} style={{ borderColor: theme.border, color: theme.textDim }}>
+                {fs ? '退出' : '全屏'}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Content */}
-        {children}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
-/* Deterministic star field */
 function Stars() {
   const positions = [
     [5,10],[15,3],[25,18],[35,5],[45,22],[55,8],[65,15],[75,4],[85,20],[95,10],
@@ -92,14 +97,8 @@ function Stars() {
   return (
     <>
       {positions.map(([x, y], i) => (
-        <div key={i} style={{
-          position: 'absolute', left: `${x}%`, top: `${y}%`,
-          width: 2, height: 2, borderRadius: '50%', background: '#fff',
-          opacity: 0.1 + (i % 3) * 0.1,
-          animation: `twinkle ${3 + (i % 4)}s ease-in-out ${(i % 3)}s infinite`,
-        }} />
+        <div key={i} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, width: i % 5 === 0 ? 3 : 2, height: i % 5 === 0 ? 3 : 2, borderRadius: '50%', background: '#dff8ff', opacity: 0.12 + (i % 3) * 0.08, boxShadow: '0 0 8px rgba(0,184,240,0.5)' }} />
       ))}
-      <style>{`@keyframes twinkle{0%,100%{opacity:0.1}50%{opacity:0.4}}`}</style>
     </>
   );
 }

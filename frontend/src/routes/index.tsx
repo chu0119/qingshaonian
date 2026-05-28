@@ -73,6 +73,24 @@ export default function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/403" element={<ForbiddenPage />} />
 
+      {/* 独立大屏路由 */}
+      <Route
+        path="/school-admin/screen"
+        element={
+          <ProtectedRoute roles={['school_admin']}>
+            <DataScreen />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/screen"
+        element={
+          <ProtectedRoute roles={['platform_admin']}>
+            <PlatformScreen />
+          </ProtectedRoute>
+        }
+      />
+
       {/* 学校管理员路由 */}
       <Route
         path="/school-admin"
@@ -94,7 +112,6 @@ export default function AppRoutes() {
         <Route path="risks/:id" element={<RiskDetail />} />
         <Route path="interventions" element={<InterventionRecords />} />
         <Route path="reports" element={<DataReports />} />
-        <Route path="screen" element={<DataScreen />} />
         <Route path="settings" element={<SystemSettings />} />
       </Route>
 
@@ -134,7 +151,6 @@ export default function AppRoutes() {
         <Route path="key-students" element={<PlatformKeyStudents />} />
         <Route path="tasks" element={<PlatformTaskSupervision />} />
         <Route path="interventions" element={<PlatformInterventionSupervision />} />
-        <Route path="screen" element={<PlatformScreen />} />
         <Route path="ai-analysis" element={<PlatformAIAnalysis />} />
         <Route path="notifications" element={<PlatformSmsCenter />} />
         <Route path="audit-logs" element={<PlatformAuditLogs />} />
