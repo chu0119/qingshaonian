@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Table, Tag, Button, Modal, Form, Input, Select, message, Typography, DatePicker, Switch } from 'antd';
+import { Table, Tag, Button, Modal, Form, Input, Select, message, Typography, DatePicker, Switch, Popconfirm, Descriptions } from 'antd';
 import { useSearchParams } from 'react-router-dom';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import StudentSelect from '../../components/common/StudentSelect';
 import client from '../../api/client';
 
@@ -15,6 +15,9 @@ export default function TeacherInterventions() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [detailRecord, setDetailRecord] = useState<any>(null);
   const [form] = Form.useForm();
 
   const fetchData = () => {
@@ -46,18 +49,50 @@ export default function TeacherInterventions() {
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
-      await client.post('/interventions', {
+      const payload = {
         ...values,
         intervention_time: values.intervention_time?.toISOString(),
         next_follow_up_time: values.next_follow_up_time?.toISOString(),
         status: values.need_follow_up ? 'follow_up' : values.status,
-      });
-      message.success('创建成功');
-      setModalOpen(false); form.resetFields(); fetchData();
+      };
+      if (editingRecord) {
+        await client.put(`/interventions/${editingRecord.id}`, payload);
+        message.success('更新成功');
+      } else {
+        await client.post('/interventions', payload);
+        message.success('创建成功');
+      }
+      setModalOpen(false); form.resetFields(); setEditingRecord(null); fetchData();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return;
-      message.error('创建失败，请重试');
+      message.error('保存失败');
     }
+  };
+
+  const handleEdit = (record: any) => {
+    setEditingRecord(record);
+    form.setFieldsValue({
+      student_id: record.student_id,
+      method: record.method,
+      content: record.content,
+      result: record.result,
+      follow_up_suggestion: record.follow_up_suggestion,
+      need_follow_up: record.need_follow_up,
+      status: record.status,
+      risk_alert_id: record.risk_alert_id,
+    });
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    await client.delete(`/interventions/${id}`);
+    message.success('删除成功');
+    fetchData();
+  };
+
+  const showDetail = (record: any) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
   };
 
   const columns = [
@@ -68,17 +103,26 @@ export default function TeacherInterventions() {
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
     { title: '跟进', dataIndex: 'need_follow_up', render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
     { title: '下次跟进', dataIndex: 'next_follow_up_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
+    { title: '操作', key: 'action', width: 200, render: (_: any, r: any) => (
+      <>
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => showDetail(r)}>查看</Button>
+        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
+        <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)}>
+          <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+        </Popconfirm>
+      </>
+    )},
   ];
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Typography.Title level={4}>干预记录</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRecord(null); form.resetFields(); setModalOpen(true); }}>新增</Button>
       </div>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }} />
-      <Modal title="新增干预记录" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} width={600} style={{ maxWidth: '95vw' }}>
+      <Modal title={editingRecord ? '编辑干预记录' : '新增干预记录'} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); setEditingRecord(null); form.resetFields(); }} width={600} style={{ maxWidth: '95vw' }}>
         <Form form={form} layout="vertical">
           <Form.Item name="risk_alert_id" hidden><Input /></Form.Item>
           <Form.Item name="student_id" label="选择学生" rules={[{ required: true }]}>
@@ -107,6 +151,23 @@ export default function TeacherInterventions() {
             <Select options={Object.entries(statusLabels).map(([k, v]) => ({ value: k, label: v }))} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 详情弹窗 */}
+      <Modal title="干预记录详情" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={600} style={{ maxWidth: '95vw' }}>
+        {detailRecord && (
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="学生">{detailRecord.student_name}</Descriptions.Item>
+            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || detailRecord.method}</Descriptions.Item>
+            <Descriptions.Item label="干预时间">{detailRecord.intervention_time ? new Date(detailRecord.intervention_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="状态"><Tag>{statusLabels[detailRecord.status] || detailRecord.status}</Tag></Descriptions.Item>
+            <Descriptions.Item label="干预内容">{detailRecord.content}</Descriptions.Item>
+            <Descriptions.Item label="处理结果">{detailRecord.result || '-'}</Descriptions.Item>
+            <Descriptions.Item label="后续建议">{detailRecord.follow_up_suggestion || '-'}</Descriptions.Item>
+            <Descriptions.Item label="需要跟进">{detailRecord.need_follow_up ? '是' : '否'}</Descriptions.Item>
+            {detailRecord.next_follow_up_time && <Descriptions.Item label="下次跟进时间">{new Date(detailRecord.next_follow_up_time).toLocaleString('zh-CN')}</Descriptions.Item>}
+          </Descriptions>
+        )}
       </Modal>
     </div>
   );
