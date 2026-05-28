@@ -152,6 +152,7 @@ export default function RiskDetail() {
         </Col>
       </Row>
       <AiAnalysisModal open={aiOpen} type="student_risk" data={{
+        student_id: detail.student_id,
         name: detail.student_name,
         risk_level: riskLabels[detail.risk_level]?.label || detail.risk_level,
         risk_type: detail.risk_type || '暂无分类',
