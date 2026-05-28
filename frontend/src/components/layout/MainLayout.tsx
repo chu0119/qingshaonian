@@ -68,13 +68,11 @@ export default function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
   const [pwdForm] = Form.useForm();
-  const { user, logout } = useAuthStore();
+  const { user, logout, hasPlatformSession, platformSchoolName, restorePlatformSession } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
-  const isImpersonating = useAuthStore(s => s.hasPlatformSession && s.hasPlatformSession());
-  const platformSchoolName = useAuthStore(s => s.platformSchoolName());
-  const restorePlatformSession = useAuthStore(s => s.restorePlatformSession);
+  const isImpersonating = hasPlatformSession();
 
   if (!user) return null;
 
@@ -198,7 +196,7 @@ export default function MainLayout() {
             type="info"
             showIcon
             message={
-              <span>当前通过平台管理员视角查看 <b>{platformSchoolName}</b> 的数据</span>
+              <span>当前通过平台管理员视角查看 <b>{platformSchoolName()}</b> 的数据</span>
             }
             action={
               <Button size="small" type="primary" onClick={() => {

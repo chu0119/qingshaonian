@@ -25,6 +25,7 @@ export default function SchoolManagement() {
   const [form] = Form.useForm();
   const [resetForm] = Form.useForm();
   const setAuth = useAuthStore(s => s.setAuth);
+  const savePlatformSession = useAuthStore(s => s.savePlatformSession);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -72,7 +73,7 @@ export default function SchoolManagement() {
     setEnteringSchool(schoolId);
     try {
       const school = data.find((s: any) => s.id === schoolId);
-      setAuth.savePlatformSession();
+      savePlatformSession();
       if (school) {
         localStorage.setItem('platform_school_name', school.name);
       }
