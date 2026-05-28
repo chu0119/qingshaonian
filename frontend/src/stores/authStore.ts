@@ -52,7 +52,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('platform_token');
       localStorage.removeItem('platform_user');
       localStorage.removeItem('platform_school_name');
-      set({ user, token });
       return true;
     }
     return false;
