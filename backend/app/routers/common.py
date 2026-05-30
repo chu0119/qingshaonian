@@ -19,6 +19,8 @@ def get_categories(user: User = Depends(get_current_user)):
         {"value": "interpersonal", "label": "人际关系测评"},
         {"value": "academic_pressure", "label": "学业压力测评"},
         {"value": "custom", "label": "自定义分类"},
+        {"value": "jindun_behavior", "label": "金盾护苗行为筛查"},
+        {"value": "jindun_family", "label": "金盾护苗家庭评估"},
     ]
     return APIResponse.success(categories)
 
@@ -68,10 +70,10 @@ def get_teacher_types(user: User = Depends(get_current_user)):
 @router.get("/dict/risk-levels")
 def get_risk_levels(user: User = Depends(get_current_user)):
     levels = [
-        {"value": "low", "label": "低风险", "color": "#1890FF"},
-        {"value": "medium", "label": "中风险", "color": "#FA8C16"},
-        {"value": "high", "label": "高风险", "color": "#FF4D4F"},
-        {"value": "urgent", "label": "紧急风险", "color": "#CF1322"},
+        {"value": "low", "label": "关注", "color": "#1890FF"},
+        {"value": "medium", "label": "预警", "color": "#FA8C16"},
+        {"value": "high", "label": "警告", "color": "#FF4D4F"},
+        {"value": "urgent", "label": "危急", "color": "#CF1322"},
     ]
     return APIResponse.success(levels)
 
@@ -107,5 +109,6 @@ def get_process_statuses(user: User = Depends(get_current_user)):
 @router.get("/dict/grades")
 def get_grades_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from ..models.user import Grade
-    grades = db.query(Grade).filter(Grade.status == True).order_by(Grade.sort_order).all()
+    school_id = getattr(user, '_effective_school_id', None) or user.school_id
+    grades = db.query(Grade).filter(Grade.school_id == school_id, Grade.status == True).order_by(Grade.sort_order).all()
     return APIResponse.success([{"value": g.id, "label": g.name} for g in grades])

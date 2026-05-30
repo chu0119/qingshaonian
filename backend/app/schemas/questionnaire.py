@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, validator
 from typing import Optional, Any
 
 
@@ -55,7 +55,7 @@ class ContradictionGroupCreate(BaseModel):
 
 
 class QuestionnaireCreate(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1, max_length=200, description="问卷标题")
     description: Optional[str] = ""
     category: Optional[str] = "custom"
     applicable_grades: Optional[str] = ""
@@ -65,6 +65,13 @@ class QuestionnaireCreate(BaseModel):
     risk_rules: dict[str, Any] = {}
     quality_rules: dict[str, Any] = {}
     source_type: Optional[str] = "school_custom"
+
+    @validator('title')
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('问卷标题不能为空')
+        return v.strip()
 
 
 class QuestionnaireUpdate(BaseModel):

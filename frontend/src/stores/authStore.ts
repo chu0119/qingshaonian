@@ -5,6 +5,7 @@ interface AuthState {
   user: UserInfo | null;
   token: string | null;
   setAuth: (user: UserInfo, token: string) => void;
+  updateUser: (user: Partial<UserInfo>) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
   savePlatformSession: () => void;
@@ -21,6 +22,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('access_token', token);
     set({ user, token });
+  },
+
+  updateUser: (partial) => {
+    const current = get().user;
+    if (!current) return;
+    const updated = { ...current, ...partial };
+    localStorage.setItem('user', JSON.stringify(updated));
+    set({ user: updated });
   },
 
   logout: () => {

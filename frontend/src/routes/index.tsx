@@ -4,6 +4,7 @@ import ProtectedRoute from './ProtectedRoute';
 import MainLayout from '../components/layout/MainLayout';
 import StudentLayout from '../components/layout/StudentLayout';
 import LoginPage from '../pages/LoginPage';
+import ForceChangePassword from '../pages/ForceChangePassword';
 import ForbiddenPage from '../pages/403';
 import NotFoundPage from '../pages/404';
 
@@ -21,6 +22,8 @@ import InterventionRecords from '../pages/school-admin/InterventionRecords';
 import DataReports from '../pages/school-admin/DataReports';
 import DataScreen from '../pages/school-admin/DataScreen';
 import SystemSettings from '../pages/school-admin/SystemSettings';
+import SchoolAuditLogs from '../pages/school-admin/AuditLogs';
+import StudentProfile360 from '../pages/school-admin/StudentProfile';
 
 // 教师页面
 import TeacherDashboard from '../pages/teacher/TeacherDashboard';
@@ -38,6 +41,7 @@ import PendingQuestionnaires from '../pages/student/PendingQuestionnaires';
 import AnswerPage from '../pages/student/AnswerPage';
 import CompletedQuestionnaires from '../pages/student/CompletedQuestionnaires';
 import StudentProfile from '../pages/student/Profile';
+import StudentHealthTips from '../pages/student/HealthTips';
 
 // 平台管理员页面
 import SchoolManagement from '../pages/platform/SchoolManagement';
@@ -51,6 +55,8 @@ import PlatformInterventionSupervision from '../pages/platform/InterventionSuper
 import PlatformAuditLogs from '../pages/platform/AuditLogs';
 import PlatformSmsCenter from '../pages/platform/Notifications';
 import PlatformAIAnalysis from '../pages/platform/AIAnalysis';
+import PlatformStudentManagement from '../pages/platform/StudentManagement';
+import PlatformQuestionnaireManagement from '../pages/platform/QuestionnaireManagement';
 
 function RootRedirect() {
   const { user } = useAuthStore();
@@ -71,6 +77,11 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/change-password" element={
+        <ProtectedRoute>
+          <ForceChangePassword />
+        </ProtectedRoute>
+      } />
       <Route path="/403" element={<ForbiddenPage />} />
 
       {/* 独立大屏路由 */}
@@ -112,6 +123,8 @@ export default function AppRoutes() {
         <Route path="risks/:id" element={<RiskDetail />} />
         <Route path="interventions" element={<InterventionRecords />} />
         <Route path="reports" element={<DataReports />} />
+        <Route path="audit-logs" element={<SchoolAuditLogs />} />
+        <Route path="students/:id" element={<StudentProfile360 />} />
         <Route path="settings" element={<SystemSettings />} />
       </Route>
 
@@ -148,6 +161,10 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<PlatformDashboard />} />
         <Route path="schools" element={<SchoolManagement />} />
         <Route path="risks" element={<PlatformRiskCenter />} />
+        <Route path="students" element={<PlatformStudentManagement />} />
+        <Route path="questionnaires" element={<PlatformQuestionnaireManagement />} />
+        <Route path="questionnaires/new" element={<QuestionnaireEditor />} />
+        <Route path="questionnaires/:id/edit" element={<QuestionnaireEditor />} />
         <Route path="key-students" element={<PlatformKeyStudents />} />
         <Route path="tasks" element={<PlatformTaskSupervision />} />
         <Route path="interventions" element={<PlatformInterventionSupervision />} />
@@ -167,8 +184,13 @@ export default function AppRoutes() {
         }
       >
         <Route path="dashboard" element={<TeacherDashboard />} />
+        <Route path="classes" element={<MyClasses />} />
+        <Route path="students" element={<StudentManagement />} />
         <Route path="risks" element={<RiskStudents />} />
         <Route path="interventions" element={<TeacherInterventions />} />
+        <Route path="tasks" element={<TeacherTasks />} />
+        <Route path="completion" element={<CompletionStatus />} />
+        <Route path="reports" element={<ClassReport />} />
       </Route>
 
       {/* 学生路由 */}
@@ -184,6 +206,7 @@ export default function AppRoutes() {
         <Route path="pending" element={<PendingQuestionnaires />} />
         <Route path="answer/:answerSheetId" element={<AnswerPage />} />
         <Route path="completed" element={<CompletedQuestionnaires />} />
+        <Route path="health-tips" element={<StudentHealthTips />} />
         <Route path="profile" element={<StudentProfile />} />
       </Route>
 

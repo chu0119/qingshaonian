@@ -31,8 +31,8 @@ export default function ClassManagement() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => {
-    getDictGrades().then(setGrades);
-    getTeachers({ page: 1, page_size: 10000 }).then(res => setTeachers(res.items || []));
+    getDictGrades().then(setGrades).catch(() => {});
+    getTeachers({ page: 1, page_size: 10000 }).then(res => setTeachers(res.items || [])).catch(() => {});
   }, []);
 
   const openCreate = () => {
@@ -96,7 +96,7 @@ export default function ClassManagement() {
       </div>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 条` }} />
-      <Modal title={editingClass ? '编辑班级' : '新增班级'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden>
+      <Modal title={editingClass ? '编辑班级' : '新增班级'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden okText="确定" cancelText="取消">
         <Form form={form} layout="vertical">
           <Form.Item name="grade_id" label="年级" rules={[{ required: true }]}>
             <Select options={grades.map(g => ({ value: g.value, label: g.label }))} />

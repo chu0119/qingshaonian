@@ -36,9 +36,10 @@ def _generate_code() -> str:
     return str(random.randint(100000, 999999))
 
 
-def _save_code(phone: str, purpose: str) -> str:
+def _save_code(phone: str, username: str, purpose: str) -> str:
     code = _generate_code()
-    _verification_codes[phone] = {
+    key = f"{phone}:{username}"
+    _verification_codes[key] = {
         "code": code,
         "expires": time.time() + 300,  # 5分钟有效期
         "purpose": purpose,
@@ -47,20 +48,21 @@ def _save_code(phone: str, purpose: str) -> str:
     return code
 
 
-def _verify_code(phone: str, code: str, purpose: str) -> bool:
-    stored = _verification_codes.get(phone)
+def _verify_code(phone: str, username: str, code: str, purpose: str) -> bool:
+    key = f"{phone}:{username}"
+    stored = _verification_codes.get(key)
     if not stored:
         return False
     if stored["expires"] < time.time():
-        del _verification_codes[phone]
+        del _verification_codes[key]
         return False
     if stored.get("attempts", 0) >= 5:
-        del _verification_codes[phone]
+        del _verification_codes[key]
         return False
     stored["attempts"] = stored.get("attempts", 0) + 1
     if stored["code"] != code or stored["purpose"] != purpose:
         return False
-    del _verification_codes[phone]  # 一次性使用
+    del _verification_codes[key]  # 一次性使用
     return True
 
 
@@ -90,8 +92,10 @@ def get_me(user: User = Depends(get_current_user)):
 
 
 @router.put("/change-password")
-def change_password(request: ChangePasswordRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def change_password(request: ChangePasswordRequest, http_request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     auth_service.change_password(db, user, request.old_password, request.new_password)
+    log_operation(db, user, http_request, module="auth", action="change_password",
+                  object_type="user", object_id=user.id, object_name=user.real_name)
     return APIResponse.success(message="密码修改成功")
 
 
@@ -105,7 +109,8 @@ def reset_password(user_id: int, request_data: ResetPasswordRequest, request: Re
     effective_school_id = getattr(user, '_effective_school_id', None) or user.school_id
     if target.school_id != effective_school_id:
         raise HTTPException(status_code=403, detail="只能重置本校用户密码")
-    auth_service.reset_user_password(db, user_id, request_data.new_password)
+    new_pwd = request_data.new_password or (target.username[-6:] if len(target.username) >= 6 else "123456")
+    auth_service.reset_user_password(db, user_id, new_pwd)
     log_operation(db, user=user, request=request, module="auth", action="reset_password",
                   object_type="user", object_id=user_id, object_name=target.real_name,
                   detail=f"operator_school={effective_school_id}")
@@ -118,18 +123,33 @@ def reset_password(user_id: int, request_data: ResetPasswordRequest, request: Re
 def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
     """发送短信验证码（用于重置密码或登录验证）"""
     phone = (data.get("phone") or "").strip()
+    username = (data.get("username") or "").strip()
     purpose = data.get("purpose", "reset_password")
 
     if not phone or len(phone) < 11:
         raise HTTPException(status_code=400, detail="请输入正确的手机号")
 
+    # 验证手机号是否属于该用户
+    if username:
+        user = db.query(User).filter(User.username == username).first()
+        if not user or user.phone != phone:
+            raise HTTPException(status_code=400, detail="手机号与账号不匹配")
+    else:
+        # 兼容：无 username 时检查手机号是否已注册
+        user = db.query(User).filter(User.phone == phone).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="该手机号未注册")
+        username = user.username
+
     now = time.time()
-    recent_sends = [ts for ts in _sms_send_records.get(phone, []) if now - ts < 3600]
+    record_key = f"{phone}:{username}"
+    recent_sends = [ts for ts in _sms_send_records.get(record_key, []) if now - ts < 3600]
     if len(recent_sends) >= 5:
         raise HTTPException(status_code=429, detail="验证码发送过于频繁，请稍后再试")
 
     # 频率限制：60秒内不能重复发送
-    stored = _verification_codes.get(phone)
+    code_key = f"{phone}:{username}"
+    stored = _verification_codes.get(code_key)
     if stored and stored["expires"] - 300 + 60 > now:
         remaining = int(stored["expires"] - 300 + 60 - now)
         raise HTTPException(status_code=429, detail=f"请{remaining}秒后再试")
@@ -137,6 +157,11 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
     # 检查短信配置
     from ..models.system_config import SystemConfig
     from ..config import settings
+
+    # 如果平台管理员显式关闭了短信服务，直接拒绝
+    sms_enabled_config = db.query(SystemConfig).filter(SystemConfig.config_key == "sms_enabled", SystemConfig.school_id.is_(None)).first()
+    if sms_enabled_config and sms_enabled_config.config_value == "false":
+        raise HTTPException(status_code=400, detail="短信服务已被管理员关闭")
 
     # 如果配置了短信API，尝试真实发送
     sms_sent = False
@@ -147,9 +172,9 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
 
     if not sms_url or not sms_key:
         if settings.DEBUG:
-            code = _save_code(phone, purpose)
+            code = _save_code(phone, username, purpose)
             recent_sends.append(now)
-            _sms_send_records[phone] = recent_sends
+            _sms_send_records[record_key] = recent_sends
             _log_sms_code(db, phone=phone, purpose=purpose, status="not_configured", failure_reason="短信服务暂未配置，调试模式返回验证码")
             log_operation(
                 db,
@@ -162,7 +187,7 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
                 result="success",
                 detail="debug code returned; sms service not configured",
             )
-            return APIResponse.success({"message": "验证码已发送", "code": code, "phone": phone, "sms_sent": False})
+            return APIResponse.success({"message": "验证码已发送", "sms_sent": False})
 
         _log_sms_code(db, phone=phone, purpose=purpose, status="not_configured", failure_reason="短信服务暂未配置")
         log_operation(
@@ -178,9 +203,9 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
         )
         return APIResponse.success({"message": "短信服务暂未配置", "sms_sent": False})
 
-    code = _save_code(phone, purpose)
+    code = _save_code(phone, username, purpose)
     recent_sends.append(now)
-    _sms_send_records[phone] = recent_sends
+    _sms_send_records[record_key] = recent_sends
 
     if sms_url and sms_key:
         failure_reason = ""
@@ -217,10 +242,6 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
         detail="" if sms_sent else "sms provider returned failure or request failed",
     )
 
-    # 开发模式：返回验证码；生产环境绝不返回验证码。
-    if settings.DEBUG:
-        return APIResponse.success({"message": "验证码已发送", "code": code, "phone": phone, "sms_sent": sms_sent})
-
     return APIResponse.success({"message": "验证码已发送" if sms_sent else "短信发送失败，请稍后重试", "sms_sent": sms_sent})
 
 
@@ -228,13 +249,14 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
 def verify_sms_code(data: dict):
     """校验短信验证码"""
     phone = (data.get("phone") or "").strip()
+    username = (data.get("username") or "").strip()
     code = (data.get("code") or "").strip()
     purpose = data.get("purpose", "reset_password")
 
-    if not phone or not code:
-        raise HTTPException(status_code=400, detail="手机号和验证码不能为空")
+    if not phone or not code or not username:
+        raise HTTPException(status_code=400, detail="手机号、账号和验证码不能为空")
 
-    valid = _verify_code(phone, code, purpose)
+    valid = _verify_code(phone, username, code, purpose)
     if not valid:
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
@@ -255,14 +277,17 @@ def reset_password_by_sms(data: dict, db: Session = Depends(get_db)):
     if len(new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码至少6位")
 
-    # 校验验证码
-    if not _verify_code(phone, code, "reset_password"):
+    # 校验验证码（使用复合 key）
+    if not _verify_code(phone, username, code, "reset_password"):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
     # 查找用户
     user = db.query(User).filter(User.username == username, User.phone == phone).first()
     if not user:
         raise HTTPException(status_code=404, detail="未找到匹配的用户，请检查账号和手机号")
+
+    if not user.status:
+        raise HTTPException(status_code=403, detail="账号已被禁用，无法重置密码")
 
     user.password_hash = hash_password(new_password)
     user.must_change_password = False

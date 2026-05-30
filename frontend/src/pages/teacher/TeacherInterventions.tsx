@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Table, Tag, Button, Modal, Form, Input, Select, message, Typography, DatePicker, Switch, Popconfirm, Descriptions } from 'antd';
 import { useSearchParams } from 'react-router-dom';
+import dayjs from 'dayjs';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import StudentSelect from '../../components/common/StudentSelect';
 import client from '../../api/client';
+import { METHOD_LABELS, INTERVENTION_STATUS_LABELS } from '../../utils/constants';
 
-const methodLabels: Record<string, string> = { student_talk: '学生谈话', teacher_communication: '班主任沟通', counselor_guidance: '心理老师辅导', counselor_counsel: '心理老师辅导', family_school: '家校沟通', parent_communication: '家校沟通', home_visit: '家访', referral: '转介专业机构', observation: '持续观察', other: '其他' };
-const statusLabels: Record<string, string> = { pending: '待处理', in_progress: '处理中', processing: '处理中', follow_up: '持续跟进', ongoing: '持续跟进', completed: '已完成', closed: '已关闭' };
+const methodLabels = METHOD_LABELS;
+const statusLabels = INTERVENTION_STATUS_LABELS;
 
 export default function TeacherInterventions() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,7 +25,7 @@ export default function TeacherInterventions() {
   const fetchData = () => {
     setLoading(true);
     client.get('/interventions', { params: { page, page_size: 20 } }).then(r => {
-      setData(r.data.data.items); setTotal(r.data.data.total);
+      setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
     }).catch(() => {
       message.error('获取干预记录失败');
     }).finally(() => setLoading(false));
@@ -85,9 +87,13 @@ export default function TeacherInterventions() {
   };
 
   const handleDelete = async (id: number) => {
-    await client.delete(`/interventions/${id}`);
-    message.success('删除成功');
-    fetchData();
+    try {
+      await client.delete(`/interventions/${id}`);
+      message.success('删除成功');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '删除失败');
+    }
   };
 
   const showDetail = (record: any) => {
@@ -107,7 +113,7 @@ export default function TeacherInterventions() {
       <>
         <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => showDetail(r)}>查看</Button>
         <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-        <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)}>
+        <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)} okText="确定" cancelText="取消">
           <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
         </Popconfirm>
       </>
@@ -122,7 +128,7 @@ export default function TeacherInterventions() {
       </div>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }} />
-      <Modal title={editingRecord ? '编辑干预记录' : '新增干预记录'} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); setEditingRecord(null); form.resetFields(); }} width={600} style={{ maxWidth: '95vw' }}>
+      <Modal title={editingRecord ? '编辑干预记录' : '新增干预记录'} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); setEditingRecord(null); form.resetFields(); }} okText="确定" cancelText="取消" width={600} style={{ maxWidth: '95vw' }}>
         <Form form={form} layout="vertical">
           <Form.Item name="risk_alert_id" hidden><Input /></Form.Item>
           <Form.Item name="student_id" label="选择学生" rules={[{ required: true }]}>

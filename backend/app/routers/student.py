@@ -148,3 +148,7 @@ def submit_answer(sheet_id: int, user: User = Depends(require_role("student")), 
         return APIResponse.success({"message": "感谢你完成本次问卷，学校和老师会根据整体情况开展后续支持工作。"})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"提交失败: {str(e)}")

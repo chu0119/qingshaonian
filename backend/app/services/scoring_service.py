@@ -144,9 +144,13 @@ def submit_answer(db: Session, sheet_id: int) -> dict:
     _validate_required_answers(db, sheet)
 
     sheet.status = "submitted"
-    sheet.submitted_at = datetime.now(tz)
+    now = datetime.now(tz)
+    sheet.submitted_at = now
     if sheet.started_at:
-        sheet.total_duration_seconds = int((sheet.submitted_at - sheet.started_at).total_seconds())
+        started = sheet.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=tz)
+        sheet.total_duration_seconds = int((now - started).total_seconds())
     db.commit()
 
     scoring = calculate_scores(db, sheet_id)
@@ -449,10 +453,10 @@ def _generate_risk_description(questionnaire: Questionnaire | None, risk_level: 
     if risk_level in messages:
         return messages[risk_level]
     descriptions = {
-        "low": "测评结果暂未发现明显关注信号，建议保持日常关怀和常规教育支持。",
-        "medium": "测评结果出现一定关注信号，建议班主任或心理老师适时了解学生近期学习、生活和情绪状态，并结合日常观察进行复核。",
-        "high": "测评结果出现较明显关注信号，建议心理老师或班主任在近期进行一对一沟通，结合日常观察、班级情况和家庭沟通综合研判，并形成持续跟进记录。",
-        "urgent": "测评结果出现需要及时关注的信号，建议学校按既有学生关怀和安全支持流程尽快跟进，必要时联系监护人并寻求专业支持。",
+        "low": "测评结果显示该学生可能需要额外的关爱和支持，建议班主任或心理老师在日常教育中给予更多关注和帮助。",
+        "medium": "测评结果显示该学生存在一定的风险信号，建议班主任适时了解学生近期学习、生活和情绪状态，并结合日常观察进行核实。",
+        "high": "测评结果显示该学生存在较为明显的风险信号，建议心理老师或班主任在近期进行一对一沟通，结合日常观察、班级情况和家庭沟通综合研判，并形成持续跟进记录。",
+        "urgent": "测评结果显示该学生存在需要及时关注的严重信号，建议学校按既有学生关怀和安全支持流程尽快跟进，必要时联系监护人并寻求专业支持。",
     }
     return descriptions.get(risk_level, "")
 

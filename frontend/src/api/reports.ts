@@ -75,3 +75,45 @@ export async function getQualityStats() {
   const res = await client.get('/quality/statistics/school');
   return res.data.data as QualityStatsData;
 }
+
+// ===== 学生纵向追踪 =====
+
+export interface LongitudinalRecord {
+  answer_sheet_id: number;
+  task_id: number;
+  questionnaire_title: string;
+  submitted_at: string | null;
+  total_score: number | null;
+  dimension_scores: Record<string, number>;
+  risk_level: string | null;
+}
+
+export interface LongitudinalData {
+  student_id: number;
+  student_name: string;
+  records: LongitudinalRecord[];
+}
+
+export async function getStudentLongitudinal(studentId: number) {
+  const res = await client.get(`/reports/student-longitudinal/${studentId}`);
+  return res.data.data as LongitudinalData;
+}
+
+// ===== 群体报告 =====
+
+export interface GroupSummaryData {
+  group_name: string;
+  student_count: number;
+  completed_count: number;
+  avg_total_score: number;
+  dimension_avg: Record<string, number>;
+  risk_distribution: Record<string, number>;
+  completion_rate: number;
+}
+
+export async function getGroupSummary(scope: string, scopeId?: number) {
+  const params: Record<string, unknown> = { scope };
+  if (scopeId) params.scope_id = scopeId;
+  const res = await client.get('/reports/group-summary', { params });
+  return res.data.data as GroupSummaryData;
+}

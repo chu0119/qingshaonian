@@ -113,6 +113,11 @@ def platform_summary(db: Session) -> dict:
         active_at = recent_school_activity(db, school.id)
         rows.append({"id": school.id, "name": school.name, "code": school.code, "status": school.status, "last_active_at": active_at, **metrics})
 
+    # 风险等级分布（全局）
+    risk_level_dist = {}
+    for level in ["low", "medium", "high", "urgent"]:
+        risk_level_dist[level] = db.query(func.count(RiskAlert.id)).filter(RiskAlert.risk_level == level).scalar() or 0
+
     return {
         "school_total": len(schools),
         "enabled_school_total": len([s for s in schools if s.status]),
@@ -125,6 +130,7 @@ def platform_summary(db: Session) -> dict:
         "pending_risk_total": sum(r["pending_risk_count"] for r in rows),
         "ai_call_total": db.query(func.count(AIAnalysisLog.id)).scalar() or 0,
         "sms_send_total": db.query(func.count(SMSLog.id)).scalar() or 0,
+        "risk_level_distribution": risk_level_dist,
         "completion_rankings": sorted(rows, key=lambda r: r["completion_rate"], reverse=True)[:10],
         "risk_rankings": sorted(rows, key=lambda r: r["risk_count"], reverse=True)[:10],
         "risk_handling_rankings": sorted(rows, key=lambda r: r["intervention_completion_rate"], reverse=True)[:10],

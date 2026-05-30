@@ -6,13 +6,13 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
   UploadOutlined, DownloadOutlined, SearchOutlined,
-  ReloadOutlined, ExclamationCircleOutlined,
+  ReloadOutlined, ExclamationCircleOutlined, KeyOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import {
   getStudents, createStudent, updateStudent,
   deleteStudent, importStudents, downloadTemplate,
-  getDictGrades, type UserInfo,
+  getDictGrades, resetUserPassword, type UserInfo,
 } from '../../api/users';
 import { getClasses, type ClassInfo } from '../../api/classes';
 
@@ -205,7 +205,7 @@ export default function StudentManagement() {
     { title: '性别', dataIndex: 'gender', key: 'gender', width: 60 },
     { title: '年级', dataIndex: 'grade_name', key: 'grade_name', width: 100 },
     { title: '班级', dataIndex: 'class_name', key: 'class_name', width: 100 },
-    { title: '登录账号', dataIndex: 'username', key: 'username', width: 120, ellipsis: true },
+    { title: '身份证号', dataIndex: 'username', key: 'username', width: 180, render: (v: string) => v && v.length >= 8 ? v.slice(0, 3) + '*'.repeat(v.length - 7) + v.slice(-4) : v || '-' },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (v: boolean) => (
@@ -215,7 +215,7 @@ export default function StudentManagement() {
       ),
     },
     {
-      title: '操作', key: 'action', width: 180, fixed: 'right' as const,
+      title: '操作', key: 'action', width: 240, fixed: 'right' as const,
       render: (_: unknown, r: UserInfo) => (
         <Space size="small">
           <Tooltip title="编辑">
@@ -223,6 +223,13 @@ export default function StudentManagement() {
               编辑
             </Button>
           </Tooltip>
+          <Popconfirm title="确定重置此学生的密码？" description="密码将重置为身份证号后6位" onConfirm={async () => {
+            try { await resetUserPassword(r.id); message.success('密码已重置'); } catch { message.error('重置失败'); }
+          }}>
+            <Tooltip title="重置密码">
+              <Button type="link" size="small" icon={<KeyOutlined />}>重置</Button>
+            </Tooltip>
+          </Popconfirm>
           <Popconfirm
             title="确定删除该学生？"
             description="删除后不可恢复"
@@ -299,7 +306,7 @@ export default function StudentManagement() {
                 options={classes.map((c) => ({ value: c.id, label: c.name }))}
               />
               <Input.Search
-                placeholder="搜索姓名 / 学号 / 账号"
+                placeholder="搜索姓名 / 学号 / 身份证号"
                 allowClear
                 style={{ width: 220 }}
                 value={filters.keyword}
@@ -386,11 +393,13 @@ export default function StudentManagement() {
       >
         <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
           <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item name="student_no" label="学号" rules={[{ required: true, message: '请输入学号' }]}>
-                <Input placeholder="请输入学号" />
-              </Form.Item>
-            </Col>
+            {editingStudent && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="student_no" label="学号">
+                  <Input disabled />
+                </Form.Item>
+              </Col>
+            )}
             <Col xs={24} sm={12}>
               <Form.Item name="real_name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
                 <Input placeholder="请输入姓名" />
@@ -399,17 +408,21 @@ export default function StudentManagement() {
           </Row>
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item name="username" label="登录账号" rules={[{ required: true, message: '请输入登录账号' }]}>
+              <Form.Item name="username" label="身份证号" rules={[
+                { required: true, message: '请输入身份证号' },
+                { pattern: /^\d{17}[\dXx]$/, message: '身份证号格式不正确（18位数字，末位可为X）' },
+              ]}>
                 <Input
                   disabled={!!editingStudent}
-                  placeholder={editingStudent ? '' : '默认同化学号'}
+                  placeholder="请输入18位身份证号"
+                  maxLength={18}
                 />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
               {!editingStudent && (
-                <Form.Item name="password" label="初始密码" tooltip="留空则默认 123456">
-                  <Input placeholder="默认 123456" />
+                <Form.Item name="password" label="初始密码" tooltip="留空则默认为身份证号后6位">
+                  <Input placeholder="默认为身份证号后6位" />
                 </Form.Item>
               )}
             </Col>

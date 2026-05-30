@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Radio, Checkbox, Button, Space, Progress, Typography, message, Modal, Result, Alert, Input } from 'antd';
-import { CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Radio, Checkbox, Button, Space, Progress, Typography, message, Modal, Result, Alert, Input, Checkbox as AntCheckbox } from 'antd';
+import { CheckCircleOutlined, SafetyOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 
 export default function AnswerPage() {
@@ -14,13 +14,19 @@ export default function AnswerPage() {
   const [questionStart, setQuestionStart] = useState(Date.now());
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
   const autoSaveRef = useRef<ReturnType<typeof setInterval>>();
   const answersRef = useRef<Record<number, any>>({});
+  const durationsRef = useRef<Record<number, number>>({});
 
-  // 同步 answers 到 ref，避免自动保存时捕获过时的 state
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  useEffect(() => {
+    durationsRef.current = durations;
+  }, [durations]);
 
   // 自动保存（每30秒）
   useEffect(() => {
@@ -35,11 +41,11 @@ export default function AnswerPage() {
   useEffect(() => {
     client.get(`/student/answer-sheets/${answerSheetId}`).then(r => {
       const data = r.data.data;
-      if (data.status === 'submitted') { setSubmitted(true); return; }
+      if (!data || data.status === 'submitted') { setSubmitted(true); return; }
       setSheet(data);
       const prev: Record<number, any> = {};
       const dur: Record<number, number> = {};
-      data.questions.forEach((q: any) => {
+      (data.questions || []).forEach((q: any) => {
         if (q.previous_answer) prev[q.id] = q.previous_answer;
         dur[q.id] = q.previous_duration || 0;
       });
@@ -52,7 +58,7 @@ export default function AnswerPage() {
   const saveToServer = async (ans: Record<number, any>, showMsg = false) => {
     const answerList = Object.entries(ans).map(([qid, content]) => ({
       question_id: Number(qid), answer_content: content,
-      duration_seconds: durations[Number(qid)] || 0, displayed_order: 0,
+      duration_seconds: durationsRef.current[Number(qid)] || 0, displayed_order: 0,
     }));
     try {
       await client.put(`/student/answer-sheets/${answerSheetId}/save`, { answers: answerList });
@@ -103,6 +109,42 @@ export default function AnswerPage() {
     });
   };
 
+  if (!consented && sheet) {
+    return (
+      <div style={{ maxWidth: 600, margin: '40px auto' }}>
+        <Card>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <SafetyOutlined style={{ fontSize: 48, color: '#4A90D9', marginBottom: 12 }} />
+            <Typography.Title level={4} style={{ marginTop: 0 }}>测评知情同意书</Typography.Title>
+          </div>
+          <div style={{ lineHeight: 1.8, color: '#333', marginBottom: 24, padding: '16px', background: '#fafafa', borderRadius: 8 }}>
+            <p>亲爱的同学，你好！</p>
+            <p>本问卷旨在了解同学们的学习和生活状况，以便学校和老师更好地为大家提供帮助和支持。</p>
+            <p><strong>保密承诺：</strong></p>
+            <ul style={{ paddingLeft: 20 }}>
+              <li>你的回答仅用于学校开展关爱帮扶工作，不会对外公开。</li>
+              <li>个人数据严格保密，仅授权人员可查看。</li>
+              <li>测评结果不会影响你的学习成绩和在校评价。</li>
+              <li>你有权随时退出本次测评。</li>
+            </ul>
+            <p>感谢你的信任与配合！</p>
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <label style={{ cursor: 'pointer' }}>
+              <AntCheckbox checked={consentChecked} onChange={e => setConsentChecked(e.target.checked)} style={{ marginRight: 8 }} />
+              我已阅读并理解以上内容，自愿参与本次测评
+            </label>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <Button type="primary" disabled={!consentChecked} onClick={() => setConsented(true)} size="large">
+              同意并开始测评
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (submitted) {
     return (
       <Result status="success" title="问卷提交成功"
@@ -118,8 +160,8 @@ export default function AnswerPage() {
 
   const questions = sheet.questions;
   const q = questions[currentIndex];
-  const progress = Math.round(((currentIndex + 1) / questions.length) * 100);
   const answeredCount = Object.keys(answers).filter(k => answers[Number(k)]).length;
+  const progress = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
 
   const recordTime = () => {
     const now = Date.now();
@@ -165,10 +207,10 @@ export default function AnswerPage() {
             style={{ width: '100%' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               {q.options?.map((opt: any) => (
-                <div key={opt.id} style={{ padding: '10px 12px', border: '1px solid #f0f0f0', borderRadius: 6, marginBottom: 4, cursor: 'pointer', background: ans?.selected_option_id === opt.id ? '#E6F7FF' : '#fff' }}
-                  onClick={() => setAnswer(q.id, { selected_option_id: opt.id })}>
-                  <Radio value={opt.id} style={{ marginRight: 8 }} />{opt.content}
-                </div>
+                <Radio key={opt.id} value={opt.id}
+                  style={{ padding: '10px 12px', border: '1px solid #f0f0f0', borderRadius: 6, marginBottom: 4, display: 'block', background: ans?.selected_option_id === opt.id ? '#E6F7FF' : '#fff' }}>
+                  {opt.content || `选项 ${opt.id}`}
+                </Radio>
               ))}
             </Space>
           </Radio.Group>
@@ -179,7 +221,7 @@ export default function AnswerPage() {
             <Space direction="vertical" style={{ width: '100%' }}>
               {q.options?.map((opt: any) => (
                 <div key={opt.id} style={{ padding: '10px 12px', border: '1px solid #f0f0f0', borderRadius: 6, marginBottom: 4 }}>
-                  <Checkbox value={opt.id}>{opt.content}</Checkbox>
+                  <Checkbox value={opt.id}>{opt.content || `选项 ${opt.id}`}</Checkbox>
                 </div>
               ))}
             </Space>

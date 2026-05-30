@@ -33,6 +33,27 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
+# 默认年级列表：小学 → 初中 → 高中 → 中专
+DEFAULT_GRADES = [
+    ("一年级", 1), ("二年级", 2), ("三年级", 3),
+    ("四年级", 4), ("五年级", 5), ("六年级", 6),
+    ("初一", 7), ("初二", 8), ("初三", 9),
+    ("高一", 10), ("高二", 11), ("高三", 12),
+    ("中专一年级", 13), ("中专二年级", 14), ("中专三年级", 15),
+]
+
+
+def create_default_grades(db, school_id: int) -> dict:
+    """为学校创建默认年级，返回 {年级名: Grade} 映射"""
+    grades = {}
+    for gname, gsort in DEFAULT_GRADES:
+        grade = Grade(school_id=school_id, name=gname, sort_order=gsort)
+        db.add(grade)
+        db.flush()
+        grades[gname] = grade
+    return grades
+
+
 def create_default_school(db):
     school = db.query(School).filter(School.code == "MINGDE").first()
     if not school:
@@ -41,13 +62,7 @@ def create_default_school(db):
         db.flush()
 
         # 创建默认年级
-        grades_data = [("初一", 1), ("初二", 2), ("初三", 3)]
-        grades = {}
-        for gname, gsort in grades_data:
-            grade = Grade(school_id=school.id, name=gname, sort_order=gsort)
-            db.add(grade)
-            db.flush()
-            grades[gname] = grade
+        grades = create_default_grades(db, school.id)
 
         # 创建默认班级
         classes_data = [
@@ -61,6 +76,17 @@ def create_default_school(db):
         db.flush()
 
     return school
+
+
+def sync_missing_grades(db):
+    """为所有已有学校补齐缺失的默认年级"""
+    schools = db.query(School).all()
+    for school in schools:
+        existing_names = {g.name for g in db.query(Grade).filter(Grade.school_id == school.id).all()}
+        for gname, gsort in DEFAULT_GRADES:
+            if gname not in existing_names:
+                db.add(Grade(school_id=school.id, name=gname, sort_order=gsort))
+    db.flush()
 
 
 def create_default_admin(db, school_id: int):
@@ -89,7 +115,7 @@ def create_builtin_dictionaries(db):
     from .models.system_config import SystemConfig
 
     configs = [
-        ("risk_levels", '{"low": {"name":"低风险","min_score":0,"max_score":25},"medium":{"name":"中风险","min_score":26,"max_score":50},"high":{"name":"高风险","min_score":51,"max_score":75},"urgent":{"name":"紧急风险","min_score":76,"max_score":100}}', "风险等级配置"),
+        ("risk_levels", '{"low": {"name":"关注","min_score":0,"max_score":25},"medium":{"name":"预警","min_score":26,"max_score":50},"high":{"name":"警告","min_score":51,"max_score":75},"urgent":{"name":"危急","min_score":76,"max_score":100}}', "风险等级配置"),
         ("quality_levels", '{"normal":{"name":"正常","min_score":80},"mild_anomaly":{"name":"轻度异常","min_score":60},"moderate_anomaly":{"name":"中度异常","min_score":40},"severe_anomaly":{"name":"高度异常","min_score":0}}', "答题质量等级配置"),
         ("fast_answer_threshold", '{"total_min_seconds_per_question":2,"consecutive_fast_count":8,"consecutive_fast_seconds":1}', "快速作答检测阈值"),
         ("consecutive_same_threshold", '{"max_consecutive_count":10}', "连续同选项检测阈值"),
@@ -108,30 +134,11 @@ def create_builtin_dictionaries(db):
 def seed_all(db):
     from .config import settings as _settings
 
-    env = getattr(_settings, "APP_ENV", "demo").lower()
-
     create_builtin_dictionaries(db)
+    sync_missing_grades(db)
 
-    # Production: only create platform/admin accounts explicitly configured.
-    if env == "production":
-        from .models.user import User
-        if _settings.PLATFORM_ADMIN_USERNAME and _settings.PLATFORM_ADMIN_PASSWORD:
-            from .utils.password import hash_password
-            platform_admin = db.query(User).filter(User.username == _settings.PLATFORM_ADMIN_USERNAME).first()
-            if not platform_admin:
-                db.add(User(
-                    username=_settings.PLATFORM_ADMIN_USERNAME,
-                    password_hash=hash_password(_settings.PLATFORM_ADMIN_PASSWORD),
-                    real_name="平台管理员",
-                    role="platform_admin",
-                    status=True,
-                ))
-        db.commit()
-        return
-
-    # Demo / development: create default school only when explicitly enabled.
     school = None
-    if getattr(_settings, "INIT_DEFAULT_SCHOOL", False) or getattr(_settings, "INIT_DEMO_DATA", False):
+    if _settings.INIT_DEFAULT_SCHOOL or _settings.INIT_DEMO_DATA:
         school = create_default_school(db)
         create_default_admin(db, school.id)
 
@@ -146,5 +153,6 @@ def seed_all(db):
                 real_name="平台管理员",
                 role="platform_admin",
                 status=True,
+                must_change_password=True,
             ))
     db.commit()

@@ -93,7 +93,7 @@ export async function deleteQuestionnaire(id: number) {
 
 export async function copyQuestionnaire(id: number) {
   const res = await client.post(`/questionnaires/${id}/copy`);
-  return res.data;
+  return res.data.data;
 }
 
 export async function addQuestion(qid: number, data: QuestionData) {
@@ -118,5 +118,10 @@ export async function addContradiction(qid: number, data: ContradictionGroupData
 
 export async function deleteContradiction(qid: number, cgId: number) {
   const res = await client.delete(`/questionnaires/${qid}/contradictions/${cgId}`);
+  return res.data;
+}
+
+export async function sortQuestions(qid: number, questionIds: number[]) {
+  const res = await client.put(`/questionnaires/${qid}/questions/sort`, { question_ids: questionIds });
   return res.data;
 }

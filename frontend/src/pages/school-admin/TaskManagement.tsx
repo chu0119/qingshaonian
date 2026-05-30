@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Button, Tag, Modal, Form, Input, DatePicker, Switch, message, Typography, Space, Row, Col, Statistic, Tabs, Select, Progress, Empty } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Button, Tag, Modal, Form, Input, DatePicker, Switch, message, Typography, Space, Row, Col, Statistic, Tabs, Select, Progress, Empty, Popconfirm, Descriptions, List } from 'antd';
+import { PlusOutlined, EditOutlined, FieldTimeOutlined, EyeOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import client from '../../api/client';
+import { TASK_STATUS_LABELS } from '../../utils/constants';
 
 const statusLabels: Record<string, { color: string; label: string }> = {
-  draft: { color: 'default', label: '草稿' },
-  active: { color: 'green', label: '进行中' },
-  in_progress: { color: 'green', label: '进行中' },
-  not_started: { color: 'cyan', label: '未开始' },
-  ended: { color: 'orange', label: '已截止' },
-  closed: { color: 'red', label: '已关闭' },
-  archived: { color: 'purple', label: '已归档' },
+  draft: { color: 'default', label: TASK_STATUS_LABELS.draft },
+  active: { color: 'green', label: TASK_STATUS_LABELS.active },
+  in_progress: { color: 'green', label: TASK_STATUS_LABELS.in_progress },
+  not_started: { color: 'cyan', label: TASK_STATUS_LABELS.not_started },
+  ended: { color: 'orange', label: TASK_STATUS_LABELS.ended },
+  closed: { color: 'red', label: TASK_STATUS_LABELS.closed },
+  archived: { color: 'purple', label: TASK_STATUS_LABELS.archived },
 };
 
 export default function TaskManagement() {
@@ -29,6 +31,21 @@ export default function TaskManagement() {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionErrors, setOptionErrors] = useState<{ classes?: string; questionnaires?: string }>({});
   const [form] = Form.useForm();
+
+  // 编辑任务相关状态
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTask, setEditTask] = useState<any>(null);
+  const [editForm] = Form.useForm();
+
+  // 延期相关状态
+  const [extendModalOpen, setExtendModalOpen] = useState(false);
+  const [extendTask, setExtendTask] = useState<any>(null);
+  const [extendForm] = Form.useForm();
+
+  // 预览问卷相关状态
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewQuestions, setPreviewQuestions] = useState<any[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -111,6 +128,88 @@ export default function TaskManagement() {
     }
   };
 
+  // 打开编辑弹窗
+  const openEdit = (task: any) => {
+    setEditTask(task);
+    editForm.setFieldsValue({
+      name: task.name,
+      description: task.description,
+      time_range: task.start_time && task.end_time ? [dayjs(task.start_time), dayjs(task.end_time)] : undefined,
+    });
+    setEditModalOpen(true);
+  };
+
+  // 提交编辑
+  const handleEdit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      setSubmitting(true);
+      const timeRange = values.time_range;
+      await client.put(`/tasks/${editTask.id}`, {
+        name: values.name,
+        description: values.description || '',
+        start_time: timeRange?.[0]?.toISOString(),
+        end_time: timeRange?.[1]?.toISOString(),
+      });
+      message.success('任务更新成功');
+      setEditModalOpen(false);
+      setEditTask(null);
+      editForm.resetFields();
+      fetchData();
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.message || '更新任务失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 打开延期弹窗
+  const openExtend = (task: any) => {
+    setExtendTask(task);
+    extendForm.resetFields();
+    if (task.end_time) {
+      extendForm.setFieldsValue({ new_end_time: dayjs(task.end_time) });
+    }
+    setExtendModalOpen(true);
+  };
+
+  // 提交延期
+  const handleExtend = async () => {
+    try {
+      const values = await extendForm.validateFields();
+      setSubmitting(true);
+      await client.post(`/tasks/${extendTask.id}/extend`, {
+        end_time: values.new_end_time.toISOString(),
+      });
+      message.success('延期成功');
+      setExtendModalOpen(false);
+      setExtendTask(null);
+      extendForm.resetFields();
+      fetchData();
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.message || '延期失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 预览问卷
+  const previewQuestionnaire = async (task: any) => {
+    setPreviewModalOpen(true);
+    setPreviewLoading(true);
+    try {
+      const r = await client.get(`/questionnaires/${task.questionnaire_id}`);
+      setPreviewQuestions(r.data.data?.questions || []);
+    } catch {
+      message.error('加载问卷预览失败');
+      setPreviewQuestions([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const columns = [
     { title: '任务名称', dataIndex: 'name', key: 'name', render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '问卷名称', dataIndex: 'questionnaire_title', key: 'questionnaire_title' },
@@ -129,6 +228,32 @@ export default function TaskManagement() {
     { title: '题目随机', dataIndex: 'shuffle_questions', key: 'shuffle_questions', render: (v: boolean) => v ? <Tag color="blue">是</Tag> : <Tag>否</Tag> },
     { title: '质量检测', dataIndex: 'enable_quality_check', key: 'enable_quality_check', render: (v: boolean) => v !== false ? <Tag color="green">开</Tag> : <Tag>关</Tag> },
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
+    {
+      title: '操作', key: 'actions', width: 280,
+      render: (_: any, r: any) => (
+        <Space size="small" wrap>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => previewQuestionnaire(r)}>预览</Button>
+          {(r.status === 'draft' || r.status === 'not_started') && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+          )}
+          {(r.status === 'active' || r.status === 'in_progress' || r.status === 'not_started') && (
+            <Button size="small" icon={<FieldTimeOutlined />} onClick={() => openExtend(r)}>延期</Button>
+          )}
+          {r.status === 'active' && (
+            <Popconfirm title="确定关闭此任务？" description="关闭后学生将无法提交答卷" onConfirm={async () => {
+              try { await client.post(`/tasks/${r.id}/close`); message.success('任务已关闭'); fetchData(); }
+              catch { message.error('操作失败'); }
+            }}><Button size="small" danger>关闭</Button></Popconfirm>
+          )}
+          {r.status === 'closed' && (
+            <Popconfirm title="确定归档此任务？" onConfirm={async () => {
+              try { await client.post(`/tasks/${r.id}/archive`); message.success('任务已归档'); fetchData(); }
+              catch { message.error('操作失败'); }
+            }}><Button size="small">归档</Button></Popconfirm>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   const uncompleted = completions.filter(c => c.status !== 'submitted');
@@ -272,6 +397,96 @@ export default function TaskManagement() {
           <Col xs={12} sm={12} md={6}><Statistic title="总人数" value={completions.length} loading={detailLoading} /></Col>
         </Row>
         <Tabs items={detailTabItems} />
+      </Modal>
+
+      {/* 编辑任务弹窗 */}
+      <Modal
+        title="编辑任务"
+        open={editModalOpen}
+        onOk={handleEdit}
+        onCancel={() => { setEditModalOpen(false); setEditTask(null); editForm.resetFields(); }}
+        confirmLoading={submitting}
+        destroyOnHidden
+        width={500}
+        style={{ maxWidth: '95vw' }}
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+            <Input placeholder="输入任务名称" />
+          </Form.Item>
+          <Form.Item name="description" label="任务说明">
+            <Input.TextArea rows={3} placeholder="填写任务说明" />
+          </Form.Item>
+          <Form.Item name="time_range" label="起止时间">
+            <DatePicker.RangePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 延期弹窗 */}
+      <Modal
+        title={`延期 - ${extendTask?.name || ''}`}
+        open={extendModalOpen}
+        onOk={handleExtend}
+        onCancel={() => { setExtendModalOpen(false); setExtendTask(null); extendForm.resetFields(); }}
+        confirmLoading={submitting}
+        destroyOnHidden
+        width={400}
+        style={{ maxWidth: '95vw' }}
+      >
+        <Form form={extendForm} layout="vertical">
+          <Form.Item name="new_end_time" label="新截止时间" rules={[{ required: true, message: '请选择新的截止时间' }]}>
+            <DatePicker showTime style={{ width: '100%' }} placeholder="选择新的截止时间" />
+          </Form.Item>
+          {extendTask?.end_time && (
+            <div style={{ color: '#888', fontSize: 13 }}>
+              当前截止时间：{new Date(extendTask.end_time).toLocaleString('zh-CN')}
+            </div>
+          )}
+        </Form>
+      </Modal>
+
+      {/* 预览问卷弹窗 */}
+      <Modal
+        title="问卷题目预览"
+        open={previewModalOpen}
+        onCancel={() => { setPreviewModalOpen(false); setPreviewQuestions([]); }}
+        footer={null}
+        destroyOnHidden
+        width={700}
+        style={{ maxWidth: '95vw' }}
+      >
+        {previewLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
+        ) : previewQuestions.length === 0 ? (
+          <Empty description="暂无题目" />
+        ) : (
+          <List
+            dataSource={previewQuestions}
+            renderItem={(item: any, index: number) => (
+              <List.Item>
+                <div style={{ width: '100%' }}>
+                  <div style={{ fontWeight: 500, marginBottom: 8 }}>
+                    {index + 1}. {item.title}
+                    {item.required && <span style={{ color: 'red', marginLeft: 4 }}>*</span>}
+                  </div>
+                  {item.description && (
+                    <div style={{ color: '#888', fontSize: 13, marginBottom: 8 }}>{item.description}</div>
+                  )}
+                  {item.options && item.options.length > 0 && (
+                    <div style={{ paddingLeft: 16 }}>
+                      {item.options.map((opt: any, optIdx: number) => (
+                        <div key={optIdx} style={{ color: '#555', marginBottom: 4 }}>
+                          {String.fromCharCode(65 + optIdx)}. {opt.content}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </List.Item>
+            )}
+          />
+        )}
       </Modal>
     </div>
   );

@@ -3,17 +3,7 @@ import { Table, Button, Space, Tag, Input, Typography, message } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { copyQuestionnaire, getQuestionnaires, type QuestionnaireInfo } from '../../api/questionnaires';
-
-const categoryLabels: Record<string, string> = {
-  mental_health: '心理健康筛查', bullying: '校园欺凌排查', internet_addiction: '网络沉迷评估',
-  family_relationship: '家庭关系调查', safety_awareness: '安全意识测评', interpersonal: '人际关系测评',
-  academic_pressure: '学业压力测评', custom: '综合',
-};
-const sourceTypeLabels: Record<string, string> = {
-  standard_like: '参考标准结构',
-  school_custom: '本校自建',
-  reference_screening: '参考性筛查',
-};
+import { QUESTIONNAIRE_CATEGORY_LABELS, SOURCE_TYPE_LABELS, QUESTIONNAIRE_STATUS_LABELS } from '../../utils/constants';
 
 export default function MyQuestionnaires() {
   const navigate = useNavigate();
@@ -26,21 +16,25 @@ export default function MyQuestionnaires() {
   useEffect(() => {
     setLoading(true);
     getQuestionnaires({ page, page_size: 20, keyword }).then(r => {
-      setData(r.items); setTotal(r.total);
-    }).finally(() => setLoading(false));
+      setData(r.items || []); setTotal(r.total || 0);
+    }).catch(() => message.error('获取问卷列表失败')).finally(() => setLoading(false));
   }, [page, keyword]);
 
   const handleCopy = async (id: number) => {
-    await copyQuestionnaire(id);
-    message.success('复制成功');
-    const refreshed = await getQuestionnaires({ page, page_size: 20, keyword });
-    setData(refreshed.items);
-    setTotal(refreshed.total);
+    try {
+      await copyQuestionnaire(id);
+      message.success('复制成功');
+      const refreshed = await getQuestionnaires({ page, page_size: 20, keyword });
+      setData(refreshed.items || []);
+      setTotal(refreshed.total || 0);
+    } catch {
+      message.error('复制失败');
+    }
   };
 
   const columns = [
     { title: '问卷标题', dataIndex: 'title', render: (v: string, r: QuestionnaireInfo) => <a onClick={() => navigate(`/teacher/questionnaires/${r.id}/edit`)}>{v}</a> },
-    { title: '分类', dataIndex: 'category', render: (v: string) => <Tag>{categoryLabels[v] || v}</Tag> },
+    { title: '分类', dataIndex: 'category', render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || v}</Tag> },
     { title: '题目数', dataIndex: 'question_count' },
     { title: '适用年级', dataIndex: 'applicable_grades', render: (v: string) => v || '-' },
     {
@@ -49,12 +43,12 @@ export default function MyQuestionnaires() {
       render: (_: unknown, r: QuestionnaireInfo) => (
         <Space size={4} wrap>
           {r.is_builtin ? <Tag color="blue">内置问卷</Tag> : <Tag>自建问卷</Tag>}
-          <Tag>{sourceTypeLabels[r.source_type] || r.source_type}</Tag>
+          <Tag>{SOURCE_TYPE_LABELS[r.source_type] || r.source_type}</Tag>
         </Space>
       ),
     },
     { title: '状态', dataIndex: 'status', render: (v: string) => {
-      const m: Record<string, any> = { draft: { color: 'default', label: '草稿' }, active: { color: 'green', label: '启用' }, inactive: { color: 'red', label: '停用' } };
+      const m: Record<string, any> = { draft: { color: 'default', label: QUESTIONNAIRE_STATUS_LABELS.draft }, active: { color: 'green', label: QUESTIONNAIRE_STATUS_LABELS.active }, inactive: { color: 'red', label: QUESTIONNAIRE_STATUS_LABELS.inactive } };
       return <Tag color={m[v]?.color}>{m[v]?.label || v}</Tag>;
     }},
     {

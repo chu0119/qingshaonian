@@ -7,6 +7,7 @@ from ..models.external import SMSLog
 from ..models.user import User
 from ..services.audit_service import log_operation
 from ..services.sms_service import DEFAULT_TEMPLATES, send_business_sms
+from ..utils.validators import mask_phone
 from ..utils.access_control import can_access_student
 from ..utils.response import APIResponse
 
@@ -30,7 +31,7 @@ def list_sms_logs(user: User = Depends(require_role("platform_admin", "school_ad
         "id": log.id,
         "recipient_user_id": log.recipient_user_id,
         "recipient_name": log.recipient_name,
-        "phone": log.phone,
+        "phone": mask_phone(log.phone),
         "school_id": log.school_id,
         "sms_type": log.sms_type,
         "template_code": log.template_code,

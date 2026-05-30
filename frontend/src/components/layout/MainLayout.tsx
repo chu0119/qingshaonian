@@ -54,6 +54,8 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'schools', icon: <BankOutlined />, label: '学校监管', path: '/platform/schools' },
     { key: 'risks', icon: <AlertOutlined />, label: '风险预警中心', path: '/platform/risks' },
     { key: 'key-students', icon: <IdcardOutlined />, label: '重点关注学生', path: '/platform/key-students' },
+    { key: 'students', icon: <TeamOutlined />, label: '学生管理', path: '/platform/students' },
+    { key: 'questionnaires', icon: <FileTextOutlined />, label: '问卷管理', path: '/platform/questionnaires' },
     { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },
     { key: 'screen', icon: <FundOutlined />, label: '区域数据大屏', path: '/platform/screen' },
@@ -64,8 +66,13 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
   ],
   counselor: [
     { key: 'dashboard', icon: <DashboardOutlined />, label: '心理老师首页', path: '/counselor/dashboard' },
+    { key: 'classes', icon: <BankOutlined />, label: '我的班级', path: '/counselor/classes' },
+    { key: 'students', icon: <TeamOutlined />, label: '学生管理', path: '/counselor/students' },
     { key: 'risks', icon: <AlertOutlined />, label: '风险学生', path: '/counselor/risks' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '辅导记录', path: '/counselor/interventions' },
+    { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务', path: '/counselor/tasks' },
+    { key: 'completion', icon: <CheckSquareOutlined />, label: '完成情况', path: '/counselor/completion' },
+    { key: 'reports', icon: <BarChartOutlined />, label: '班级报告', path: '/counselor/reports' },
   ],
 };
 
@@ -139,13 +146,13 @@ export default function MainLayout() {
   );
 
   const logoArea = (
-    <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'linear-gradient(135deg, rgba(22,119,255,0.15) 0%, rgba(0,21,41,0) 100%)', marginBottom: 4 }}>
+    <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'linear-gradient(135deg, rgba(212,168,67,0.15) 0%, rgba(22,119,255,0.05) 100%)', marginBottom: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #1677ff, #4096ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(22,119,255,0.4)', flexShrink: 0 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #d4a843, #c49635)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(212,168,67,0.4)', flexShrink: 0 }}>
           <SafetyOutlined style={{ fontSize: 20, color: '#fff' }} />
         </div>
         <span style={{ fontSize: 17, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', letterSpacing: 1 }}>
-          {user.role === 'platform_admin' ? '青盾 · 公安监管端' : '青盾'}
+          {user.role === 'platform_admin' ? '金盾护苗 · 公安监管端' : '金盾护苗'}
         </span>
       </div>
     </div>
@@ -162,7 +169,7 @@ export default function MainLayout() {
           {navMenu}
           {!collapsed && (
             <div style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: 12, padding: '0 16px' }}>
-              <Typography.Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>青少年风险防范测评 v1.0</Typography.Text>
+              <Typography.Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>金盾护苗 · 信息管理平台 v1.0</Typography.Text>
             </div>
           )}
         </Sider>
@@ -231,6 +238,7 @@ export default function MainLayout() {
         </Content>
 
         <div style={{ textAlign: 'center', padding: `0 ${isMobile ? 8 : 24}px 16px`, color: 'rgba(0,0,0,0.3)', fontSize: 12 }}>
+          <div style={{ marginBottom: 2 }}>平利县公安局老县派出所</div>
           陕西安楠云芯科技有限公司 &nbsp;
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>陕ICP备2026008842号-1</a>
         </div>

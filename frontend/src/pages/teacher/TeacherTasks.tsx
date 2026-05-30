@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Form, Select, Input, Button, DatePicker, Switch, message, Typography, Space, Tabs, Table, Tag, Modal, Empty, Spin, Progress } from 'antd';
 import { SendOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import client from '../../api/client';
 
 export default function TeacherTasks() {
@@ -59,9 +60,9 @@ export default function TeacherTasks() {
   };
 
   const handlePublish = async () => {
-    const values = await form.validateFields();
-    setPublishLoading(true);
     try {
+      const values = await form.validateFields();
+      setPublishLoading(true);
       await client.post('/tasks', {
         name: values.name,
         questionnaire_id: values.questionnaire_id,

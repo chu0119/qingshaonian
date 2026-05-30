@@ -8,6 +8,7 @@ from ..dependencies import get_current_user, require_role
 from ..services import user_service
 from ..services.audit_service import log_operation
 from ..utils.access_control import can_access_class, can_access_student, teacher_class_ids
+from ..utils.validators import validate_id_card
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/users", tags=["用户管理"])
@@ -37,6 +38,13 @@ def list_students(
 def create_student(data: UserCreate, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     data.school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     data.role = "student"
+    try:
+        data.username = validate_id_card(data.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    existing = db.query(User).filter(User.username == data.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="该身份证号已被注册")
     if data.class_id and not can_access_class(db, user, data.class_id):
         raise HTTPException(status_code=403, detail="班级不属于当前学校")
     u = user_service.create_user(db, data)
@@ -75,7 +83,7 @@ def download_template(user: User = Depends(require_role("school_admin"))):
 
 @router.get("/students/export")
 def export_students(request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "student", page=1, page_size=10000)
+    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "student", page=1, page_size=5000)
     log_operation(db, user, request, module="student", action="export", object_type="student_list", detail=f"count={len(result['items'])}")
     return APIResponse.success(result["items"])
 
@@ -142,12 +150,7 @@ def list_teachers(
     user: User = Depends(require_role("school_admin")),
     db: Session = Depends(get_db),
 ):
-    result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "teacher", page, page_size, keyword=keyword, teacher_type=teacher_type)
-    # 也包含心理老师
-    counselors = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "counselor", page, page_size, keyword=keyword)
-    result["items"].extend(counselors["items"])
-    result["total"] += counselors["total"]
-    result["total_pages"] = max((result["total"] + page_size - 1) // page_size, 1)
+    result = user_service.list_teachers(db, (getattr(user, '_effective_school_id', None) or user.school_id), page, page_size, keyword=keyword, teacher_type=teacher_type)
     return APIResponse.success(result)
 
 
@@ -157,6 +160,13 @@ def create_teacher(data: UserCreate, request: Request, user: User = Depends(requ
         raise HTTPException(status_code=400, detail="教师角色只能为 teacher 或 counselor")
     data.role = data.role or "teacher"
     data.school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    try:
+        data.username = validate_id_card(data.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    existing = db.query(User).filter(User.username == data.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="该身份证号已被注册")
     u = user_service.create_user(db, data)
     log_operation(db, user, request, module="teacher", action="create", object_type="user", object_id=u.id, object_name=u.real_name)
     return APIResponse.success({"id": u.id}, message="教师创建成功")

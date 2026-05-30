@@ -86,8 +86,9 @@ def update_intervention(intervention_id: int, data: dict, request: Request, user
         if dt_key in data and data[dt_key]:
             from datetime import datetime
             data[dt_key] = datetime.fromisoformat(str(data[dt_key]).replace("Z", "+00:00")).replace(tzinfo=None)
+    allowed_fields = {"method", "content", "status", "intervention_time", "next_follow_up_time", "need_follow_up", "teacher_id", "result", "follow_up_suggestion"}
     for k, v in data.items():
-        if hasattr(inv, k):
+        if k in allowed_fields and hasattr(inv, k):
             setattr(inv, k, v)
     db.commit()
     log_operation(db, user, request, module="intervention", action="update", object_type="intervention", object_id=intervention_id)

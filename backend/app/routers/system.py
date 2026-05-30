@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
@@ -7,6 +7,7 @@ from ..models.user import User
 from ..dependencies import require_role
 from ..utils.access_control import effective_school_id
 from ..services.seed_service import seed_demo_data
+from ..services.audit_service import log_operation
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/system", tags=["系统设置"])
@@ -51,7 +52,7 @@ ALLOWED_SCHOOL_FIELDS = {"name", "address", "phone"}
 
 
 @router.put("/school-info")
-def update_school_info(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def update_school_info(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import School
     school = db.query(School).filter(School.id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
     if not school:
@@ -61,6 +62,9 @@ def update_school_info(data: dict, user: User = Depends(require_role("school_adm
             setattr(school, k, v if v is not None else "")
     db.commit()
     db.refresh(school)
+    log_operation(db, user, request, module="system", action="update_school_info",
+                  object_type="school", object_id=school.id, object_name=school.name,
+                  detail=f"更新字段: {', '.join(data.keys())}")
     return APIResponse.success(data={
         "id": school.id,
         "name": school.name,
@@ -79,10 +83,10 @@ def get_risk_config(user: User = Depends(require_role("school_admin")), db: Sess
     # If no risk configs exist, return sensible defaults
     if not configs:
         default_risk_levels = [
-            {"level": "low", "label": "低风险", "min": 0, "max": 25, "color": "#1890FF"},
-            {"level": "medium", "label": "中风险", "min": 26, "max": 50, "color": "#FA8C16"},
-            {"level": "high", "label": "高风险", "min": 51, "max": 75, "color": "#FF4D4F"},
-            {"level": "urgent", "label": "紧急风险", "min": 76, "max": 100, "color": "#CF1322"},
+            {"level": "low", "label": "关注", "min": 0, "max": 25, "color": "#1890FF"},
+            {"level": "medium", "label": "预警", "min": 26, "max": 50, "color": "#FA8C16"},
+            {"level": "high", "label": "警告", "min": 51, "max": 75, "color": "#FF4D4F"},
+            {"level": "urgent", "label": "危急", "min": 76, "max": 100, "color": "#CF1322"},
         ]
         return APIResponse.success({
             "risk_levels": default_risk_levels,
@@ -100,7 +104,7 @@ def get_risk_config(user: User = Depends(require_role("school_admin")), db: Sess
 
 
 @router.put("/risk-config")
-def update_risk_config(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def update_risk_config(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.system_config import SystemConfig
     school_id = effective_school_id(user)
     updated = []
@@ -108,6 +112,8 @@ def update_risk_config(data: dict, user: User = Depends(require_role("school_adm
         _upsert_school_config(db, school_id, key, value, key)
         updated.append(key)
     db.commit()
+    log_operation(db, user, request, module="system", action="update_risk_config",
+                  object_type="config", detail=f"更新配置: {', '.join(updated)}")
     return APIResponse.success(message=f"配置已更新: {', '.join(updated)}" if updated else "无配置需要更新")
 
 
@@ -122,7 +128,7 @@ def get_grades_for_admin(user: User = Depends(require_role("school_admin")), db:
 
 
 @router.post("/grades")
-def create_grade(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def create_grade(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import Grade
     name = (data.get("name") or "").strip()
     if not name:
@@ -142,11 +148,13 @@ def create_grade(data: dict, user: User = Depends(require_role("school_admin")),
     db.add(grade)
     db.commit()
     db.refresh(grade)
+    log_operation(db, user, request, module="system", action="create_grade",
+                  object_type="grade", object_id=grade.id, object_name=name)
     return APIResponse.success({"id": grade.id, "name": grade.name, "sort_order": grade.sort_order}, message="年级添加成功")
 
 
 @router.delete("/grades/{grade_id}")
-def delete_grade(grade_id: int, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def delete_grade(grade_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     from ..models.user import Grade
     grade = db.query(Grade).filter(
         Grade.id == grade_id,
@@ -154,17 +162,20 @@ def delete_grade(grade_id: int, user: User = Depends(require_role("school_admin"
     ).first()
     if not grade:
         raise HTTPException(status_code=404, detail="年级不存在")
+    grade_name = grade.name
     grade.status = False
     db.commit()
+    log_operation(db, user, request, module="system", action="delete_grade",
+                  object_type="grade", object_id=grade_id, object_name=grade_name)
     return APIResponse.success(message="年级已删除")
 
 
-@router.post("/seed-demo-data")
-def seed_demo(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    if settings.APP_ENV.lower() not in {"demo", "development"}:
-        raise HTTPException(status_code=403, detail="当前环境不允许初始化演示数据")
+@router.post("/seed-data")
+def seed_data(request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     seeded = seed_demo_data(db, school_id=(getattr(user, '_effective_school_id', None) or user.school_id), current_settings=settings)
-    return APIResponse.success({"seeded_school_ids": seeded}, message="演示数据初始化完成")
+    log_operation(db, user, request, module="system", action="seed_demo_data",
+                  object_type="school", detail=f"初始化演示数据, 学校ID: {seeded}")
+    return APIResponse.success({"seeded_school_ids": seeded}, message="数据初始化完成")
 
 
 # ===== 短信配置（预留接口） =====
@@ -198,7 +209,7 @@ def get_sms_config(user: User = Depends(require_role("school_admin")), db: Sessi
 
 
 @router.put("/sms-config")
-def update_sms_config(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def update_sms_config(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     """保存短信配置（预留，仅做数据存储不实际发送）"""
     from ..models.system_config import SystemConfig
 
@@ -212,6 +223,8 @@ def update_sms_config(data: dict, user: User = Depends(require_role("school_admi
         updated.append(key)
 
     db.commit()
+    log_operation(db, user, request, module="system", action="update_sms_config",
+                  object_type="config", detail=f"更新短信配置: {', '.join(updated)}")
     if updated:
         return APIResponse.success(message=f"短信配置已保存: {', '.join(updated)}")
     return APIResponse.success(message="无配置需要更新")
@@ -245,7 +258,7 @@ def get_screen_config(user: User = Depends(require_role("school_admin")), db: Se
 
 
 @router.put("/screen-config")
-def update_screen_config(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+def update_screen_config(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     """保存数据大屏配置"""
     from ..models.system_config import SystemConfig
 
@@ -259,6 +272,8 @@ def update_screen_config(data: dict, user: User = Depends(require_role("school_a
         updated.append(key)
 
     db.commit()
+    log_operation(db, user, request, module="system", action="update_screen_config",
+                  object_type="config", detail=f"更新大屏配置: {', '.join(updated)}")
     if updated:
         return APIResponse.success(message=f"大屏配置已保存: {', '.join(updated)}")
     return APIResponse.success({"screen_title": data.get("screen_title", ""), "screen_subtitle": data.get("screen_subtitle", "")}, message="无配置需要更新")

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, Typography, Progress, Space, Empty } from 'antd';
 import {
   BankOutlined, TeamOutlined, UserOutlined, AlertOutlined, FileTextOutlined,
   BarChartOutlined, CheckCircleOutlined, MessageOutlined, RobotOutlined,
 } from '@ant-design/icons';
+import * as echarts from 'echarts';
 import client from '../../api/client';
+import { RISK_LABELS, RISK_COLORS } from '../../utils/constants';
 
 const { Title } = Typography;
 
@@ -15,6 +17,7 @@ function formatTime(value?: string) {
 export default function Dashboard() {
   const [data, setData] = useState<any>({});
   const [loading, setLoading] = useState(false);
+  const chartsRef = useRef<{ chart: echarts.ECharts; observer: ResizeObserver; el: HTMLElement }[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -23,6 +26,26 @@ export default function Dashboard() {
       .catch(() => setData({}))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      chartsRef.current.forEach(({ chart, observer, el }) => {
+        chart.dispose();
+        observer.disconnect();
+        el.remove();
+      });
+      chartsRef.current = [];
+    };
+  }, []);
+
+  const initChart = (el: HTMLElement, option: any) => {
+    if (!el) return;
+    const chart = echarts.init(el);
+    chart.setOption(option);
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(el);
+    chartsRef.current.push({ chart, observer, el });
+  };
 
   const cards = [
     { title: '学校总数', value: data.school_total, icon: <BankOutlined />, color: '#1677ff' },
@@ -37,6 +60,51 @@ export default function Dashboard() {
     { title: 'AI 调用', value: data.ai_call_total, icon: <RobotOutlined />, color: '#eb2f96' },
     { title: '短信发送', value: data.sms_send_total, icon: <MessageOutlined />, color: '#08979c' },
   ];
+
+  const riskDist = data.risk_level_distribution || {};
+  const riskLabels = RISK_LABELS;
+  const riskColors = RISK_COLORS;
+
+  const riskPieOption = useMemo(() => {
+    const pieData = Object.entries(riskDist).filter(([, v]) => (v as number || 0) > 0).map(([k, v]) => ({ name: riskLabels[k] || k, value: v as number, itemStyle: { color: riskColors[k] } }));
+    if (!pieData.length) return null;
+    return {
+      tooltip: { trigger: 'item' as const },
+      legend: { bottom: 0, textStyle: { fontSize: 12 } },
+      series: [{ type: 'pie' as const, radius: ['45%', '72%'], center: ['50%', '45%'], data: pieData, padAngle: 2, itemStyle: { borderRadius: 4 },
+        label: { show: true, formatter: '{b}: {c} ({d}%)', fontSize: 12 } }],
+    };
+  }, [data.risk_level_distribution]);
+
+  const completionBarOption = useMemo(() => {
+    const items = (data.completion_rankings || []).slice(0, 8);
+    if (!items.length) return null;
+    return {
+      tooltip: { trigger: 'axis' as const },
+      grid: { left: 40, right: 20, bottom: 40, top: 16, containLabel: true },
+      xAxis: { type: 'category' as const, data: items.map((s: any) => s.name.length > 6 ? s.name.slice(0, 6) + '…' : s.name),
+        axisLabel: { rotate: items.length > 5 ? 30 : 0, fontSize: 11 } },
+      yAxis: { type: 'value' as const, max: 100, axisLabel: { formatter: '{value}%' } },
+      series: [{ type: 'bar' as const, data: items.map((s: any) => s.completion_rate || 0),
+        itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#1677ff' }, { offset: 1, color: '#69b1ff' }]), borderRadius: [4, 4, 0, 0] },
+        barMaxWidth: 32, label: { show: true, position: 'top' as const, formatter: '{c}%', fontSize: 11 } }],
+    };
+  }, [data.completion_rankings]);
+
+  const riskBarOption = useMemo(() => {
+    const items = (data.risk_rankings || []).slice(0, 8);
+    if (!items.length) return null;
+    return {
+      tooltip: { trigger: 'axis' as const },
+      grid: { left: 40, right: 20, bottom: 40, top: 16, containLabel: true },
+      xAxis: { type: 'category' as const, data: items.map((s: any) => s.name.length > 6 ? s.name.slice(0, 6) + '…' : s.name),
+        axisLabel: { rotate: items.length > 5 ? 30 : 0, fontSize: 11 } },
+      yAxis: { type: 'value' as const },
+      series: [{ type: 'bar' as const, data: items.map((s: any) => s.risk_count || 0),
+        itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#ff4d4f' }, { offset: 1, color: '#ff7875' }]), borderRadius: [4, 4, 0, 0] },
+        barMaxWidth: 32, label: { show: true, position: 'top' as const, fontSize: 11 } }],
+    };
+  }, [data.risk_rankings]);
 
   const completionColumns = [
     { title: '学校', dataIndex: 'name', key: 'name' },
@@ -67,49 +135,53 @@ export default function Dashboard() {
         {cards.map((card) => (
           <Col xs={12} sm={8} lg={6} xl={4} key={card.title}>
             <Card loading={loading}>
-              <Statistic
-                title={card.title}
-                value={card.value || 0}
-                prefix={card.icon}
-                valueStyle={{ color: card.color }}
-              />
+              <Statistic title={card.title} value={card.value || 0} prefix={card.icon} valueStyle={{ color: card.color }} />
             </Card>
           </Col>
         ))}
       </Row>
 
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={8}>
+          <Card title="风险等级分布" loading={loading}>
+            {riskPieOption ? (
+              <div ref={el => { if (el) initChart(el, riskPieOption); }} style={{ height: 280 }} />
+            ) : <Empty description="暂无风险数据" />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title="学校完成率排名" loading={loading}>
+            {completionBarOption ? (
+              <div ref={el => { if (el) initChart(el, completionBarOption); }} style={{ height: 280 }} />
+            ) : <Empty description="暂无数据" />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title="学校风险数量对比" loading={loading}>
+            {riskBarOption ? (
+              <div ref={el => { if (el) initChart(el, riskBarOption); }} style={{ height: 280 }} />
+            ) : <Empty description="暂无数据" />}
+          </Card>
+        </Col>
+      </Row>
+
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title={<Space><BarChartOutlined />学校完成率排名</Space>} loading={loading}>
-            <Table
-              rowKey="id"
-              dataSource={data.completion_rankings || []}
-              columns={completionColumns}
-              pagination={false}
-              locale={{ emptyText: <Empty description="暂无完成率数据" /> }}
-            />
+          <Card title={<Space><BarChartOutlined />学校完成率详情</Space>} loading={loading}>
+            <Table rowKey="id" dataSource={data.completion_rankings || []} columns={completionColumns} pagination={false}
+              locale={{ emptyText: <Empty description="暂无完成率数据" /> }} />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
           <Card title={<Space><AlertOutlined />学校风险提示排名</Space>} loading={loading}>
-            <Table
-              rowKey="id"
-              dataSource={data.risk_rankings || []}
-              columns={riskColumns}
-              pagination={false}
-              locale={{ emptyText: <Empty description="暂无风险提示数据" /> }}
-            />
+            <Table rowKey="id" dataSource={data.risk_rankings || []} columns={riskColumns} pagination={false}
+              locale={{ emptyText: <Empty description="暂无风险提示数据" /> }} />
           </Card>
         </Col>
         <Col xs={24}>
           <Card title={<Space><BankOutlined />最近活跃学校</Space>} loading={loading}>
-            <Table
-              rowKey="id"
-              dataSource={data.recent_active_schools || []}
-              columns={activeColumns}
-              pagination={false}
-              locale={{ emptyText: <Empty description="暂无活跃记录" /> }}
-            />
+            <Table rowKey="id" dataSource={data.recent_active_schools || []} columns={activeColumns} pagination={false}
+              locale={{ emptyText: <Empty description="暂无活跃记录" /> }} />
           </Card>
         </Col>
       </Row>

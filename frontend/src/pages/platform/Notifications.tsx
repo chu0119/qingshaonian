@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Select, Input, Typography, Space, Button, Modal, Form, message } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+import { SMS_TYPE_LABELS, SMS_STATUS_LABELS } from '../../utils/constants';
 
 export default function PlatformSmsCenter() {
   const [data, setData] = useState<any[]>([]);
@@ -20,7 +21,7 @@ export default function PlatformSmsCenter() {
       if (filters.status) params.status = filters.status;
       if (filters.keyword) params.keyword = filters.keyword;
       const r = await client.get('/platform/sms-logs', { params });
-      setData(r.data.data.items); setTotal(r.data.data.total);
+      setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
     } finally { setLoading(false); }
   }, [page, filters]);
 
@@ -41,8 +42,8 @@ export default function PlatformSmsCenter() {
   const columns = [
     { title: '接收人', dataIndex: 'recipient_name', key: 'recipient_name', width: 100, render: (v: string) => v || '-' },
     { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120, render: (v: string) => v ? v.substring(0, 3) + '****' + v.substring(7) : '-' },
-    { title: '类型', dataIndex: 'sms_type', key: 'sms_type', width: 80 },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (v: string) => <Tag color={v === 'sent' ? 'green' : v === 'failed' ? 'red' : 'default'}>{v}</Tag> },
+    { title: '类型', dataIndex: 'sms_type', key: 'sms_type', width: 80, render: (v: string) => SMS_TYPE_LABELS[v] || v || '-' },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (v: string) => <Tag color={v === 'sent' ? 'green' : v === 'failed' ? 'red' : 'default'}>{SMS_STATUS_LABELS[v] || v}</Tag> },
     { title: '发送时间', dataIndex: 'sent_at', key: 'sent_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '失败原因', dataIndex: 'failure_reason', key: 'failure_reason', ellipsis: true, width: 150 },
   ];
@@ -61,7 +62,7 @@ export default function PlatformSmsCenter() {
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
 
-      <Modal title="发送催办短信" open={sendOpen} onOk={handleSend} onCancel={() => setSendOpen(false)} confirmLoading={sending} destroyOnClose>
+      <Modal title="发送催办短信" open={sendOpen} onOk={handleSend} onCancel={() => setSendOpen(false)} confirmLoading={sending} destroyOnHidden okText="发送" cancelText="取消">
         <Form form={form} layout="vertical">
           <Form.Item name="phone" label="手机号" rules={[{ required: true, pattern: /^1\d{10}$/, message: '请输入11位手机号' }]}>
             <Input placeholder="请输入接收人手机号" />

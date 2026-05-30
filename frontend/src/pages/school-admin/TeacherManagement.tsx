@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, Transfer } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getDictTeacherTypes, assignTeacherClasses, getTeacherAssignedClasses, type UserInfo } from '../../api/users';
+import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, KeyOutlined } from '@ant-design/icons';
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getDictTeacherTypes, assignTeacherClasses, getTeacherAssignedClasses, resetUserPassword, type UserInfo } from '../../api/users';
 import { getClasses, type ClassInfo } from '../../api/classes';
+import { TEACHER_TYPE_LABELS } from '../../utils/constants';
 
 export default function TeacherManagement() {
   const [data, setData] = useState<UserInfo[]>([]);
@@ -33,7 +34,7 @@ export default function TeacherManagement() {
   }, [page, filters]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { getDictTeacherTypes().then(setTeacherTypes); getClasses({ page: 1, page_size: 100 }).then(r => setAllClasses(r.items)); }, []);
+  useEffect(() => { getDictTeacherTypes().then(setTeacherTypes).catch(() => {}); getClasses({ page: 1, page_size: 100 }).then(r => setAllClasses(r.items || [])).catch(() => {}); }, []);
 
   const openCreate = () => {
     setEditingTeacher(null);
@@ -85,20 +86,22 @@ export default function TeacherManagement() {
   };
 
   const columns = [
-    { title: '工号', dataIndex: 'username', key: 'username' },
+    { title: '身份证号', dataIndex: 'username', key: 'username', render: (v: string) => v && v.length >= 8 ? v.slice(0, 3) + '*'.repeat(v.length - 7) + v.slice(-4) : v || '-' },
     { title: '姓名', dataIndex: 'real_name', key: 'real_name' },
     { title: '手机号', dataIndex: 'phone', key: 'phone', render: (v: string) => v || '-' },
     { title: '教师类型', dataIndex: 'teacher_type', key: 'teacher_type', render: (v: string) => {
-      const m: Record<string, string> = { head_teacher: '班主任', counselor: '心理老师', grade_director: '年级主任', moral_edu: '德育老师', normal: '普通教师' };
-      return m[v] || v || '-';
+      return TEACHER_TYPE_LABELS[v] || v || '-';
     }},
     { title: '角色', dataIndex: 'role', key: 'role', render: (v: string) => v === 'counselor' ? <Tag color="purple">心理老师</Tag> : <Tag color="blue">教师</Tag> },
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '停用'}</Tag> },
-    { title: '操作', key: 'action', width: 180, render: (_: unknown, r: UserInfo) => (
+    { title: '操作', key: 'action', width: 220, render: (_: unknown, r: UserInfo) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
           <Button size="small" icon={<TeamOutlined />} onClick={() => openAssign(r)}>分配班级</Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)}><Button size="small" danger icon={<DeleteOutlined />}>删除</Button></Popconfirm>
+          <Popconfirm title="确定重置此教师的密码？" description="密码将重置为身份证号后6位" okText="确定" cancelText="取消" onConfirm={async () => {
+            try { await resetUserPassword(r.id); message.success('密码已重置'); } catch { message.error('重置失败'); }
+          }}><Button size="small" icon={<KeyOutlined />}>重置密码</Button></Popconfirm>
+          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)} okText="确定" cancelText="取消"><Button size="small" danger icon={<DeleteOutlined />}>删除</Button></Popconfirm>
         </Space>
     )},
   ];
@@ -113,26 +116,29 @@ export default function TeacherManagement() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Space>
           <Select placeholder="教师类型" allowClear style={{ width: 120 }} value={filters.teacher_type || undefined} onChange={v => setFilters(f => ({ ...f, teacher_type: v || '' }))} options={teacherTypes.map(t => ({ value: t.value, label: t.label }))} />
-          <Input.Search placeholder="搜索姓名/工号" style={{ width: 180 }} value={filters.keyword} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
+          <Input.Search placeholder="搜索姓名/身份证号" style={{ width: 200 }} value={filters.keyword} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增教师</Button>
       </div>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
 
-      <Modal title={editingTeacher ? '编辑教师' : '新增教师'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={520} style={{ maxWidth: '95vw' }}>
+      <Modal title={editingTeacher ? '编辑教师' : '新增教师'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} okText="确定" cancelText="取消" destroyOnHidden width={520} style={{ maxWidth: '95vw' }}>
         <Form form={form} layout="vertical">
           <Form.Item name="real_name" label="姓名" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="username" label="工号" rules={[{ required: true }]}><Input disabled={!!editingTeacher} /></Form.Item>
+          <Form.Item name="username" label="身份证号" rules={[
+            { required: true, message: '请输入身份证号' },
+            { pattern: /^\d{17}[\dXx]$/, message: '身份证号格式不正确（18位数字，末位可为X）' },
+          ]}><Input disabled={!!editingTeacher} placeholder="请输入18位身份证号" maxLength={18} /></Form.Item>
           <Form.Item name="role" label="角色" rules={[{ required: true }]}><Select options={roleOptions} /></Form.Item>
           <Form.Item name="teacher_type" label="教师类型"><Select options={teacherTypes.map(t => ({ value: t.value, label: t.label }))} /></Form.Item>
-          {!editingTeacher && <Form.Item name="password" label="初始密码"><Input placeholder="默认 123456" /></Form.Item>}
+          {!editingTeacher && <Form.Item name="password" label="初始密码" tooltip="留空则默认为身份证号后6位"><Input placeholder="默认为身份证号后6位" /></Form.Item>}
           <Form.Item name="phone" label="手机号"><Input /></Form.Item>
           <Form.Item name="status" label="状态"><Select options={[{ value: true, label: '启用' }, { value: false, label: '停用' }]} /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} okButtonProps={{ disabled: assignLoading }} confirmLoading={assignLoading} onCancel={() => setAssignModalOpen(false)} width={520} style={{ maxWidth: '95vw' }}>
+      <Modal title="分配班级" open={assignModalOpen} onOk={handleAssign} okButtonProps={{ disabled: assignLoading }} confirmLoading={assignLoading} onCancel={() => setAssignModalOpen(false)} okText="确定" cancelText="取消" width={520} style={{ maxWidth: '95vw' }}>
         <Transfer
           dataSource={allClasses.map(c => ({ key: String(c.id), title: `${c.grade_name} ${c.name}` }))}
           targetKeys={assignedKeys}

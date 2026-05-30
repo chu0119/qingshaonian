@@ -6,8 +6,7 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    # 环境: demo / development / production
-    APP_ENV: str = os.getenv("APP_ENV", "demo")
+    APP_ENV: str = os.getenv("APP_ENV", "development")
 
     # 数据库类型: sqlite 或 mysql
     DB_TYPE: str = os.getenv("DB_TYPE", "sqlite")
@@ -35,7 +34,7 @@ class Settings(BaseSettings):
 
     # 系统
     APP_URL: str = os.getenv("APP_URL", "http://localhost:8000")
-    APP_NAME: str = os.getenv("APP_NAME", "青少年风险防范测评管理系统")
+    APP_NAME: str = os.getenv("APP_NAME", "金盾护苗 · 青少年关爱帮扶信息管理平台")
 
     # 管理员
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "")
@@ -44,12 +43,9 @@ class Settings(BaseSettings):
     PLATFORM_ADMIN_PASSWORD: str = os.getenv("PLATFORM_ADMIN_PASSWORD", "")
 
     # 调试
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     INIT_DEFAULT_SCHOOL: bool = os.getenv("INIT_DEFAULT_SCHOOL", "false").lower() == "true"
-    INIT_BUILTIN_QUESTIONNAIRES: bool = os.getenv(
-        "INIT_BUILTIN_QUESTIONNAIRES",
-        "true" if os.getenv("APP_ENV", "demo").lower() in {"demo", "development"} else "false",
-    ).lower() == "true"
+    INIT_BUILTIN_QUESTIONNAIRES: bool = os.getenv("INIT_BUILTIN_QUESTIONNAIRES", "true").lower() == "true"
     INIT_DEMO_DATA: bool = os.getenv("INIT_DEMO_DATA", "false").lower() == "true"
 
     # 可选外部服务开关。生产环境只有显式启用时才强制校验密钥。

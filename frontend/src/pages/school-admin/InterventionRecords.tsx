@@ -1,24 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Table, Tag, Button, Modal, Form, Input, Select, Switch, message, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Modal, Form, Input, Select, Switch, Space, Drawer, Descriptions, message, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import StudentSelect from '../../components/common/StudentSelect';
 import client from '../../api/client';
+import { METHOD_LABELS, INTERVENTION_STATUS_LABELS } from '../../utils/constants';
 
-const methodLabels: Record<string, string> = {
-  student_talk: '学生谈话', teacher_communication: '班主任沟通', counselor_guidance: '心理老师辅导', counselor_counsel: '心理老师辅导',
-  family_school: '家校沟通', parent_communication: '家校沟通', home_visit: '家访', referral: '转介专业机构', observation: '持续观察', other: '其他',
-};
-const statusLabels: Record<string, string> = {
-  pending: '待处理', viewed: '已查看', in_progress: '处理中', processing: '处理中', follow_up: '持续跟进', ongoing: '持续跟进', completed: '已完成', closed: '已关闭',
-};
+const methodLabels = METHOD_LABELS;
+const statusLabels = INTERVENTION_STATUS_LABELS;
 
 export default function InterventionRecords() {
   const [data, setData] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,7 +26,9 @@ export default function InterventionRecords() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await client.get('/interventions', { params: { page, page_size: 20 } });
+      const params: Record<string, unknown> = { page, page_size: 20 };
+      if (statusFilter) params.status = statusFilter;
+      const r = await client.get('/interventions', { params });
       setData(r.data.data.items || []);
       setTotal(r.data.data.total || 0);
     } catch (err: any) {
@@ -34,7 +36,7 @@ export default function InterventionRecords() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, statusFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -46,22 +48,39 @@ export default function InterventionRecords() {
     setModalOpen(true);
   }, [form, searchParams]);
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       setSubmitting(true);
-      await client.post('/interventions', values);
-      message.success('创建成功');
+      if (editingRecord) {
+        await client.put(`/interventions/${editingRecord.id}`, values);
+        message.success('更新成功');
+      } else {
+        await client.post('/interventions', values);
+        message.success('创建成功');
+      }
       setModalOpen(false);
+      setEditingRecord(null);
       setSearchParams({});
       form.resetFields();
       fetchData();
     } catch (err: any) {
-      if (err?.errorFields) return; // 表单验证错误，不做提示
-      message.error(err?.response?.data?.message || '创建干预记录失败');
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.message || '操作失败');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openEdit = (record: any) => {
+    setEditingRecord(record);
+    form.setFieldsValue(record);
+    setModalOpen(true);
+  };
+
+  const openDetail = (record: any) => {
+    setDetailRecord(record);
+    setDetailOpen(true);
   };
 
   const columns = [
@@ -71,27 +90,44 @@ export default function InterventionRecords() {
     { title: '干预时间', dataIndex: 'intervention_time', key: 'intervention_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
     { title: '持续跟进', dataIndex: 'need_follow_up', key: 'need_follow_up', render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
+    { title: '操作', key: 'action', width: 150, render: (_: unknown, r: any) => (
+      <Space>
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(r)}>详情</Button>
+        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+      </Space>
+    )},
   ];
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Typography.Title level={4}>干预记录</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增干预记录</Button>
+        <Space>
+          <Select
+            placeholder="处理状态"
+            allowClear
+            style={{ width: 130 }}
+            value={statusFilter || undefined}
+            onChange={v => { setStatusFilter(v || ''); setPage(1); }}
+            options={Object.entries(statusLabels).map(([k, v]) => ({ value: k, label: v }))}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRecord(null); form.resetFields(); setModalOpen(true); }}>新增干预记录</Button>
+        </Space>
       </div>
       <Table
         rowKey="id"
         dataSource={data}
         columns={columns}
         loading={loading}
+        scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }}
       />
 
       <Modal
-        title="新增干预记录"
+        title={editingRecord ? '编辑干预记录' : '新增干预记录'}
         open={modalOpen}
-        onOk={handleCreate}
-        onCancel={() => { setModalOpen(false); setSearchParams({}); form.resetFields(); }}
+        onOk={handleSubmit}
+        onCancel={() => { setModalOpen(false); setEditingRecord(null); setSearchParams({}); form.resetFields(); }}
         confirmLoading={submitting}
         destroyOnHidden
         width={600}
@@ -124,6 +160,21 @@ export default function InterventionRecords() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Drawer title="干预记录详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={520}>
+        {detailRecord && (
+          <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label="学生姓名">{detailRecord.student_name}</Descriptions.Item>
+            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || detailRecord.method}</Descriptions.Item>
+            <Descriptions.Item label="干预内容">{detailRecord.content || '-'}</Descriptions.Item>
+            <Descriptions.Item label="干预结果">{detailRecord.result || '-'}</Descriptions.Item>
+            <Descriptions.Item label="后续建议">{detailRecord.follow_up_suggestion || '-'}</Descriptions.Item>
+            <Descriptions.Item label="处理状态"><Tag>{statusLabels[detailRecord.status] || detailRecord.status}</Tag></Descriptions.Item>
+            <Descriptions.Item label="持续跟进">{detailRecord.need_follow_up ? <Tag color="orange">是</Tag> : <Tag>否</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="干预时间">{detailRecord.intervention_time ? new Date(detailRecord.intervention_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Drawer>
     </div>
   );
 }

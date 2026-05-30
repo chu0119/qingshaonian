@@ -55,8 +55,26 @@ class Phase1SecurityTests(unittest.TestCase):
 
     def test_production_sms_without_provider_never_leaks_code(self):
         from app.config import settings
+        from app.database import SessionLocal
+        from app.models.user import User
+        from app.utils.password import hash_password
 
         settings.DEBUG = False
+
+        # Ensure a user with this phone exists for the test
+        db = SessionLocal()
+        try:
+            test_user = db.query(User).filter(User.phone == "13900000001").first()
+            if not test_user:
+                test_user = User(
+                    school_id=1, username="sms_test_user", password_hash=hash_password("test123"),
+                    real_name="短信测试", role="student", phone="13900000001", status=True,
+                )
+                db.add(test_user)
+                db.commit()
+        finally:
+            db.close()
+
         response = self.client.post(
             "/api/v1/auth/send-sms-code",
             json={"phone": "13900000001", "purpose": "reset_password"},
@@ -98,6 +116,49 @@ class Phase1SecurityTests(unittest.TestCase):
             self.assertTrue(failure.failure_reason)
         finally:
             db.close()
+
+    def test_intervention_update_rejects_disallowed_fields(self):
+        from app.database import SessionLocal
+        from app.models.risk import Intervention
+
+        headers = self._login("padm", "padm123")
+        db = SessionLocal()
+        try:
+            inv = db.query(Intervention).first()
+            if not inv:
+                return
+            inv_id = inv.id
+            original_school_id = inv.school_id
+        finally:
+            db.close()
+
+        response = self.client.put(
+            f"/api/v1/interventions/{inv_id}",
+            headers=headers,
+            json={"school_id": 99999, "student_id": 99999, "method": "observation"},
+        )
+        if response.status_code == 404 or response.status_code == 403:
+            return
+
+        db = SessionLocal()
+        try:
+            inv = db.query(Intervention).filter(Intervention.id == inv_id).first()
+            self.assertEqual(inv.school_id, original_school_id, "school_id should not change via mass assignment")
+        finally:
+            db.close()
+
+    def test_platform_settings_mask_secrets(self):
+        headers = self._login("padm", "padm123")
+        response = self.client.get("/api/v1/platform/settings", headers=headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        if data.get("default_admin_password"):
+            self.assertNotEqual(data["default_admin_password"], "")
+            self.assertNotIn("admin", data["default_admin_password"].lower())
+        if data.get("sms_api_key") and data["sms_api_key"] != "":
+            self.assertEqual(data["sms_api_key"], "••••••")
+        if data.get("sms_api_secret") and data["sms_api_secret"] != "":
+            self.assertEqual(data["sms_api_secret"], "••••••")
 
     def test_critical_operations_are_written_to_operation_logs(self):
         from app.database import SessionLocal

@@ -1,13 +1,15 @@
 import json
 import httpx
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import case, func
 from ..database import get_db
 from ..models.user import User, School, Grade, Class
-from ..models.task import Task, AnswerSheet
+from ..models.task import Task, AnswerSheet, AnswerRecord
 from ..models.risk import RiskAlert, Intervention, ScoringResult, QualityAssessment
 from ..models.audit import LoginLog, OperationLog
+from ..utils.validators import mask_id_card, mask_phone
 from ..models.questionnaire import Questionnaire
 from ..models.external import SMSLog, AIAnalysisLog
 from ..dependencies import require_role
@@ -22,8 +24,8 @@ router = APIRouter(prefix="/api/v1/platform", tags=["平台管理"])
 
 
 def _validate_initial_password(password: str) -> None:
-    if not password or len(password) < 10:
-        raise HTTPException(status_code=400, detail="初始密码至少10位")
+    if not password or len(password) < 6:
+        raise HTTPException(status_code=400, detail="初始密码至少6位")
     if password in {"admin123", "padm123", "123456", "password"}:
         raise HTTPException(status_code=400, detail="初始密码不能使用弱默认密码")
 
@@ -98,6 +100,10 @@ def create_school(data: dict, request: Request, user: User = Depends(require_rol
     db.add(school)
     db.flush()
 
+    # 自动创建默认年级（小学→初中→高中→中专）
+    from ..database import create_default_grades
+    create_default_grades(db, school.id)
+
     admin = None
     if data.get("create_admin", True):
         admin_data = {
@@ -159,11 +165,14 @@ def enable_school(school_id: int, request: Request, user: User = Depends(require
 
 
 @router.post("/schools/{school_id}/enter")
-def enter_school(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+def enter_school(school_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     """平台管理员以代入模式进入学校后台——JWT 保留平台身份并附加 school_context_id。"""
     school = db.query(School).filter(School.id == school_id).first()
     if not school:
         raise HTTPException(status_code=404, detail="学校不存在")
+    log_operation(db, user, request, module="platform_school", action="enter_school",
+                  object_type="school", object_id=school_id, object_name=school.name,
+                  detail="平台管理员进入学校后台")
     # 签发代入 token：保持平台管理员身份 + school_context_id
     token = create_access_token({
         "user_id": user.id,
@@ -234,7 +243,7 @@ def get_school_detail(school_id: int, user: User = Depends(require_role("platfor
     recent_risk_updates = db.query(RiskAlert).filter(RiskAlert.school_id == school_id).order_by(RiskAlert.updated_at.desc()).limit(5).all()
 
     # 各年级统计
-    grades = db.query(Grade).filter(Grade.school_id == school_id).all()
+    grades = db.query(Grade).filter(Grade.school_id == school_id, Grade.status == True).order_by(Grade.sort_order).all()
     grade_stats = []
     for g in grades:
         g_students = db.query(func.count(User.id)).filter(User.school_id == school_id, User.role == "student", User.grade_id == g.id).scalar()
@@ -278,7 +287,7 @@ def list_school_admins(school_id: int, user: User = Depends(require_role("platfo
         "id": a.id,
         "username": a.username,
         "real_name": a.real_name,
-        "phone": a.phone,
+        "phone": mask_phone(a.phone),
         "status": a.status,
         "must_change_password": a.must_change_password,
         "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
@@ -325,18 +334,155 @@ def disable_school_admin(school_id: int, admin_id: int, request: Request, user: 
 
 # ==================== 平台设置 ====================
 
+@router.get("/students")
+def platform_students(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), grade_id: int | None = Query(None),
+    class_id: int | None = Query(None), keyword: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """平台管理员 -- 跨校学生列表"""
+    q = db.query(User).filter(User.role == "student")
+    if school_id:
+        q = q.filter(User.school_id == school_id)
+    if grade_id:
+        q = q.filter(User.grade_id == grade_id)
+    if class_id:
+        q = q.filter(User.class_id == class_id)
+    if keyword:
+        q = q.filter(User.real_name.contains(keyword) | User.username.contains(keyword) | User.student_no.contains(keyword))
+    total = q.count()
+    items = q.order_by(User.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    school_ids = list(set(u.school_id for u in items if u.school_id))
+    grade_ids = list(set(u.grade_id for u in items if u.grade_id))
+    class_ids_list = list(set(u.class_id for u in items if u.class_id))
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_(school_ids)).all()) if school_ids else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_(grade_ids)).all()) if grade_ids else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_(class_ids_list)).all()) if class_ids_list else {}
+
+
+    return APIResponse.success({
+        "items": [{
+            "id": u.id, "student_name": u.real_name, "student_no": u.student_no or "",
+            "id_card": mask_id_card(u.username),
+            "school_id": u.school_id, "school_name": school_names.get(u.school_id, ""),
+            "grade_id": u.grade_id, "grade_name": grade_names.get(u.grade_id, "") if u.grade_id else "",
+            "class_id": u.class_id, "class_name": class_names.get(u.class_id, "") if u.class_id else "",
+            "phone": (u.phone[:3] + "****" + u.phone[-4:]) if u.phone and len(u.phone) >= 7 else (u.phone or ""),
+            "gender": u.gender or "",
+            "status": u.status, "created_at": u.created_at.isoformat() if u.created_at else None,
+        } for u in items],
+        "total": total, "page": page, "page_size": page_size,
+    })
+
+
+@router.get("/students/{student_id}")
+def platform_student_detail(
+    student_id: int,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """平台管理员 -- 学生详情"""
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    school = db.query(School).filter(School.id == student.school_id).first()
+    grade = db.query(Grade).filter(Grade.id == student.grade_id).first() if student.grade_id else None
+
+    klass = db.query(Class).filter(Class.id == student.class_id).first() if student.class_id else None
+    return APIResponse.success({
+        "id": student.id, "student_name": student.real_name, "student_no": student.student_no or "",
+        "id_card": mask_id_card(student.username), "school_name": school.name if school else "",
+        "grade_name": grade.name if grade else "", "class_name": klass.name if klass else "",
+        "phone": (student.phone[:3] + "****" + student.phone[-4:]) if student.phone and len(student.phone) >= 7 else (student.phone or ""),
+        "gender": student.gender or "",
+        "status": student.status, "created_at": student.created_at.isoformat() if student.created_at else None,
+    })
+
+
+@router.post("/verify-password")
+def platform_verify_password(data: dict, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """验证平台管理员密码（用于查看敏感信息）"""
+    password = (data.get("password") or "").strip()
+    if not password:
+        raise HTTPException(status_code=400, detail="请输入密码")
+    from ..utils.password import verify_password as check_pw
+    if not check_pw(password, user.password_hash):
+        raise HTTPException(status_code=400, detail="密码错误")
+    return APIResponse.success({"verified": True})
+
+
+@router.post("/students/{student_id}/reveal-id-card")
+def reveal_student_id_card(
+    student_id: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """验证密码后返回学生真实身份证号"""
+    password = (data.get("password") or "").strip()
+    if not password:
+        raise HTTPException(status_code=400, detail="请输入密码")
+    from ..utils.password import verify_password as check_pw
+    if not check_pw(password, user.password_hash):
+        raise HTTPException(status_code=400, detail="密码错误")
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    log_operation(db, user, request, module="platform_student", action="view_detail",
+                  object_type="student", object_id=student_id, object_name=student.real_name,
+                  detail="查看完整身份证号")
+    return APIResponse.success({"id_card": student.username})
+
+
 @router.get("/settings")
 def get_platform_settings(user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     from ..models.system_config import SystemConfig
+    config_keys = [
+        "platform_system_name", "platform_support_contact", "platform_default_admin_password",
+        "sms_enabled", "sms_provider", "sms_api_url", "sms_app_key", "sms_api_secret",
+        "sms_template_code", "sms_sign_name",
+        "ai_provider", "ai_api_key", "ai_base_url", "ai_model", "ai_system_prompt",
+        "password_min_length", "password_expire_days", "login_lock_threshold", "login_lock_minutes", "session_timeout_minutes",
+        "feature_ai_analysis", "feature_sms_notify", "feature_student_view_result", "feature_data_export", "feature_auto_risk_alert",
+        "data_retention_months", "log_retention_months", "auto_cleanup_enabled",
+        "template_risk_alert", "template_task_assign", "template_password_reset",
+    ]
     configs = {c.config_key: c.config_value for c in db.query(SystemConfig).filter(
-        SystemConfig.config_key.in_(["platform_system_name", "platform_support_contact",
-                                      "platform_default_admin_password"]),
+        SystemConfig.config_key.in_(config_keys),
         SystemConfig.school_id.is_(None)
     ).all()}
     return APIResponse.success({
-        "system_name": configs.get("platform_system_name", "青盾 · 青少年风险防范测评管理系统"),
+        "system_name": configs.get("platform_system_name", "金盾护苗 · 青少年关爱帮扶信息管理平台"),
         "support_contact": configs.get("platform_support_contact", ""),
-        "default_admin_password": configs.get("platform_default_admin_password", settings.ADMIN_PASSWORD),
+        "default_admin_password": "••••••" if configs.get("platform_default_admin_password") else "",
+        "sms_enabled": configs.get("sms_enabled", "false"),
+        "sms_provider": configs.get("sms_provider", ""),
+        "sms_api_url": configs.get("sms_api_url", ""),
+        "sms_api_key": "••••••" if configs.get("sms_app_key") else "",
+        "sms_api_secret": "••••••" if configs.get("sms_api_secret") else "",
+        "sms_template_code": configs.get("sms_template_code", ""),
+        "sms_sign_name": configs.get("sms_sign_name", ""),
+        "ai_provider": configs.get("ai_provider", "openai"),
+        "ai_api_key": "••••••" if configs.get("ai_api_key") else "",
+        "ai_base_url": configs.get("ai_base_url", ""),
+        "ai_model": configs.get("ai_model", "gpt-4o-mini"),
+        "ai_system_prompt": configs.get("ai_system_prompt", ""),
+        "password_min_length": int(configs.get("password_min_length", "6")),
+        "password_expire_days": int(configs.get("password_expire_days", "0")),
+        "login_lock_threshold": int(configs.get("login_lock_threshold", "5")),
+        "login_lock_minutes": int(configs.get("login_lock_minutes", "30")),
+        "session_timeout_minutes": int(configs.get("session_timeout_minutes", "480")),
+        "feature_ai_analysis": configs.get("feature_ai_analysis", "true") == "true",
+        "feature_sms_notify": configs.get("feature_sms_notify", "false") == "true",
+        "feature_student_view_result": configs.get("feature_student_view_result", "false") == "true",
+        "feature_data_export": configs.get("feature_data_export", "true") == "true",
+        "feature_auto_risk_alert": configs.get("feature_auto_risk_alert", "true") == "true",
+        "data_retention_months": int(configs.get("data_retention_months", "36")),
+        "log_retention_months": int(configs.get("log_retention_months", "12")),
+        "auto_cleanup_enabled": configs.get("auto_cleanup_enabled", "false"),
+        "template_risk_alert": configs.get("template_risk_alert", "尊敬的{school_name}，学生{student_name}的风险评估等级为{risk_level}，请及时关注。"),
+        "template_task_assign": configs.get("template_task_assign", "尊敬的老师，{school_name}已下发新的测评任务，请及时组织学生完成。"),
+        "template_password_reset": configs.get("template_password_reset", "您的账号密码已被管理员重置，请使用新密码登录并及时修改。"),
     })
 
 
@@ -347,6 +493,34 @@ def update_platform_settings(data: dict, user: User = Depends(require_role("plat
         "system_name": "platform_system_name",
         "support_contact": "platform_support_contact",
         "default_admin_password": "platform_default_admin_password",
+        "sms_enabled": "sms_enabled",
+        "sms_provider": "sms_provider",
+        "sms_api_url": "sms_api_url",
+        "sms_api_key": "sms_app_key",
+        "sms_api_secret": "sms_api_secret",
+        "sms_template_code": "sms_template_code",
+        "sms_sign_name": "sms_sign_name",
+        "ai_provider": "ai_provider",
+        "ai_api_key": "ai_api_key",
+        "ai_base_url": "ai_base_url",
+        "ai_model": "ai_model",
+        "ai_system_prompt": "ai_system_prompt",
+        "password_min_length": "password_min_length",
+        "password_expire_days": "password_expire_days",
+        "login_lock_threshold": "login_lock_threshold",
+        "login_lock_minutes": "login_lock_minutes",
+        "session_timeout_minutes": "session_timeout_minutes",
+        "feature_ai_analysis": "feature_ai_analysis",
+        "feature_sms_notify": "feature_sms_notify",
+        "feature_student_view_result": "feature_student_view_result",
+        "feature_data_export": "feature_data_export",
+        "feature_auto_risk_alert": "feature_auto_risk_alert",
+        "data_retention_months": "data_retention_months",
+        "log_retention_months": "log_retention_months",
+        "auto_cleanup_enabled": "auto_cleanup_enabled",
+        "template_risk_alert": "template_risk_alert",
+        "template_task_assign": "template_task_assign",
+        "template_password_reset": "template_password_reset",
     }
     for field, config_key in key_map.items():
         if field in data:
@@ -358,6 +532,105 @@ def update_platform_settings(data: dict, user: User = Depends(require_role("plat
                 db.add(SystemConfig(config_key=config_key, config_value=value, description=f"平台设置 - {field}"))
     db.commit()
     return APIResponse.success(message="平台设置保存成功")
+
+
+# ============ 平台管理员管理 ============
+
+@router.get("/admins")
+def list_platform_admins(
+    page: int = Query(1), page_size: int = Query(20),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """列出所有平台管理员"""
+    q = db.query(User).filter(User.role == "platform_admin").order_by(User.id)
+    total = q.count()
+    admins = q.offset((page - 1) * page_size).limit(page_size).all()
+    return APIResponse.success({
+        "total": total,
+        "items": [{
+            "id": a.id,
+            "username": a.username,
+            "real_name": a.real_name,
+            "phone": (a.phone[:3] + "****" + a.phone[-4:]) if a.phone and len(a.phone) >= 7 else (a.phone or ""),
+            "status": a.status,
+            "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        } for a in admins],
+    })
+
+
+@router.post("/admins")
+def create_platform_admin(
+    data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """创建平台管理员"""
+    from ..utils.password import hash_password
+    username = (data.get("username") or "").strip()
+    real_name = (data.get("real_name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    password = (data.get("password") or "").strip()
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于6位")
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    admin = User(
+        username=username,
+        real_name=real_name,
+        phone=phone,
+        role="platform_admin",
+        password_hash=hash_password(password),
+        status=True,
+        must_change_password=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    log_operation(db, user=user, request=request, module="admin", action="create",
+                  object_type="platform_admin", object_id=admin.id, object_name=admin.username, result="success")
+    return APIResponse.success({"id": admin.id, "username": admin.username}, message="平台管理员创建成功")
+
+
+@router.put("/admins/{admin_id}")
+def update_platform_admin(
+    admin_id: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """编辑平台管理员信息"""
+    target = db.query(User).filter(User.id == admin_id, User.role == "platform_admin").first()
+    if not target:
+        raise HTTPException(status_code=404, detail="管理员不存在")
+    allowed = {"real_name", "phone", "status"}
+    for k, v in data.items():
+        if k in allowed and hasattr(target, k):
+            setattr(target, k, v)
+    db.commit()
+    log_operation(db, user=user, request=request, module="admin", action="update",
+                  object_type="platform_admin", object_id=admin_id, object_name=target.username, result="success")
+    return APIResponse.success(message="更新成功")
+
+
+@router.put("/admins/{admin_id}/reset-password")
+def reset_platform_admin_password(
+    admin_id: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """重置平台管理员密码"""
+    from ..utils.password import hash_password
+    target = db.query(User).filter(User.id == admin_id, User.role == "platform_admin").first()
+    if not target:
+        raise HTTPException(status_code=404, detail="管理员不存在")
+    new_password = (data.get("new_password") or "").strip()
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于6位")
+    target.password_hash = hash_password(new_password)
+    target.must_change_password = True
+    db.commit()
+    log_operation(db, user=user, request=request, module="admin", action="reset_password",
+                  object_type="platform_admin", object_id=admin_id, object_name=target.username, result="success")
+    return APIResponse.success(message="密码重置成功")
 
 
 # ============ 公安监管端 API ============
@@ -388,6 +661,7 @@ def platform_risk_alerts(
     return APIResponse.success({
         "items": [{
             "id": a.id, "student_id": a.student_id, "student_name": students.get(a.student_id).real_name if students.get(a.student_id) else "",
+            "id_card": mask_id_card(students.get(a.student_id).username) if students.get(a.student_id) else "",
             "school_id": a.school_id, "school_name": school_names.get(a.school_id, ""),
             "risk_level": a.risk_level, "risk_type": a.risk_type or "",
             "status": a.status, "created_at": a.created_at.isoformat() if a.created_at else None,
@@ -404,7 +678,7 @@ def platform_key_students(
     school_id: int | None = Query(None), risk_level: str = Query(""),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
-    """重点学生——高风险/紧急风险学生详情"""
+    """重点学生——警告/危急学生详情"""
     q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id).filter(
         RiskAlert.risk_level.in_(["high", "urgent"]))
     if school_id:
@@ -434,6 +708,7 @@ def platform_key_students(
         "items": [{
             **{k: v for k, v in a.__dict__.items() if not k.startswith("_")},
             "student_name": students.get(a.student_id).real_name if students.get(a.student_id) else "",
+            "id_card": mask_id_card(students.get(a.student_id).username) if students.get(a.student_id) else "",
             "school_name": school_names.get(a.school_id, ""),
             "student_grade": grade_names.get(students[a.student_id].grade_id, "") if a.student_id in students else "",
             "student_class": class_names.get(students[a.student_id].class_id, "") if a.student_id in students else "",
@@ -473,6 +748,126 @@ def platform_tasks(
     })
 
 
+@router.get("/tasks/{task_id}")
+def platform_task_detail(task_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    qnr = task.questionnaire
+    school = db.query(School).filter(School.id == task.school_id).first()
+    snapshot = task.target_snapshot or {}
+    student_ids = snapshot.get("student_ids", [])
+    if isinstance(student_ids, list):
+        student_ids = [int(s) for s in student_ids if str(s).isdigit()]
+    total_students = len(student_ids)
+    submitted = db.query(func.count(AnswerSheet.id)).filter(
+        AnswerSheet.task_id == task_id, AnswerSheet.status == "submitted"
+    ).scalar() or 0
+    grades_q = db.query(Grade).filter(Grade.school_id == task.school_id, Grade.status == True).order_by(Grade.sort_order).all()
+    grade_stats = []
+    for g in grades_q:
+        g_students = db.query(User.id).filter(User.grade_id == g.id, User.role == "student")
+        g_ids = [s[0] for s in g_students.all()]
+        target_in_grade = list(set(g_ids) & set(student_ids))
+        if not target_in_grade:
+            continue
+        g_submitted = db.query(func.count(AnswerSheet.id)).filter(
+            AnswerSheet.task_id == task_id, AnswerSheet.student_id.in_(target_in_grade), AnswerSheet.status == "submitted"
+        ).scalar() or 0
+        grade_stats.append({
+            "grade_name": g.name, "total": len(target_in_grade), "submitted": g_submitted,
+            "rate": round(g_submitted / max(len(target_in_grade), 1) * 100, 1),
+        })
+    return APIResponse.success({
+        "id": task.id, "name": task.name, "school_name": school.name if school else "",
+        "questionnaire_title": qnr.title if qnr else "", "status": task.status,
+        "target_type": task.target_type, "description": task.description or "",
+        "start_time": task.start_time.isoformat() if task.start_time else None,
+        "end_time": task.end_time.isoformat() if task.end_time else None,
+        "published_at": task.published_at.isoformat() if task.published_at else None,
+        "total_students": total_students, "submitted": submitted,
+        "completion_rate": round(submitted / max(total_students, 1) * 100, 1) if total_students else 0,
+        "grade_stats": grade_stats,
+    })
+
+@router.post("/tasks/{task_id}/close")
+def platform_close_task(task_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    task.status = "closed"
+    task.closed_at = func.now()
+    db.commit()
+    log_operation(db, user, request, module="task_supervision", action="close", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success(message="任务已关闭")
+
+@router.post("/tasks/{task_id}/extend")
+def platform_extend_task(task_id: int, data: dict, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    from datetime import datetime
+    end_time = data.get("end_time")
+    if not end_time:
+        raise HTTPException(status_code=400, detail="请设置新的截止时间")
+    task.end_time = datetime.fromisoformat(str(end_time).replace("Z", "+00:00")).replace(tzinfo=None)
+    task.extended_at = datetime.now()
+    if task.status == "ended":
+        task.status = "in_progress"
+    db.commit()
+    log_operation(db, user, request, module="task_supervision", action="extend", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success(message="任务已延期")
+
+@router.put("/tasks/{task_id}")
+def platform_edit_task(task_id: int, data: dict, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.status not in ("draft", "not_started"):
+        raise HTTPException(status_code=400, detail="只能编辑草稿或未开始的任务")
+    if "name" in data:
+        task.name = data["name"]
+    if "description" in data:
+        task.description = data["description"]
+    if "start_time" in data:
+        task.start_time = datetime.fromisoformat(str(data["start_time"]).replace("Z", "+00:00")).replace(tzinfo=None) if data["start_time"] else None
+    if "end_time" in data:
+        task.end_time = datetime.fromisoformat(str(data["end_time"]).replace("Z", "+00:00")).replace(tzinfo=None) if data["end_time"] else None
+    db.commit()
+    log_operation(db, user, request, module="task_supervision", action="edit", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success(message="任务更新成功")
+
+@router.post("/tasks/{task_id}/archive")
+def platform_archive_task(task_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    task.status = "archived"
+    db.commit()
+    log_operation(db, user, request, module="task_supervision", action="archive", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success(message="任务已归档")
+
+@router.delete("/tasks/{task_id}")
+def platform_delete_task(task_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.status not in ("draft", "archived"):
+        raise HTTPException(status_code=400, detail="只能删除草稿或已归档的任务")
+    task_name = task.name
+    # 级联删除关联记录（数据库无 cascade，需手动删除）
+    sheet_ids = [s.id for s in db.query(AnswerSheet.id).filter(AnswerSheet.task_id == task_id).all()]
+    if sheet_ids:
+        db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(RiskAlert).filter(RiskAlert.task_id == task_id).delete(synchronize_session=False)
+        db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).delete(synchronize_session=False)
+    db.delete(task)
+    db.commit()
+    log_operation(db, user, request, module="task_supervision", action="delete", object_type="task", object_id=task_id, object_name=task_name)
+    return APIResponse.success(message="任务已删除")
+
 @router.get("/interventions")
 def platform_interventions(
     page: int = Query(1), page_size: int = Query(20),
@@ -487,15 +882,20 @@ def platform_interventions(
         q = q.filter(Intervention.status == status)
     total = q.count()
     items = q.order_by(Intervention.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    student_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.student_id for iv in items])).all()) if items else {}
+    students = {u.id: u for u in db.query(User).filter(User.id.in_([iv.student_id for iv in items])).all()} if items else {}
     teacher_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.teacher_id for iv in items if iv.teacher_id])).all()) if items else {}
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([iv.school_id for iv in items])).all()) if items else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
     return APIResponse.success({
         "items": [{
             "id": iv.id, "student_id": iv.student_id, "school_id": iv.school_id,
-            "student_name": student_names.get(iv.student_id, ""),
+            "student_name": students.get(iv.student_id).real_name if students.get(iv.student_id) else "",
+            "id_card": mask_id_card(students.get(iv.student_id).username) if students.get(iv.student_id) else "",
             "school_name": school_names.get(iv.school_id, ""),
             "teacher_name": teacher_names.get(iv.teacher_id, ""),
+            "student_grade": grade_names.get(students[iv.student_id].grade_id, "") if iv.student_id in students else "",
+            "student_class": class_names.get(students[iv.student_id].class_id, "") if iv.student_id in students else "",
             "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
             "need_follow_up": iv.need_follow_up,
             "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,
@@ -532,6 +932,31 @@ def platform_audit_logs(
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """操作日志审计"""
+    MODULE_LABELS = {
+        "platform_school": "学校管理", "auth": "认证管理", "student": "学生管理",
+        "teacher": "教师管理", "ai_analysis": "AI研判", "sms": "短信管理",
+        "platform_supervision": "监管督办", "system": "系统设置", "intervention": "干预管理",
+        "report": "报告管理", "questionnaire": "问卷管理", "task": "任务管理", "risk": "风险预警",
+        "platform_student": "学生管理", "platform_risk": "风险预警", "platform_sms": "短信管理",
+        "platform_ai": "AI研判", "school_admin_account": "学校管理员",
+    }
+    ACTION_LABELS = {
+        "create": "创建", "update": "更新", "delete": "删除", "disable": "停用",
+        "enable": "启用", "export": "导出", "import": "导入", "send": "发送",
+        "view_detail": "查看详情", "view_profile": "查看档案", "enter_school": "进入学校",
+        "force_delete": "彻底删除", "reset_password": "重置密码", "change_password": "修改密码",
+        "assign_classes": "分配班级", "urge_intervention": "督促处理", "remind": "发送提醒",
+        "send_code": "发送验证码", "regional_analysis": "区域分析", "seed_demo_data": "初始化演示数据",
+        "update_school_info": "更新学校信息", "update_risk_config": "更新风险配置",
+        "update_sms_config": "更新短信配置", "update_screen_config": "更新大屏配置",
+        "create_grade": "创建年级", "delete_grade": "删除年级",
+    }
+    OBJECT_TYPE_LABELS = {
+        "school": "学校", "user": "用户", "student_list": "学生列表", "student_batch": "学生批次",
+        "config": "配置", "risk_alert": "风险预警", "intervention": "干预记录",
+        "sms_log": "短信记录", "report": "报告", "phone": "手机号", "grade": "年级",
+        "sms": "短信", "task": "任务", "student": "学生",
+    }
     q = db.query(OperationLog)
     if module:
         q = q.filter(OperationLog.module == module)
@@ -550,11 +975,14 @@ def platform_audit_logs(
     return APIResponse.success({
         "items": [{
             "id": log.id, "module": log.module, "action": log.action,
+            "module_label": MODULE_LABELS.get(log.module, log.module),
+            "action_label": ACTION_LABELS.get(log.action, log.action),
+            "object_type": log.object_type, "object_type_label": OBJECT_TYPE_LABELS.get(log.object_type, log.object_type),
             "operator_name": log.operator_name, "operator_role": log.operator_role,
-            "object_type": log.object_type, "object_id": log.object_id,
+            "object_id": log.object_id,
             "object_name": log.object_name, "result": log.result,
-            "detail": log.detail or "", "ip": log.ip or "",
-            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "detail": log.detail or "", "ip": log.request_ip or "",
+            "created_at": log.operation_time.isoformat() if log.operation_time else None,
         } for log in items],
         "total": total, "page": page, "page_size": page_size,
     })
@@ -578,7 +1006,7 @@ def platform_sms_logs(
     items = q.order_by(SMSLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return APIResponse.success({
         "items": [{
-            "id": s.id, "recipient_name": s.recipient_name, "phone": s.phone or "",
+            "id": s.id, "recipient_name": s.recipient_name, "phone": mask_phone(s.phone),
             "sms_type": s.sms_type or "", "status": s.status or "",
             "failure_reason": s.failure_reason or "", "school_id": s.school_id,
             "sent_at": s.sent_at.isoformat() if s.sent_at else None,
@@ -712,9 +1140,23 @@ def platform_overdue_interventions(user: User = Depends(require_role("platform_a
         Intervention.status.in_(["pending", "in_progress", "follow_up"]),
         Intervention.created_at < deadline,
     ).order_by(Intervention.created_at).limit(50).all()
+    students = {u.id: u for u in db.query(User).filter(User.id.in_([iv.student_id for iv in items])).all()} if items else {}
+    teacher_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.teacher_id for iv in items if iv.teacher_id])).all()) if items else {}
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([iv.school_id for iv in items])).all()) if items else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
     return APIResponse.success({"items": [{
         "id": iv.id, "student_id": iv.student_id, "school_id": iv.school_id,
-        "status": iv.status, "created_at": iv.created_at.isoformat() if iv.created_at else None,
+        "student_name": students.get(iv.student_id).real_name if students.get(iv.student_id) else "",
+        "id_card": mask_id_card(students.get(iv.student_id).username) if students.get(iv.student_id) else "",
+        "school_name": school_names.get(iv.school_id, ""),
+        "teacher_name": teacher_names.get(iv.teacher_id, ""),
+        "student_grade": grade_names.get(students[iv.student_id].grade_id, "") if iv.student_id in students else "",
+        "student_class": class_names.get(students[iv.student_id].class_id, "") if iv.student_id in students else "",
+        "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+        "need_follow_up": iv.need_follow_up,
+        "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,
+        "created_at": iv.created_at.isoformat() if iv.created_at else None,
     } for iv in items], "total": len(items)})
 
 
@@ -747,23 +1189,190 @@ def platform_ai_logs(page: int = Query(1), page_size: int = Query(20), user: Use
 @router.post("/ai-analysis/regional")
 def platform_ai_regional(data: dict | None = None, request: Request = None, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     summary = platform_summary(db)
-    schools = summary.get("completion_rankings", [])[:5]
-    risks = summary.get("risk_rankings", [])[:5]
-    prompt = f"""区域风险态势研判报告:
-接入学校{summary.get('school_total',0)}所, 学生{summary.get('student_total',0)}人, 风险预警{summary.get('risk_alert_total',0)}条, 待处理{summary.get('pending_risk_total',0)}条。
-学校完成率排名: {', '.join(f"{s['name']}: {s.get('completion_rate',0)}%" for s in schools)}。
-风险排名: {', '.join(f"{s['name']}: {s.get('risk_count',0)}条" for s in risks)}。
-请生成教育管理部门视角的区域风险防范态势研判。"""
-    return APIResponse.success({"analysis": prompt, "configured": False})
+    school_total = summary.get("school_total", 0)
+    student_total = summary.get("student_total", 0)
+    risk_total = summary.get("risk_alert_total", 0)
+    pending_total = summary.get("pending_risk_total", 0)
+    completion_rankings = summary.get("completion_rankings", [])
+    risk_rankings = summary.get("risk_rankings", [])
+    risk_level_dist = summary.get("risk_level_distribution", {})
+
+    # School risk density: risks per 100 students
+    school_risk_density = []
+    for s in risk_rankings[:10]:
+        density = round(s.get("risk_count", 0) / max(s.get("student_count", 1), 1) * 100, 1)
+        school_risk_density.append({"name": s["name"], "risk_count": s.get("risk_count", 0), "student_count": s.get("student_count", 0), "density": density})
+
+    # Intervention efficiency per school
+    school_interventions = []
+    all_schools = db.query(School).filter(School.status == True).all()
+    for sch in all_schools:
+        total_alerts = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == sch.id).scalar() or 0
+        resolved = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == sch.id, RiskAlert.status.in_(["resolved", "closed", "completed"])).scalar() or 0
+        pending = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == sch.id, RiskAlert.status == "pending").scalar() or 0
+        if total_alerts > 0:
+            school_interventions.append({"name": sch.name, "total_alerts": total_alerts, "resolved": resolved, "pending": pending, "resolution_rate": round(resolved / total_alerts * 100, 1)})
+
+    # Anomaly detection: schools with high pending ratios
+    anomaly_schools = []
+    for si in school_interventions:
+        if si["pending"] > 0 and si["resolution_rate"] < 30:
+            anomaly_schools.append({"name": si["name"], "pending": si["pending"], "resolution_rate": si["resolution_rate"], "alert": "干预处置率过低，需重点关注"})
+
+    # Low completion rate tasks
+    low_completion_tasks = []
+    recent_tasks = db.query(Task).filter(Task.status.in_(["in_progress", "active", "not_started"])).order_by(Task.id.desc()).limit(20).all()
+    for t in recent_tasks:
+        snapshot = t.target_snapshot or {}
+        student_ids = snapshot.get("student_ids", [])
+        if isinstance(student_ids, list):
+            total_s = len(student_ids)
+        else:
+            total_s = 0
+        submitted = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.task_id == t.id, AnswerSheet.status == "submitted").scalar() or 0
+        rate = round(submitted / max(total_s, 1) * 100, 1)
+        if total_s > 0 and rate < 30:
+            school = db.query(School).filter(School.id == t.school_id).first()
+            low_completion_tasks.append({"task_name": t.name, "school_name": school.name if school else "", "rate": rate, "total": total_s, "submitted": submitted})
+
+    # Risk level distribution by school
+    school_risk_levels = []
+    for sch in all_schools[:15]:
+        dist = {}
+        for level in ["low", "medium", "high", "urgent"]:
+            c = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == sch.id, RiskAlert.risk_level == level).scalar() or 0
+            if c > 0:
+                dist[level] = c
+        if dist:
+            school_risk_levels.append({"name": sch.name, **dist})
+
+    # High risk student dimension patterns
+    high_risk_scores = db.query(ScoringResult).join(RiskAlert, RiskAlert.answer_sheet_id == ScoringResult.answer_sheet_id).filter(
+        RiskAlert.risk_level.in_(["high", "urgent"])
+    ).limit(200).all()
+    dimension_totals: dict[str, list[float]] = {}
+    for sr in high_risk_scores:
+        if sr.dimension_scores and isinstance(sr.dimension_scores, dict):
+            for k, v in sr.dimension_scores.items():
+                dimension_totals.setdefault(k, []).append(float(v))
+    dimension_patterns = [{"dimension": k, "avg_score": round(sum(v) / len(v), 1), "count": len(v)} for k, v in dimension_totals.items() if v]
+    dimension_patterns.sort(key=lambda x: x["avg_score"])
+    # 维度名称翻译
+    dimension_labels = {
+        "emotion": "情绪状态", "sleep": "睡眠状态", "academic_pressure": "学业压力",
+        "interpersonal": "人际关系", "family_support": "家庭支持", "campus_safety": "校园安全",
+        "internet_use": "网络使用", "self_safety": "自我安全", "general": "综合",
+    }
+    for dp in dimension_patterns:
+        dp["dimension"] = dimension_labels.get(dp["dimension"], dp["dimension"])
+
+    # Monthly risk trend (last 6 months)
+    from datetime import datetime, timedelta
+    monthly_risks = []
+    for i in range(5, -1, -1):
+        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=30 * i)
+        month_end = month_start + timedelta(days=30)
+        count = db.query(func.count(RiskAlert.id)).filter(RiskAlert.created_at >= month_start, RiskAlert.created_at < month_end).scalar() or 0
+        monthly_risks.append({"month": month_start.strftime("%Y-%m"), "count": count})
+
+    # Overall assessment summary text
+    avg_completion = round(sum(s.get("completion_rate", 0) for s in completion_rankings) / max(len(completion_rankings), 1), 1) if completion_rankings else 0
+    high_risk_pct = round((risk_level_dist.get("high", 0) + risk_level_dist.get("urgent", 0)) / max(risk_total, 1) * 100, 1)
+    assessment = {
+        "risk_level": "高" if high_risk_pct > 20 else "中" if high_risk_pct > 10 else "低",
+        "summary": f"区域接入{school_total}所学校，覆盖{student_total}名学生。累计风险预警{risk_total}条，待处理{pending_total}条。"
+                   f"高危+紧急占比{high_risk_pct}%，区域平均测评完成率{avg_completion}%。",
+        "recommendations": [],
+    }
+    if pending_total > 50:
+        assessment["recommendations"].append(f"当前有{pending_total}条待处理风险预警，建议督促相关学校加快干预处置进度。")
+    if anomaly_schools:
+        assessment["recommendations"].append(f"{len(anomaly_schools)}所学校干预处置率低于30%，需重点关注并约谈学校负责人。")
+    if low_completion_tasks:
+        assessment["recommendations"].append(f"{len(low_completion_tasks)}项测评任务完成率不足30%，建议了解原因并适当延期。")
+    if dimension_patterns and dimension_patterns[0]["avg_score"] < 40:
+        assessment["recommendations"].append(f"警告学生群体在「{dimension_patterns[0]['dimension']}」维度平均得分仅{dimension_patterns[0]['avg_score']}，建议开展针对性辅导。")
+
+    if request:
+        log_operation(db, user, request, module="platform_ai", action="regional_analysis", object_type="report", object_id=0, object_name="区域综合分析")
+
+    return APIResponse.success({
+        "overview": {"school_total": school_total, "student_total": student_total, "risk_total": risk_total, "pending_total": pending_total},
+        "assessment": assessment,
+        "school_risk_density": school_risk_density[:8],
+        "school_interventions": sorted(school_interventions, key=lambda x: x["resolution_rate"])[:8],
+        "anomaly_schools": anomaly_schools,
+        "low_completion_tasks": low_completion_tasks[:5],
+        "school_risk_levels": school_risk_levels,
+        "dimension_patterns": dimension_patterns[:8],
+        "monthly_risks": monthly_risks,
+        "risk_level_dist": risk_level_dist,
+    })
+
+
+# ============ 答题详情 ============
+
+@router.get("/answer-sheets/{sheet_id}/detail")
+def platform_answer_detail(
+    sheet_id: int, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    from ..services.questionnaire_service import get_answer_detail
+    try:
+        detail = get_answer_detail(db, sheet_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    log_operation(db, user, request, module="platform_risk", action="view_detail",
+                  object_type="answer_sheet", object_id=sheet_id,
+                  object_name=detail.get("student_name", ""), detail="查看答题详情")
+    return APIResponse.success(detail)
+
+
+@router.get("/students/{student_id}/answer-sheets")
+def platform_student_answer_sheets(
+    student_id: int,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    from ..services.questionnaire_service import list_student_answer_sheets
+    sheets = list_student_answer_sheets(db, student_id)
+    return APIResponse.success(sheets)
+
+
+@router.get("/risks/{alert_id}/answers")
+def platform_risk_answer_detail(
+    alert_id: int, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    alert = db.query(RiskAlert).filter(RiskAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="风险预警不存在")
+    if not alert.answer_sheet_id:
+        raise HTTPException(status_code=404, detail="该预警无关联答卷")
+    from ..services.questionnaire_service import get_answer_detail
+    try:
+        detail = get_answer_detail(db, alert.answer_sheet_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    log_operation(db, user, request, module="platform_risk", action="view_detail",
+                  object_type="answer_sheet", object_id=alert.answer_sheet_id,
+                  object_name=detail.get("student_name", ""), detail=f"通过风险预警{alert_id}查看答题详情")
+    return APIResponse.success(detail)
 
 
 # ============ 审计日志增强 ============
 
 @router.get("/audit/login-logs")
 def platform_login_logs(page: int = Query(1), page_size: int = Query(20), school_id: int | None = Query(None),
+    keyword: str = Query(""), result: str = Query(""), user_role: str = Query(""),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     q = db.query(LoginLog).order_by(LoginLog.id.desc())
     if school_id: q = q.filter(LoginLog.school_id == school_id)
+    if keyword: q = q.filter(LoginLog.username.contains(keyword))
+    if result: q = q.filter(LoginLog.result == result)
+    if user_role: q = q.filter(LoginLog.user_role == user_role)
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()
     return APIResponse.success({"items": [{
@@ -784,4 +1393,189 @@ def platform_export_logs(page: int = Query(1), page_size: int = Query(20),
         "module": l.module, "action": l.action, "object_name": l.object_name,
         "created_at": l.created_at.isoformat() if l.created_at else None,
     } for l in items], "total": total, "page": page, "page_size": page_size})
+
+
+# ============ 问卷管理 ============
+
+@router.get("/questionnaires")
+def platform_questionnaires(
+    page: int = Query(1), page_size: int = Query(20),
+    category: str = Query(""), status: str = Query(""), keyword: str = Query(""),
+    source_type: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    from ..services.questionnaire_service import list_questionnaires
+    result = list_questionnaires(db, school_id=None, page=page, page_size=page_size,
+                                 category=category, status=status, keyword=keyword, include_builtin=True)
+    items = result["items"]
+    if source_type:
+        items = [i for i in items if i.get("source_type") == source_type]
+        result["items"] = items
+        result["total"] = len(items)
+    for item in items:
+        task_count = db.query(func.count(Task.id)).filter(Task.questionnaire_id == item["id"]).scalar() or 0
+        answer_count = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.questionnaire_id == item["id"]).scalar() or 0
+        item["task_count"] = task_count
+        item["answer_count"] = answer_count
+    return APIResponse.success(result)
+
+
+@router.get("/questionnaires/{qid}")
+def platform_questionnaire_detail(qid: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    from ..services.questionnaire_service import get_questionnaire_detail
+    try:
+        return APIResponse.success(get_questionnaire_detail(db, qid))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/questionnaires")
+def platform_create_questionnaire(
+    data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    from ..services.questionnaire_service import create_questionnaire
+    from ..schemas.questionnaire import QuestionnaireCreate
+    qn_data = QuestionnaireCreate(**data)
+    q = create_questionnaire(db, qn_data, user_id=user.id, school_id=None)
+    log_operation(db, user, request, module="questionnaire", action="create",
+                  object_type="questionnaire", object_id=q.id, object_name=q.title, result="success")
+    return APIResponse.success({"id": q.id, "title": q.title}, message="问卷创建成功")
+
+
+@router.put("/questionnaires/{qid}")
+def platform_update_questionnaire(
+    qid: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+    if q.is_builtin:
+        raise HTTPException(status_code=400, detail="内置问卷不可编辑")
+    from ..services.questionnaire_service import update_questionnaire
+    from ..schemas.questionnaire import QuestionnaireUpdate
+    update_data = QuestionnaireUpdate(**data)
+    updated = update_questionnaire(db, qid, update_data)
+    log_operation(db, user, request, module="questionnaire", action="update",
+                  object_type="questionnaire", object_id=qid, object_name=updated.title, result="success")
+    return APIResponse.success(message="问卷更新成功")
+
+
+@router.delete("/questionnaires/{qid}")
+def platform_delete_questionnaire(
+    qid: int, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+    if q.is_builtin:
+        raise HTTPException(status_code=400, detail="内置问卷不可删除")
+    from ..services.questionnaire_service import delete_questionnaire
+    try:
+        delete_questionnaire(db, qid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    log_operation(db, user, request, module="questionnaire", action="delete",
+                  object_type="questionnaire", object_id=qid, object_name=q.title, result="success")
+    return APIResponse.success(message="问卷删除成功")
+
+
+@router.post("/questionnaires/{qid}/push")
+def platform_push_questionnaire(
+    qid: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """推送问卷到指定学校（创建学校级副本）"""
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+    school_ids = data.get("school_ids", [])
+    push_all = data.get("push_all", False)
+    if push_all:
+        school_ids = [s.id for s in db.query(School).filter(School.status == True).all()]
+    if not school_ids:
+        raise HTTPException(status_code=400, detail="请选择目标学校")
+    from ..services.questionnaire_service import copy_questionnaire
+    pushed = []
+    for sid in school_ids:
+        school = db.query(School).filter(School.id == sid).first()
+        if not school:
+            continue
+        existing = db.query(Questionnaire).filter(
+            Questionnaire.source_questionnaire_id == qid,
+            Questionnaire.school_id == sid,
+        ).first()
+        if existing:
+            continue
+        new_q = copy_questionnaire(db, qid, user_id=user.id, school_id=sid)
+        new_q.title = q.title
+        new_q.source_questionnaire_id = qid
+        db.commit()
+        pushed.append({"school_id": sid, "school_name": school.name, "questionnaire_id": new_q.id})
+    log_operation(db, user, request, module="questionnaire", action="push",
+                  object_type="questionnaire", object_id=qid, object_name=q.title,
+                  detail=f"推送到{len(pushed)}所学校")
+    return APIResponse.success({"pushed": pushed, "count": len(pushed)}, message=f"已推送到{len(pushed)}所学校")
+
+
+@router.post("/questionnaires/{qid}/copy")
+def platform_copy_questionnaire(
+    qid: int, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    from ..services.questionnaire_service import copy_questionnaire
+    try:
+        new_q = copy_questionnaire(db, qid, user_id=user.id, school_id=None)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    log_operation(db, user, request, module="questionnaire", action="create",
+                  object_type="questionnaire", object_id=new_q.id, object_name=new_q.title,
+                  detail=f"复制自问卷{qid}")
+    return APIResponse.success({"id": new_q.id, "title": new_q.title}, message="问卷复制成功")
+
+
+@router.get("/questionnaires/{qid}/usage")
+def platform_questionnaire_usage(
+    qid: int,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+    task_count = db.query(func.count(Task.id)).filter(Task.questionnaire_id == qid).scalar() or 0
+    answer_count = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.questionnaire_id == qid).scalar() or 0
+    submitted = db.query(func.count(AnswerSheet.id)).join(Task).filter(
+        Task.questionnaire_id == qid, AnswerSheet.status == "submitted").scalar() or 0
+    school_ids = [t.school_id for t in db.query(Task.school_id).filter(Task.questionnaire_id == qid).distinct().all()]
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_(school_ids)).all()) if school_ids else {}
+    copies = db.query(Questionnaire).filter(Questionnaire.source_questionnaire_id == qid).count()
+    return APIResponse.success({
+        "task_count": task_count, "answer_count": answer_count, "submitted": submitted,
+        "schools": [{"id": sid, "name": school_names.get(sid, "")} for sid in school_ids],
+        "copies": copies,
+    })
+
+
+@router.get("/system-info")
+def platform_system_info(user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    school_count = db.query(func.count(School.id)).scalar() or 0
+    student_count = db.query(func.count(User.id)).filter(User.role == "student").scalar() or 0
+    teacher_count = db.query(func.count(User.id)).filter(User.role.in_(["teacher", "counselor"])).scalar() or 0
+    task_count = db.query(func.count(Task.id)).scalar() or 0
+    risk_count = db.query(func.count(RiskAlert.id)).scalar() or 0
+    from ..config import settings as app_settings
+    db_url = str(app_settings.DATABASE_URL) if hasattr(app_settings, 'DATABASE_URL') else ''
+    db_type = 'MySQL' if 'mysql' in db_url.lower() else 'SQLite'
+    return APIResponse.success({
+        "version": "v2.1.0",
+        "tech_stack": "Python FastAPI + React 18 + Ant Design 5 + ECharts",
+        "db_type": db_type,
+        "school_count": school_count,
+        "student_count": student_count,
+        "teacher_count": teacher_count,
+        "task_count": task_count,
+        "risk_count": risk_count,
+    })
 

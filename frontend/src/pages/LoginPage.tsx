@@ -35,6 +35,10 @@ export default function LoginPage() {
       const result = await login(values);
       setAuth(result.user, result.access_token);
       message.success('登录成功');
+      if (result.user.must_change_password) {
+        navigate('/change-password', { replace: true });
+        return;
+      }
       const rolePathMap: Record<string, string> = {
         school_admin: '/school-admin/dashboard',
         teacher: '/teacher/dashboard',
@@ -92,29 +96,29 @@ export default function LoginPage() {
       )}
 
       <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', width: '100%' }}>
-        <div style={{ width: isMobile ? 72 : 110, height: isMobile ? 72 : 110, borderRadius: isMobile ? 20 : 30, background: 'rgba(0,212,255,0.08)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: `0 auto ${isMobile ? 24 : 40}px`, border: '1px solid rgba(0,212,255,0.25)', boxShadow: '0 0 40px rgba(0,212,255,0.12), 0 8px 32px rgba(0,0,0,0.25)' }}>
+        <div style={{ width: isMobile ? 72 : 110, height: isMobile ? 72 : 110, borderRadius: isMobile ? 20 : 30, background: 'rgba(0,212,255,0.08)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: `0 auto ${isMobile ? 24 : 40}px`, border: '1px solid rgba(212,168,67,0.25)', boxShadow: '0 0 40px rgba(212,168,67,0.12), 0 8px 32px rgba(0,0,0,0.25)' }}>
           <SafetyOutlined style={{ fontSize: isMobile ? 36 : 54, color: '#00d4ff' }} />
         </div>
 
         <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 800, letterSpacing: isMobile ? 4 : 8, color: '#fff', fontFamily: "'PingFang SC', 'Microsoft YaHei', sans-serif", textShadow: '0 0 60px rgba(0,212,255,0.3)', marginBottom: 8, textAlign: 'center' }}>
-          青盾
+          金盾护苗
         </div>
 
         <div style={{ color: 'rgba(0,212,255,0.85)', fontSize: isMobile ? 14 : 18, letterSpacing: isMobile ? 1 : 3, fontWeight: 500, marginBottom: isMobile ? 24 : 36, textAlign: 'center' }}>
-          青少年风险防范测评管理系统
+          金盾护苗 · 青少年关爱帮扶信息管理平台
         </div>
 
         <div style={{ width: 100, height: 2, background: 'linear-gradient(90deg, rgba(0,212,255,0), rgba(0,212,255,0.5), rgba(0,212,255,0))', borderRadius: 2, margin: '0 auto 30px' }} />
 
         <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: isMobile ? 14 : 16, letterSpacing: isMobile ? 2 : 4, marginBottom: 12, textAlign: 'center' }}>
-          守护青春，预见未来
+          护航青春，共筑未来
         </div>
       </div>
 
       <div style={{ position: isMobile ? 'relative' : 'absolute', bottom: isMobile ? undefined : 48, left: isMobile ? undefined : 60, right: isMobile ? undefined : 60, display: 'flex', flexWrap: 'wrap', gap: 24, zIndex: 1, marginTop: isMobile ? 24 : 0, justifyContent: 'center' }}>
         {[
-          { title: '专业测评工具', desc: '标准化评估量表' },
-          { title: '智能风险识别', desc: 'AI 辅助分析预警' },
+          { title: '关爱筛查评估', desc: '标准化评估量表' },
+          { title: '智能分类识别', desc: 'AI 辅助分析预警' },
           { title: '答题质量检测', desc: '自动筛选有效答卷' },
           { title: '数据驱动决策', desc: '可视化数据报表' },
         ].map((item, i) => (
@@ -169,6 +173,7 @@ export default function LoginPage() {
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px 0 0', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+        <div style={{ marginBottom: 2 }}>平利县公安局老县派出所</div>
         陕西安楠云芯科技有限公司 &nbsp;
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>陕ICP备2026008842号-1</a>
       </div>
@@ -189,7 +194,7 @@ export default function LoginPage() {
           setResetPhone(vals.phone); setResetUsername(vals.username);
           setSendingCode(true);
           try {
-            await fetch('/api/v1/auth/send-sms-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: vals.phone, purpose: 'reset_password' }) });
+            await fetch('/api/v1/auth/send-sms-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: vals.phone, username: vals.username, purpose: 'reset_password' }) });
             message.success('验证码已发送'); setForgotStep('code');
           } catch { message.error('发送失败'); }
           finally { setSendingCode(false); }

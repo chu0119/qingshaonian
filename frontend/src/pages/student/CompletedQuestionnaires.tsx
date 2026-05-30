@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, List, Typography, Tag, message, Descriptions, Empty, Spin } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+import { QUALITY_LABELS } from '../../utils/constants';
 
 export default function CompletedQuestionnaires() {
   const [items, setItems] = useState<any[]>([]);
@@ -121,8 +122,8 @@ export default function CompletedQuestionnaires() {
                       )}
                       {item.quality_level && (
                         <Descriptions.Item label="答题质量">
-                          <Tag color={item.quality_level === 'good' ? 'green' : item.quality_level === 'medium' ? 'orange' : 'red'}>
-                            {item.quality_level === 'good' ? '良好' : item.quality_level === 'medium' ? '一般' : '较差'}
+                          <Tag color={item.quality_level === 'normal' || item.quality_level === 'good' ? 'green' : item.quality_level === 'medium' || item.quality_level === 'mild_anomaly' ? 'orange' : 'red'}>
+                            {QUALITY_LABELS[item.quality_level] || item.quality_level}
                           </Tag>
                         </Descriptions.Item>
                       )}

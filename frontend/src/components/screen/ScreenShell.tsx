@@ -52,24 +52,48 @@ export default function ScreenShell({ title, subtitle, updatedAt, onBack, childr
   const tm = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}:${String(time.getSeconds()).padStart(2, '0')}`;
 
   return (
-    <div ref={rootRef} style={{ minHeight: '100vh', background: `radial-gradient(circle at 50% 0%, rgba(0,184,240,0.12), transparent 34%), linear-gradient(180deg, ${theme.bg} 0%, #07162c 100%)`, color: theme.text, overflow: 'auto' }}>
+    <div ref={rootRef} style={{
+      minHeight: '100vh',
+      background: `radial-gradient(ellipse at 50% 0%, rgba(0,184,240,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(77,159,255,0.06) 0%, transparent 40%), linear-gradient(180deg, ${theme.bg} 0%, #07162c 100%)`,
+      color: theme.text,
+      overflow: 'auto',
+    }}>
+      {/* Background effects */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
         <Stars />
+        <GridLines />
       </div>
 
       <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: isMobile ? '12px 10px 16px' : '14px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', alignItems: 'start', gap: 10, marginBottom: isMobile ? 12 : 10, flexShrink: 0 }}>
+        {/* Header */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', alignItems: 'center', gap: 10, marginBottom: isMobile ? 12 : 10, flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: 8 }}>
             {onBack && <Button size="small" ghost icon={<ArrowLeftOutlined />} onClick={onBack} style={{ borderColor: theme.border, color: theme.textDim }}>返回</Button>}
           </div>
           <div style={{ minWidth: 0, textAlign: isMobile ? 'left' : 'center' }}>
-            <Typography.Title level={isMobile ? 5 : 3} style={{ color: '#fff', margin: 0, letterSpacing: isMobile ? 1 : 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 0 18px rgba(0,184,240,0.35)' }}>
+            {/* Decorative line above title */}
+            {!isMobile && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 6 }}>
+                <span style={{ height: 1, width: 60, background: `linear-gradient(90deg, transparent, ${theme.cyan}66)`, display: 'block' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: theme.cyan, boxShadow: `0 0 10px ${theme.cyan}88` }} />
+                <span style={{ height: 1, width: 60, background: `linear-gradient(90deg, ${theme.cyan}66, transparent)`, display: 'block' }} />
+              </div>
+            )}
+            <Typography.Title level={isMobile ? 5 : 3} style={{
+              color: '#fff',
+              margin: 0,
+              letterSpacing: isMobile ? 1 : 4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              textShadow: `0 0 20px rgba(0,184,240,0.4), 0 0 40px rgba(0,184,240,0.15)`,
+            }}>
               {title}
             </Typography.Title>
-            {subtitle && <div style={{ color: theme.textDim, fontSize: isMobile ? 12 : 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</div>}
+            {subtitle && <div style={{ color: theme.textDim, fontSize: isMobile ? 12 : 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: 1 }}>{subtitle}</div>}
           </div>
           <div style={{ display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end', alignItems: 'center', gap: 8, color: theme.textDim, fontSize: 12 }}>
-            <span>{dt} {tm}{updatedAt ? ` · 数据: ${updatedAt}` : ''}</span>
+            <span style={{ fontFamily: theme.numberFont, letterSpacing: 0.5 }}>{dt} {tm}{updatedAt ? ` · 数据: ${updatedAt}` : ''}</span>
             {!isMobile && (
               <Button size="small" ghost icon={fs ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={toggleFs} style={{ borderColor: theme.border, color: theme.textDim }}>
                 {fs ? '退出' : '全屏'}
@@ -78,6 +102,7 @@ export default function ScreenShell({ title, subtitle, updatedAt, onBack, childr
           </div>
         </div>
 
+        {/* Content */}
         <div style={{ flex: 1, minHeight: 0 }}>
           {children}
         </div>
@@ -97,8 +122,39 @@ function Stars() {
   return (
     <>
       {positions.map(([x, y], i) => (
-        <div key={i} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, width: i % 5 === 0 ? 3 : 2, height: i % 5 === 0 ? 3 : 2, borderRadius: '50%', background: '#dff8ff', opacity: 0.12 + (i % 3) * 0.08, boxShadow: '0 0 8px rgba(0,184,240,0.5)' }} />
+        <div key={i} style={{
+          position: 'absolute',
+          left: `${x}%`,
+          top: `${y}%`,
+          width: i % 5 === 0 ? 3 : 2,
+          height: i % 5 === 0 ? 3 : 2,
+          borderRadius: '50%',
+          background: '#dff8ff',
+          opacity: 0.12 + (i % 3) * 0.08,
+          boxShadow: '0 0 8px rgba(0,184,240,0.5)',
+          animation: i % 4 === 0 ? `twinkle ${3 + (i % 3)}s ease-in-out infinite` : 'none',
+          animationDelay: `${(i * 0.3) % 5}s`,
+        }} />
       ))}
+      <style>{`
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.1; }
+          50% { opacity: 0.35; }
+        }
+      `}</style>
     </>
+  );
+}
+
+function GridLines() {
+  return (
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.03 }}>
+      <defs>
+        <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+          <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#00b8f0" strokeWidth="0.5" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid)" />
+    </svg>
   );
 }

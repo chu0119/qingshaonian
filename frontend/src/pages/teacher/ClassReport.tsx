@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Row, Col, Card, Statistic, Progress, Tag, Typography, message, Modal, Descriptions, Empty, Spin } from 'antd';
 import { BankOutlined, TeamOutlined, FileTextOutlined, AlertOutlined, SafetyOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+import { RISK_LABELS, RISK_COLORS } from '../../utils/constants';
 
 export default function ClassReport() {
   const [classes, setClasses] = useState<any[]>([]);
@@ -48,21 +49,12 @@ export default function ClassReport() {
   };
 
   const getRiskTagColor = (level: string) => {
-    switch (level) {
-      case 'high': return 'red';
-      case 'medium': return 'orange';
-      case 'low': return 'green';
-      default: return 'default';
-    }
+    const map: Record<string, string> = { low: 'green', medium: 'orange', high: 'red', urgent: '#CF1322' };
+    return map[level] || 'default';
   };
 
   const getRiskTagText = (level: string) => {
-    switch (level) {
-      case 'high': return '高风险';
-      case 'medium': return '中风险';
-      case 'low': return '低风险';
-      default: return '无风险';
-    }
+    return RISK_LABELS[level] || '无风险';
   };
 
   return (
@@ -180,13 +172,13 @@ export default function ClassReport() {
                   {getRiskTagText(reportData.risk_level)}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="高风险提示数">
+              <Descriptions.Item label="警告提示数">
                 {reportData.high_risk_count || 0}
               </Descriptions.Item>
-              <Descriptions.Item label="中风险提示数">
+              <Descriptions.Item label="预警提示数">
                 {reportData.medium_risk_count || 0}
               </Descriptions.Item>
-              <Descriptions.Item label="低风险提示数">
+              <Descriptions.Item label="关注提示数">
                 {reportData.low_risk_count || 0}
               </Descriptions.Item>
               <Descriptions.Item label="测评进度">

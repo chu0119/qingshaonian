@@ -68,3 +68,20 @@ body {
     font-size: 20px !important;
   }
 }
+
+/* Extra small screens */
+@media (max-width: 576px) {
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+  .ant-card-head-title {
+    font-size: 14px;
+  }
+}
+
+/* Medium screens — data screens */
+@media (max-width: 1200px) {
+  .screen-grid-3col {
+    grid-template-columns: 1fr !important;
+  }
+}

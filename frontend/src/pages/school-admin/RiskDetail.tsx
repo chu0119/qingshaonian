@@ -5,18 +5,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { RobotOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
+import { RISK_LABELS, RISK_COLORS, QUALITY_LABELS, VALIDITY_LABELS, INTERVENTION_STATUS_LABELS, DIMENSION_LABELS } from '../../utils/constants';
 
 const riskLabels: Record<string, { label: string; color: string }> = {
-  low: { label: '低风险', color: '#1890FF' },
-  medium: { label: '中风险', color: '#FA8C16' },
-  high: { label: '高风险', color: '#FF4D4F' },
-  urgent: { label: '紧急风险', color: '#CF1322' },
+  low: { label: RISK_LABELS.low, color: RISK_COLORS.low },
+  medium: { label: RISK_LABELS.medium, color: RISK_COLORS.medium },
+  high: { label: RISK_LABELS.high, color: RISK_COLORS.high },
+  urgent: { label: RISK_LABELS.urgent, color: RISK_COLORS.urgent },
 };
-const qualityLabels: Record<string, string> = { normal: '正常', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '高度异常' };
-const qualityColors: Record<string, string> = { normal: '#67C23A', mild_anomaly: '#E6A23C', moderate_anomaly: '#FA8C16', severe_anomaly: '#FF4D4F' };
-const validityLabels: Record<string, string> = { valid: '有效', basically_valid: '基本有效', questionable: '存疑', not_recommended: '不建议纳入核心统计' };
-const statusLabels: Record<string, string> = { pending: '待处理', viewed: '已查看', processing: '处理中', ongoing: '持续跟进', completed: '已完成', closed: '已关闭' };
-const dimLabels: Record<string, string> = { emotion: '情绪状态', sleep: '睡眠状态', academic_pressure: '学习压力', interpersonal: '人际关系', family_support: '家庭支持', campus_safety: '校园安全', internet_use: '网络使用', self_safety: '自我安全风险', general: '综合' };
+const qualityLabels = QUALITY_LABELS;
+const qualityColors: Record<string, string> = { normal: '#67C23A', questionable: '#E6A23C', mild_anomaly: '#E6A23C', moderate_anomaly: '#FA8C16', severe_anomaly: '#FF4D4F' };
+const validityLabels = VALIDITY_LABELS;
+const statusLabels = INTERVENTION_STATUS_LABELS;
+const dimLabels = DIMENSION_LABELS;
 
 export default function RiskDetail() {
   const { id } = useParams<{ id: string }>();

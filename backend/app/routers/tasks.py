@@ -233,6 +233,26 @@ def publish_task(task_id: int, request: Request, user: User = Depends(require_ro
     return APIResponse.success(message="任务已发布")
 
 
+@router.put("/{task_id}")
+def update_task(task_id: int, data: dict, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not can_access_task(db, user, task):
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.status not in ("draft", "not_started"):
+        raise HTTPException(status_code=400, detail="只能编辑草稿或未开始的任务")
+    if "name" in data:
+        task.name = data["name"]
+    if "description" in data:
+        task.description = data["description"]
+    if "start_time" in data:
+        task.start_time = datetime.fromisoformat(str(data["start_time"]).replace("Z", "+00:00")).replace(tzinfo=None) if data["start_time"] else None
+    if "end_time" in data:
+        task.end_time = datetime.fromisoformat(str(data["end_time"]).replace("Z", "+00:00")).replace(tzinfo=None) if data["end_time"] else None
+    db.commit()
+    log_operation(db, user, request, module="questionnaire_task", action="edit", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success(message="任务更新成功")
+
+
 @router.post("/{task_id}/close")
 def close_task(task_id: int, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()

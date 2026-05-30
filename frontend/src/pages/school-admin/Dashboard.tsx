@@ -10,12 +10,11 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
+import { RISK_LABELS, RISK_COLORS, QUALITY_LABELS } from '../../utils/constants';
 
 const { Title, Text } = Typography;
 
-const riskLabels: Record<string, string> = {
-  low: '低风险', medium: '中风险', high: '高风险', urgent: '紧急风险',
-};
+const riskLabels = RISK_LABELS;
 const riskColors: Record<string, string> = {
   low: '#1677ff', medium: '#faad14', high: '#ff7a45', urgent: '#ff4d4f',
 };
@@ -24,10 +23,10 @@ const riskBgColors: Record<string, string> = {
 };
 
 const qLabels: Record<string, string> = {
-  normal: '正常', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '高度异常',
+  normal: '正常', questionable: '存疑', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '高度异常',
 };
 const qColors: Record<string, string> = {
-  normal: '#52c41a', mild_anomaly: '#faad14', moderate_anomaly: '#fa8c16', severe_anomaly: '#ff4d4f',
+  normal: '#52c41a', questionable: '#e8b339', mild_anomaly: '#faad14', moderate_anomaly: '#fa8c16', severe_anomaly: '#ff4d4f',
 };
 
 // 统计卡片配置
@@ -129,7 +128,7 @@ export default function Dashboard() {
     (qualityDist.moderate_anomaly || 0) +
     (qualityDist.severe_anomaly || 0);
   const effectiveRate =
-    qualityTotal > 0 ? Math.round(((qualityDist.normal || 0) / qualityTotal) * 100) : 100;
+    qualityTotal > 0 ? Math.round(((qualityDist.normal || 0) / qualityTotal) * 100) : null;
 
   const riskColumns = [
     {
@@ -322,7 +321,7 @@ export default function Dashboard() {
             <Space>
               <WarningOutlined style={{ color: '#ff4d4f', fontSize: 18 }} />
               <Text strong style={{ color: '#cf1322' }}>
-                当前有 {urgentCount} 条紧急风险提示和 {highCount} 条高风险提示需要关注
+                当前有 {urgentCount} 条危急关注信号和 {highCount} 条警告关注信号需要关注
               </Text>
             </Space>
             <Button
@@ -431,9 +430,9 @@ export default function Dashboard() {
                 textAlign: 'center',
                 marginBottom: 20,
                 padding: '16px 0',
-                background: effectiveRate >= 80 ? '#f6ffed' : '#fffbe6',
+                background: effectiveRate === null ? '#f5f5f5' : (effectiveRate >= 80 ? '#f6ffed' : '#fffbe6'),
                 borderRadius: 10,
-                border: `1px solid ${effectiveRate >= 80 ? '#b7eb8f' : '#ffe58f'}`,
+                border: `1px solid ${effectiveRate === null ? '#d9d9d9' : (effectiveRate >= 80 ? '#b7eb8f' : '#ffe58f')}`,
               }}
             >
               <Text style={{ fontSize: 15 }}>
@@ -442,11 +441,11 @@ export default function Dashboard() {
               <strong
                 style={{
                   fontSize: 28,
-                  color: effectiveRate >= 80 ? '#52c41a' : '#faad14',
+                  color: effectiveRate === null ? '#999' : (effectiveRate >= 80 ? '#52c41a' : '#faad14'),
                   margin: '0 4px',
                 }}
               >
-                {effectiveRate}%
+                {effectiveRate === null ? '暂无数据' : `${effectiveRate}%`}
               </strong>
             </div>
             {qualityTotal > 0 ? (

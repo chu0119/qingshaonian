@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Switch, InputNumber, Popconfirm, Alert, Descriptions, Tag, Collapse } from 'antd';
-import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, CopyOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, message, Divider, Modal, Switch, InputNumber, Popconfirm, Alert, Descriptions, Tag, Collapse, Radio, Checkbox } from 'antd';
+import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, CopyOutlined, EyeOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import {
   getQuestionnaire, createQuestionnaire, updateQuestionnaire, copyQuestionnaire,
   addQuestion, updateQuestion, deleteQuestion,
-  addContradiction, deleteContradiction,
+  addContradiction, deleteContradiction, sortQuestions,
   type QuestionData, type OptionData, type ContradictionGroupData, type QuestionnaireDetail,
 } from '../../api/questionnaires';
 import { getDictGrades } from '../../api/users';
+import { QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS, DIMENSION_LABELS, SOURCE_TYPE_LABELS, RISK_LABELS, RISK_COLORS } from '../../utils/constants';
 
 const questionTypes = [
   { value: 'single_choice', label: '单选题' }, { value: 'multi_choice', label: '多选题' },
@@ -21,18 +22,13 @@ const dimensionOptions = [
   { value: 'family_support', label: '家庭支持' }, { value: 'campus_safety', label: '校园安全' },
   { value: 'internet_use', label: '网络使用' }, { value: 'self_safety', label: '自我安全风险' },
 ];
-const dimensionLabels: Record<string, string> = { emotion: '情绪状态', sleep: '睡眠状态', academic_pressure: '学习压力', interpersonal: '人际关系', family_support: '家庭支持', campus_safety: '校园安全', internet_use: '网络使用', self_safety: '自我安全风险' };
+const dimensionLabels = DIMENSION_LABELS;
 const riskTagOptions = [
   { value: '', label: '不设置' }, ...dimensionOptions.map(d => ({ value: d.value, label: d.label + '关注信号' })),
   { value: 'bullying', label: '校园欺凌关注信号' },
 ];
 const relationTypeLabels: Record<string, string> = { opposite: '相反关系', positive_correlated: '正相关', mutually_exclusive: '互斥关系' };
-const categories = [
-  { value: 'mental_health', label: '心理健康筛查' }, { value: 'bullying', label: '校园欺凌排查' },
-  { value: 'internet_addiction', label: '网络沉迷评估' }, { value: 'family_relationship', label: '家庭关系调查' },
-  { value: 'safety_awareness', label: '安全意识测评' }, { value: 'interpersonal', label: '人际关系测评' },
-  { value: 'academic_pressure', label: '学业压力测评' }, { value: 'custom', label: '综合' },
-];
+const categories = Object.entries(QUESTIONNAIRE_CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }));
 
 const emptyOption = (): OptionData => ({ content: '', score: 0, sort_order: 0, is_risk_option: false });
 const emptyQuestion = (): QuestionData => ({
@@ -41,21 +37,56 @@ const emptyQuestion = (): QuestionData => ({
   options: [emptyOption(), emptyOption()],
 });
 
-function JsonEditor({ value, onChange, placeholder }: { value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; placeholder?: string }) {
-  const [text, setText] = useState(JSON.stringify(value, null, 2));
-  const [error, setError] = useState('');
-  useEffect(() => { setText(JSON.stringify(value, null, 2)); }, [value]);
-  return (
-    <div>
-      <Input.TextArea value={text} rows={6} placeholder={placeholder} onChange={e => {
-        setText(e.target.value);
-        try { const parsed = JSON.parse(e.target.value); setError(''); onChange(parsed); }
-        catch { setError('JSON 格式不正确'); }
-      }} />
-      {error && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>{error}</div>}
-    </div>
-  );
-}
+// --- 规则解析辅助 ---
+interface ScoringForm { method: string; score_types: string[]; exclude_attention_check: boolean; }
+interface RiskRange { min: number; max: number; level: string; }
+interface QualityForm { all_negative_detection: boolean; too_fast_detection: boolean; fast_min_seconds: number; attention_check: boolean; contradiction_check: boolean; pattern_check: boolean; consecutive_same: boolean; consecutive_max: number; same_option_ratio: boolean; same_option_max: number; }
+
+const parseScoringRule = (v: Record<string, unknown>): ScoringForm => {
+  try { return { method: (v.method as string) || 'sum', score_types: (v.score_types as string[]) || ['single_choice', 'scale'], exclude_attention_check: v.exclude_attention_check !== false }; }
+  catch { return { method: 'sum', score_types: ['single_choice', 'scale'], exclude_attention_check: true }; }
+};
+const buildScoringRule = (f: ScoringForm) => ({ method: f.method, score_types: f.score_types, exclude_attention_check: f.exclude_attention_check });
+
+const parseRiskRules = (v: Record<string, unknown>): RiskRange[] => {
+  try {
+    if (v.total_pct_ranges) return (v.total_pct_ranges as RiskRange[]);
+    if (v.dimension_pct_ranges) return (v.dimension_pct_ranges as RiskRange[]);
+    return [];
+  } catch { return []; }
+};
+const buildRiskRules = (ranges: RiskRange[]) => ({ total_pct_ranges: ranges });
+
+const parseQualityRules = (v: Record<string, unknown>): QualityForm => ({
+  all_negative_detection: (v.all_negative_detection as any)?.enabled !== false,
+  too_fast_detection: (v.too_fast_detection as any)?.enabled !== false,
+  fast_min_seconds: (v.too_fast_detection as any)?.min_seconds ?? 3,
+  attention_check: (v.attention_check as any)?.enabled !== false,
+  contradiction_check: (v.contradiction_check as any)?.enabled !== false,
+  pattern_check: (v.pattern_detection as any)?.enabled !== false,
+  consecutive_same: (v.consecutive_same_detection as any)?.enabled !== false,
+  consecutive_max: (v.consecutive_same_detection as any)?.max_count ?? 8,
+  same_option_ratio: (v.same_option_ratio_detection as any)?.enabled !== false,
+  same_option_max: (v.same_option_ratio_detection as any)?.max_ratio ?? 80,
+});
+const buildQualityRules = (f: QualityForm) => ({
+  all_negative_detection: { enabled: f.all_negative_detection },
+  too_fast_detection: { enabled: f.too_fast_detection, min_seconds: f.fast_min_seconds },
+  attention_check: { enabled: f.attention_check },
+  contradiction_check: { enabled: f.contradiction_check },
+  pattern_detection: { enabled: f.pattern_check },
+  consecutive_same_detection: { enabled: f.consecutive_same, max_count: f.consecutive_max },
+  same_option_ratio_detection: { enabled: f.same_option_ratio, max_ratio: f.same_option_max },
+});
+
+const methodLabels: Record<string, string> = { sum: '各题得分求和', average: '各题得分取平均', weighted: '加权计分' };
+const scoreTypeLabels: Record<string, string> = { single_choice: '单选题', multi_choice: '多选题', true_false: '判断题', scale: '量表题', fill_blank: '填空题', short_answer: '简答题' };
+const defaultRiskRanges: RiskRange[] = [
+  { min: 0, max: 29.99, level: 'low' },
+  { min: 30, max: 49.99, level: 'medium' },
+  { min: 50, max: 69.99, level: 'high' },
+  { min: 70, max: 100, level: 'urgent' },
+];
 
 export default function QuestionnaireEditor() {
   const { id } = useParams<{ id: string }>();
@@ -85,8 +116,11 @@ export default function QuestionnaireEditor() {
 
   // 维度 & 规则
   const [dimensions, setDimensions] = useState<Array<{ code: string; title: string }>>([]);
-  const [scoringRule, setScoringRule] = useState<Record<string, unknown>>({});
-  const [riskRules, setRiskRules] = useState<Record<string, unknown>>({});
+  const [scoringForm, setScoringForm] = useState<ScoringForm>({ method: 'sum', score_types: ['single_choice', 'scale'], exclude_attention_check: true });
+  const [riskRanges, setRiskRanges] = useState<RiskRange[]>(defaultRiskRanges);
+  const [qualityForm, setQualityForm] = useState<QualityForm>({ all_negative_detection: true, too_fast_detection: true, fast_min_seconds: 3, attention_check: true, contradiction_check: true, pattern_check: true, consecutive_same: true, consecutive_max: 8, same_option_ratio: true, same_option_max: 80 });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIdx, setPreviewIdx] = useState(0);
 
   const isBuiltin = Boolean(detail?.is_builtin);
 
@@ -104,10 +138,11 @@ export default function QuestionnaireEditor() {
         setTitle(d.title); setDescription(d.description); setCategory(d.category); setStatus(d.status);
         setQuestions(d.questions || []); setContradictions(d.contradiction_groups || []);
         setDimensions(d.dimensions || []);
-        setScoringRule(d.scoring_rule || {});
-        setRiskRules(d.risk_rules || {});
+        setScoringForm(parseScoringRule(d.scoring_rule || {}));
+        setRiskRanges(parseRiskRules(d.risk_rules || {}).length ? parseRiskRules(d.risk_rules || {}) : defaultRiskRanges);
+        setQualityForm(parseQualityRules(d.quality_rules || {}));
         setApplicableGrades(d.applicable_grades ? d.applicable_grades.split(',').filter(Boolean) : []);
-      }).finally(() => setLoading(false));
+      }).catch(() => message.error('获取问卷详情失败')).finally(() => setLoading(false));
     }
   }, [qid, isNew]);
 
@@ -115,7 +150,7 @@ export default function QuestionnaireEditor() {
     if (!qid) return;
     const res = await copyQuestionnaire(qid);
     message.success('已复制为可编辑副本');
-    navigate(`${rolePrefix}/questionnaires/${res.data.id}/edit`);
+    navigate(`${rolePrefix}/questionnaires/${res.id}/edit`);
   };
 
   const handleSaveBase = async () => {
@@ -124,7 +159,10 @@ export default function QuestionnaireEditor() {
       const payload: Record<string, unknown> = {
         title: title || '未命名问卷', description, category,
         applicable_grades: applicableGrades.join(','),
-        dimensions, scoring_rule: scoringRule, risk_rules: riskRules,
+        dimensions: dimensions.map((d, i) => ({ code: d.code || `dim_${i + 1}`, title: d.title })),
+        scoring_rule: buildScoringRule(scoringForm),
+        risk_rules: buildRiskRules(riskRanges),
+        quality_rules: buildQualityRules(qualityForm),
       };
       if (isNew) {
         const res = await createQuestionnaire(payload);
@@ -163,12 +201,17 @@ export default function QuestionnaireEditor() {
     setQuestions(questions.filter((_, i) => i !== idx));
   };
 
-  const moveQuestion = (idx: number, dir: -1 | 1) => {
+  const moveQuestion = async (idx: number, dir: -1 | 1) => {
     const newQuestions = [...questions];
     const target = idx + dir;
     if (target < 0 || target >= newQuestions.length) return;
     [newQuestions[idx], newQuestions[target]] = [newQuestions[target], newQuestions[idx]];
     setQuestions(newQuestions);
+    if (qid) {
+      try {
+        await sortQuestions(qid, newQuestions.filter(q => q.id).map(q => q.id!));
+      } catch { message.error('排序保存失败'); }
+    }
   };
 
   const addOption = () => {
@@ -203,7 +246,7 @@ export default function QuestionnaireEditor() {
   };
 
   const needsOptionsType = (type: string) => ['single_choice', 'multi_choice', 'scale'].includes(type);
-  const sourceTypeLabel = detail?.source_type === 'standard_like' ? '参考标准结构' : detail?.source_type === 'reference_screening' ? '参考性筛查' : '本校自建';
+  const sourceTypeLabel = SOURCE_TYPE_LABELS[detail?.source_type ?? ''] || '本校自建';
 
   // 维度编辑辅助
   const addDimension = () => setDimensions([...dimensions, { code: '', title: '' }]);
@@ -214,6 +257,59 @@ export default function QuestionnaireEditor() {
     setDimensions(newDims);
   };
 
+  // 风险标签翻译
+  const translateRiskTag = (tag: string) => {
+    if (!tag) return '';
+    return riskTagOptions.find(o => o.value === tag)?.label || tag;
+  };
+
+  // --- 规则展示辅助（预览模式）---
+  const renderScoringSummary = (rule: Record<string, unknown>) => {
+    const f = parseScoringRule(rule);
+    return (
+      <div>
+        <div style={{ marginBottom: 6 }}><strong>评分方式：</strong>{methodLabels[f.method] || f.method}</div>
+        <div style={{ marginBottom: 6 }}><strong>计分题型：</strong>{f.score_types.map(t => scoreTypeLabels[t] || t).join('、')}</div>
+        <div><strong>排除注意力检测题：</strong>{f.exclude_attention_check ? '是' : '否'}</div>
+      </div>
+    );
+  };
+
+  const renderRiskSummary = (rules: Record<string, unknown>) => {
+    const ranges = parseRiskRules(rules);
+    if (!ranges.length) return <span style={{ color: '#999' }}>暂未配置</span>;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {ranges.map((r, i) => (
+          <Tag key={i} color={RISK_COLORS[r.level] || '#666'} style={{ margin: 0 }}>
+            {RISK_LABELS[r.level] || r.level}：得分占比 {r.min}% ~ {r.max}%
+          </Tag>
+        ))}
+      </div>
+    );
+  };
+
+  const renderQualitySummary = (rules: Record<string, unknown>) => {
+    const f = parseQualityRules(rules);
+    const items = [
+      { label: '全选相同选项检测', on: f.all_negative_detection },
+      { label: '快速作答检测', on: f.too_fast_detection, detail: f.too_fast_detection ? `（少于 ${f.fast_min_seconds} 秒/题）` : '' },
+      { label: '注意力检测题', on: f.attention_check },
+      { label: '矛盾回答检测', on: f.contradiction_check },
+      { label: '规律作答检测', on: f.pattern_check },
+    ];
+    return (
+      <div>
+        {items.map((it, i) => (
+          <div key={i} style={{ marginBottom: 4 }}>
+            {it.on ? <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 6 }} /> : <CloseCircleOutlined style={{ color: '#D9D9D9', marginRight: 6 }} />}
+            {it.label}{it.detail && <span style={{ color: '#888' }}>{it.detail}</span>}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div style={{ maxWidth: 900 }}>
       <Card loading={loading} title={isNew ? '新建问卷' : isBuiltin ? '内置问卷预览' : '编辑问卷'}
@@ -221,6 +317,7 @@ export default function QuestionnaireEditor() {
           {!isBuiltin && <Button icon={<SaveOutlined />} onClick={handleSaveBase} loading={saving}>保存基本信息</Button>}
           {!isNew && isBuiltin && <Button icon={<CopyOutlined />} type="primary" onClick={handleCopyBuiltin}>复制为副本</Button>}
           {!isNew && !isBuiltin && <Button onClick={() => setStatus(s => s === 'active' ? 'inactive' : 'active')}>{status === 'active' ? '切换为停用' : '切换为启用'}</Button>}
+          {!isNew && questions.length > 0 && <Button icon={<EyeOutlined />} onClick={() => { setPreviewIdx(0); setPreviewOpen(true); }}>预览问卷</Button>}
         </Space>}
       >
         {isBuiltin && detail ? (
@@ -230,25 +327,19 @@ export default function QuestionnaireEditor() {
               <Descriptions.Item label="问卷名称">{detail.title}</Descriptions.Item>
               <Descriptions.Item label="版本">V{detail.version}</Descriptions.Item>
               <Descriptions.Item label="分类">{categories.find(item => item.value === detail.category)?.label || detail.category}</Descriptions.Item>
-              <Descriptions.Item label="来源类型">{sourceTypeLabel}</Descriptions.Item>
+              <Descriptions.Item label="来源">{sourceTypeLabel}</Descriptions.Item>
               <Descriptions.Item label="适用年级" span={2}>{detail.applicable_grades || '-'}</Descriptions.Item>
               <Descriptions.Item label="题目数量">{detail.question_count}</Descriptions.Item>
-              <Descriptions.Item label="状态">{status === 'active' ? '启用' : status}</Descriptions.Item>
+              <Descriptions.Item label="状态">{QUESTIONNAIRE_STATUS_LABELS[status] || status}</Descriptions.Item>
               <Descriptions.Item label="问卷说明" span={2}>{detail.description || '暂无说明'}</Descriptions.Item>
-              <Descriptions.Item label="维度定义" span={2}>
+              <Descriptions.Item label="评估维度" span={2}>
                 <Space wrap>
-                  {detail.dimensions?.length ? detail.dimensions.map(item => <Tag key={item.code}>{item.title}</Tag>) : '暂无'}
+                  {detail.dimensions?.length ? detail.dimensions.map(item => <Tag key={item.code} color="blue">{item.title}</Tag>) : '暂无'}
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="评分规则" span={2}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.scoring_rule || {}, null, 2)}</pre>
-              </Descriptions.Item>
-              <Descriptions.Item label="风险规则" span={2}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.risk_rules || {}, null, 2)}</pre>
-              </Descriptions.Item>
-              <Descriptions.Item label="质量规则" span={2}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(detail.quality_rules || {}, null, 2)}</pre>
-              </Descriptions.Item>
+              <Descriptions.Item label="评分设置" span={2}>{renderScoringSummary(detail.scoring_rule || {})}</Descriptions.Item>
+              <Descriptions.Item label="风险等级划分" span={2}>{renderRiskSummary(detail.risk_rules || {})}</Descriptions.Item>
+              <Descriptions.Item label="答题质量检测" span={2}>{renderQualitySummary(detail.quality_rules || {})}</Descriptions.Item>
             </Descriptions>
           </Space>
         ) : (
@@ -259,21 +350,65 @@ export default function QuestionnaireEditor() {
             <Form.Item label="适用年级"><Select mode="multiple" value={applicableGrades} onChange={setApplicableGrades} options={gradeOptions} placeholder={gradeOptions.length ? '选择适用年级（可选）' : '请先在系统设置中配置年级'} disabled={!gradeOptions.length} /></Form.Item>
 
             <Collapse ghost style={{ marginBottom: 16 }}>
-              <Collapse.Panel header="维度定义" key="dimensions">
+              <Collapse.Panel header="评估维度" key="dimensions">
                 {dimensions.map((dim, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                    <Input value={dim.code} onChange={e => updateDimension(idx, 'code', e.target.value)} placeholder="维度编码 (如 emotion)" style={{ width: 160 }} />
-                    <Input value={dim.title} onChange={e => updateDimension(idx, 'title', e.target.value)} placeholder="维度名称 (如 情绪状态)" style={{ flex: 1 }} />
+                    <Input value={dim.title} onChange={e => updateDimension(idx, 'title', e.target.value)} placeholder="维度名称（如 情绪状态）" style={{ flex: 1 }} />
                     <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeDimension(idx)} />
                   </div>
                 ))}
                 <Button type="dashed" onClick={addDimension} block icon={<PlusOutlined />}>添加维度</Button>
               </Collapse.Panel>
-              <Collapse.Panel header="评分规则 (JSON)" key="scoring">
-                <JsonEditor value={scoringRule} onChange={setScoringRule} placeholder='{"method":"sum","score_types":["single_choice","scale"],"exclude_attention_check":true}' />
+              <Collapse.Panel header="评分设置" key="scoring">
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ marginBottom: 4, color: '#666', fontSize: 13 }}>评分方式</div>
+                  <Select value={scoringForm.method} onChange={v => setScoringForm({ ...scoringForm, method: v })} style={{ width: 200 }}
+                    options={[{ value: 'sum', label: '各题得分求和' }, { value: 'average', label: '各题得分取平均' }]} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ marginBottom: 4, color: '#666', fontSize: 13 }}>参与计分的题型</div>
+                  <Checkbox.Group value={scoringForm.score_types} onChange={v => setScoringForm({ ...scoringForm, score_types: v as string[] })}
+                    options={[{ value: 'single_choice', label: '单选题' }, { value: 'multi_choice', label: '多选题' }, { value: 'scale', label: '量表题' }, { value: 'true_false', label: '判断题' }]} />
+                </div>
+                <div>
+                  <Switch checked={scoringForm.exclude_attention_check} onChange={v => setScoringForm({ ...scoringForm, exclude_attention_check: v })} />
+                  <span style={{ marginLeft: 8 }}>排除注意力检测题不计入总分</span>
+                </div>
               </Collapse.Panel>
-              <Collapse.Panel header="风险规则 (JSON)" key="risk">
-                <JsonEditor value={riskRules} onChange={setRiskRules} placeholder='{"total_pct_ranges":[{"min":0,"max":29.99,"level":"low"},{"min":30,"max":49.99,"level":"medium"},{"min":50,"max":69.99,"level":"high"},{"min":70,"max":100,"level":"urgent"}]}' />
+              <Collapse.Panel header="风险等级划分" key="risk">
+                <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>设置不同风险等级对应的得分占比区间</div>
+                {riskRanges.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Tag color={RISK_COLORS[r.level] || '#666'} style={{ width: 48, textAlign: 'center', margin: 0 }}>{RISK_LABELS[r.level] || r.level}</Tag>
+                    <span style={{ color: '#666' }}>得分占比</span>
+                    <InputNumber value={r.min} onChange={v => { const rr = [...riskRanges]; rr[i] = { ...rr[i], min: v ?? 0 }; setRiskRanges(rr); }} min={0} max={100} size="small" style={{ width: 70 }} />
+                    <span style={{ color: '#666' }}>% ~</span>
+                    <InputNumber value={r.max} onChange={v => { const rr = [...riskRanges]; rr[i] = { ...rr[i], max: v ?? 100 }; setRiskRanges(rr); }} min={0} max={100} size="small" style={{ width: 70 }} />
+                    <span style={{ color: '#666' }}>%</span>
+                    {riskRanges.length > 1 && <Button size="small" danger icon={<DeleteOutlined />} onClick={() => setRiskRanges(riskRanges.filter((_, j) => j !== i))} />}
+                  </div>
+                ))}
+                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setRiskRanges([...riskRanges, { min: 0, max: 100, level: 'low' }])}>添加等级</Button>
+              </Collapse.Panel>
+              <Collapse.Panel header="答题质量检测" key="quality">
+                <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>开启后，系统会自动检测学生的答题质量，过滤无效问卷</div>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <div><Switch checked={qualityForm.all_negative_detection} onChange={v => setQualityForm({ ...qualityForm, all_negative_detection: v })} /><span style={{ marginLeft: 8 }}>全部选同一选项检测</span></div>
+                  <div>
+                    <Switch checked={qualityForm.too_fast_detection} onChange={v => setQualityForm({ ...qualityForm, too_fast_detection: v })} />
+                    <span style={{ marginLeft: 8 }}>快速作答检测</span>
+                    {qualityForm.too_fast_detection && <>
+                      <span style={{ marginLeft: 8, color: '#888' }}>少于</span>
+                      <InputNumber value={qualityForm.fast_min_seconds} onChange={v => setQualityForm({ ...qualityForm, fast_min_seconds: v ?? 3 })} min={1} max={30} size="small" style={{ width: 60, margin: '0 4px' }} />
+                      <span style={{ color: '#888' }}>秒/题视为异常</span>
+                    </>}
+                  </div>
+                  <div><Switch checked={qualityForm.attention_check} onChange={v => setQualityForm({ ...qualityForm, attention_check: v })} /><span style={{ marginLeft: 8 }}>注意力检测题验证</span></div>
+                  <div><Switch checked={qualityForm.contradiction_check} onChange={v => setQualityForm({ ...qualityForm, contradiction_check: v })} /><span style={{ marginLeft: 8 }}>矛盾回答检测</span></div>
+                  <div><Switch checked={qualityForm.pattern_check} onChange={v => setQualityForm({ ...qualityForm, pattern_check: v })} /><span style={{ marginLeft: 8 }}>规律作答检测（如 ABAB 循环）</span></div>
+                  <div><Switch checked={qualityForm.consecutive_same} onChange={v => setQualityForm({ ...qualityForm, consecutive_same: v })} /><span style={{ marginLeft: 8 }}>连续同选项检测</span></div>
+                  <div><Switch checked={qualityForm.same_option_ratio} onChange={v => setQualityForm({ ...qualityForm, same_option_ratio: v })} /><span style={{ marginLeft: 8 }}>单一选项占比过高检测</span></div>
+                </Space>
               </Collapse.Panel>
             </Collapse>
           </Form>
@@ -281,7 +416,7 @@ export default function QuestionnaireEditor() {
       </Card>
 
       {!isNew && (
-        <Card title={`题目列表 (${questions.length} 题)`} style={{ marginTop: 16 }}
+        <Card title={`问卷题目 (${questions.length} 题)`} style={{ marginTop: 16 }}
           extra={!isBuiltin ? <Button type="primary" icon={<PlusOutlined />} onClick={openAddQuestion}>添加题目</Button> : null}
         >
           {questions.length === 0 ? (
@@ -290,23 +425,33 @@ export default function QuestionnaireEditor() {
             <div>
               {questions.map((q, idx) => (
                 <Card key={q.id || idx} size="small" style={{ marginBottom: 8 }}
-                  title={<span>{idx + 1}. {q.title?.substring(0, 60)}{q.is_attention_check ? <span style={{ color: '#FA8C16', marginLeft: 8 }}>[注意力检测]</span> : ''}{q.code ? <span style={{ color: '#999', marginLeft: 8 }}>({q.code})</span> : null}</span>}
+                  title={<span>{idx + 1}. {q.title?.substring(0, 60)}{q.is_attention_check ? <Tag color="orange" style={{ marginLeft: 8 }}>注意力检测</Tag> : ''}</span>}
                   extra={!isBuiltin ? (
                     <Space>
                       <Button size="small" icon={<ArrowUpOutlined />} disabled={idx === 0} onClick={() => moveQuestion(idx, -1)} />
                       <Button size="small" icon={<ArrowDownOutlined />} disabled={idx === questions.length - 1} onClick={() => moveQuestion(idx, 1)} />
                       <Button size="small" onClick={() => openEditQuestion(q, idx)}>编辑</Button>
-                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteQuestion(q.id!, idx)}>
+                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteQuestion(q.id!, idx)} okText="确定" cancelText="取消">
                         <Button size="small" danger icon={<DeleteOutlined />} />
                       </Popconfirm>
                     </Space>
                   ) : null}
                 >
-                  <span style={{ color: '#888', fontSize: 13 }}>{questionTypes.find(t => t.value === q.type)?.label}</span>
-                  {q.dimension && <span style={{ color: '#4A90D9', fontSize: 13, marginLeft: 12 }}>维度: {dimensionLabels[q.dimension] || q.dimension}</span>}
-                  {q.risk_tag && <span style={{ color: '#FA8C16', fontSize: 13, marginLeft: 12 }}>风险标签: {q.risk_tag}</span>}
-                  {q.is_reverse && <span style={{ color: '#722ED1', fontSize: 13, marginLeft: 12 }}>反向计分</span>}
-                  {q.options.length > 0 && <span style={{ color: '#888', fontSize: 13, marginLeft: 12 }}>选项: {q.options.map(o => `${o.content}(${o.score}分)`).join(', ')}</span>}
+                  <Space size={12} wrap>
+                    <Tag>{questionTypes.find(t => t.value === q.type)?.label || q.type}</Tag>
+                    {q.dimension && <Tag color="blue">{dimensionLabels[q.dimension] || q.dimension}</Tag>}
+                    {q.risk_tag && <Tag color="orange">{translateRiskTag(q.risk_tag)}</Tag>}
+                    {q.is_reverse && <Tag color="purple">反向计分</Tag>}
+                  </Space>
+                  {q.options.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {q.options.map((o, oi) => (
+                        <Tag key={oi} color={o.is_risk_option ? 'red' : undefined}>
+                          {o.content}（{o.score}分）{o.is_risk_option ? ' ⚠' : ''}
+                        </Tag>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -315,20 +460,20 @@ export default function QuestionnaireEditor() {
       )}
 
       {!isNew && (
-        <Card title={`矛盾题组 (${contradictions.length} 组)`} style={{ marginTop: 16 }}
-          extra={!isBuiltin ? <Button icon={<PlusOutlined />} onClick={() => { cgForm.resetFields(); setCgModalOpen(true); }}>添加矛盾题组</Button> : null}
+        <Card title={`答题逻辑校验 (${contradictions.length} 组)`} style={{ marginTop: 16 }}
+          extra={!isBuiltin ? <Button icon={<PlusOutlined />} onClick={() => { cgForm.resetFields(); setCgModalOpen(true); }}>添加校验规则</Button> : null}
         >
           {contradictions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>暂未设置矛盾题组</div>
+            <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>暂未设置答题逻辑校验</div>
           ) : (
             contradictions.map((cg, idx) => {
               const qa = questions.find(q => q.id === cg.question_a_id);
               const qb = questions.find(q => q.id === cg.question_b_id);
               return (
                 <div key={cg.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span>题目A: {qa?.title?.substring(0, 30) || cg.question_a_id} ↔ 题目B: {qb?.title?.substring(0, 30) || cg.question_b_id} ({relationTypeLabels[cg.relation_type] || cg.relation_type})</span>
+                  <span>题目「{qa?.title?.substring(0, 30) || cg.question_a_id}」与「{qb?.title?.substring(0, 30) || cg.question_b_id}」应为{relationTypeLabels[cg.relation_type] || cg.relation_type}</span>
                   {!isBuiltin ? (
-                    <Popconfirm title="确定删除？" onConfirm={() => handleDeleteCg(cg.id!, idx)}>
+                    <Popconfirm title="确定删除？" onConfirm={() => handleDeleteCg(cg.id!, idx)} okText="确定" cancelText="取消">
                       <Button size="small" danger icon={<DeleteOutlined />} />
                     </Popconfirm>
                   ) : null}
@@ -340,7 +485,7 @@ export default function QuestionnaireEditor() {
       )}
 
       {/* 题目编辑Modal */}
-      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen && !isBuiltin} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} width={720} style={{ maxWidth: '95vw' }} destroyOnHidden>
+      <Modal title={editingIndex !== null ? '编辑题目' : '添加题目'} open={questionModalOpen && !isBuiltin} onOk={saveQuestion} onCancel={() => setQuestionModalOpen(false)} okText="确定" cancelText="取消" width={720} style={{ maxWidth: '95vw' }} destroyOnHidden>
         {editingQuestion && (
           <Form layout="vertical">
             <Form.Item label="题目标题" required><Input.TextArea value={editingQuestion.title} onChange={e => setEditingQuestion({ ...editingQuestion, title: e.target.value })} rows={2} /></Form.Item>
@@ -352,6 +497,7 @@ export default function QuestionnaireEditor() {
               <div><span style={{ fontSize: 12, color: '#666' }}>风险标签</span><br /><Select value={editingQuestion.risk_tag || ''} onChange={v => setEditingQuestion({ ...editingQuestion, risk_tag: v })} options={riskTagOptions} style={{ width: 160 }} /></div>
               <div><span style={{ fontSize: 12, color: '#666' }}>反向计分</span><br /><Switch checked={editingQuestion.is_reverse} onChange={v => setEditingQuestion({ ...editingQuestion, is_reverse: v })} /></div>
               <div><span style={{ fontSize: 12, color: '#666' }}>注意力检测</span><br /><Switch checked={editingQuestion.is_attention_check} onChange={v => setEditingQuestion({ ...editingQuestion, is_attention_check: v })} /></div>
+              <div><span style={{ fontSize: 12, color: '#666' }}>风险阈值</span><br /><InputNumber value={editingQuestion.risk_threshold ?? undefined} onChange={v => setEditingQuestion({ ...editingQuestion, risk_threshold: v ?? null })} placeholder="不设置" style={{ width: 100 }} min={0} /></div>
             </Space>
             {editingQuestion.is_attention_check && (
               <Form.Item label="注意力检测正确答案" required><Input value={editingQuestion.attention_correct_answer} onChange={e => setEditingQuestion({ ...editingQuestion, attention_correct_answer: e.target.value })} placeholder="请输入正确答案内容" /></Form.Item>
@@ -377,7 +523,7 @@ export default function QuestionnaireEditor() {
       </Modal>
 
       {/* 矛盾题组Modal */}
-      <Modal title="添加矛盾题组" open={cgModalOpen && !isBuiltin} onOk={saveContradiction} onCancel={() => setCgModalOpen(false)}>
+      <Modal title="添加答题逻辑校验" open={cgModalOpen && !isBuiltin} onOk={saveContradiction} onCancel={() => setCgModalOpen(false)} okText="确定" cancelText="取消">
         <Form form={cgForm} layout="vertical">
           <Form.Item name="question_a_id" label="题目A" rules={[{ required: true }]}>
             <Select options={questions.map(q => ({ value: q.id, label: `${q.title?.substring(0, 40)}` }))} />
@@ -391,6 +537,46 @@ export default function QuestionnaireEditor() {
           <Form.Item name="max_score_diff" label="允许最大分差" initialValue={3}><InputNumber min={1} max={10} /></Form.Item>
           <Form.Item name="description" label="说明"><Input /></Form.Item>
         </Form>
+      </Modal>
+
+      {/* 预览Modal */}
+      <Modal title={`问卷预览 — ${title || '未命名问卷'}`} open={previewOpen} onCancel={() => setPreviewOpen(false)} footer={null} width={640} style={{ maxWidth: '95vw' }}>
+        {questions.length > 0 && (() => {
+          const q = questions[previewIdx];
+          return (
+            <div>
+              <div style={{ marginBottom: 16, color: '#888', fontSize: 13 }}>
+                第 {previewIdx + 1} / {questions.length} 题
+                {q.dimension && <Tag style={{ marginLeft: 8 }}>{dimensionLabels[q.dimension] || q.dimension}</Tag>}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16 }}>{previewIdx + 1}. {q.title}</div>
+              {q.description && <div style={{ color: '#666', marginBottom: 12, fontSize: 13 }}>{q.description}</div>}
+              {q.type === 'single_choice' && q.options.map((opt, oi) => (
+                <Radio key={oi} style={{ display: 'block', marginBottom: 8 }} disabled>{opt.content}（{opt.score}分）{opt.is_risk_option && <Tag color="red" style={{ marginLeft: 4 }}>风险</Tag>}</Radio>
+              ))}
+              {q.type === 'multi_choice' && q.options.map((opt, oi) => (
+                <Checkbox key={oi} style={{ display: 'block', marginBottom: 8 }} disabled>{opt.content}（{opt.score}分）{opt.is_risk_option && <Tag color="red" style={{ marginLeft: 4 }}>风险</Tag>}</Checkbox>
+              ))}
+              {q.type === 'scale' && q.options.map((opt, oi) => (
+                <Radio key={oi} style={{ display: 'block', marginBottom: 8 }} disabled>{opt.content}（{opt.score}分）</Radio>
+              ))}
+              {q.type === 'true_false' && (
+                <div><Radio disabled>是</Radio><Radio disabled style={{ marginLeft: 16 }}>否</Radio></div>
+              )}
+              {(q.type === 'fill_blank' || q.type === 'short_answer') && (
+                <Input.TextArea disabled placeholder={q.type === 'fill_blank' ? '填空' : '请输入回答'} rows={q.type === 'short_answer' ? 3 : 1} />
+              )}
+              <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+                <Button disabled={previewIdx === 0} onClick={() => setPreviewIdx(previewIdx - 1)}>上一题</Button>
+                {previewIdx < questions.length - 1 ? (
+                  <Button type="primary" onClick={() => setPreviewIdx(previewIdx + 1)}>下一题</Button>
+                ) : (
+                  <Button type="primary" onClick={() => setPreviewOpen(false)}>完成预览</Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

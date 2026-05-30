@@ -1,8 +1,29 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
+import os
 from .database import init_db, seed_all, SessionLocal
 from .config import settings, validate_production_settings
+
+MAX_PAGE_SIZE = 200
+
+
+class PageSizeClampMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Clamp page_size query param to MAX_PAGE_SIZE
+        ps = request.query_params.get("page_size")
+        if ps is not None:
+            try:
+                val = int(ps)
+                if val > MAX_PAGE_SIZE:
+                    # Replace in scope query string
+                    qs = str(request.scope.get("query_string", b"").decode())
+                    qs = qs.replace(f"page_size={ps}", f"page_size={MAX_PAGE_SIZE}")
+                    request.scope["query_string"] = qs.encode()
+            except (ValueError, TypeError):
+                pass
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -25,10 +46,12 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+app.add_middleware(PageSizeClampMiddleware)
 
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()] or ["http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

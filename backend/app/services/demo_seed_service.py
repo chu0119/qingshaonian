@@ -15,7 +15,7 @@ tz = timezone(timedelta(hours=8))
 
 
 def seed_demo_school_data(db: Session, school_id: int) -> bool:
-    existing_students = db.query(User).filter(User.school_id == school_id, User.role == "student", User.username.like("S2024%")).count()
+    existing_students = db.query(User).filter(User.school_id == school_id, User.role == "student").count()
     if existing_students > 0:
         return False
 
@@ -23,23 +23,27 @@ def seed_demo_school_data(db: Session, school_id: int) -> bool:
     if not classes:
         return False
 
-    teachers = []
-    for idx, name in enumerate(["张老师", "李老师", "王老师", "赵老师"], start=1):
-        teacher = User(
-            school_id=school_id,
-            username=f"T{school_id:02d}{idx:02d}",
-            password_hash=hash_password("DemoTeach123"),
-            real_name=name,
-            role="teacher",
-            status=True,
-        )
-        db.add(teacher)
+    existing_teachers = db.query(User).filter(User.school_id == school_id, User.role.in_(["teacher", "counselor"])).all()
+    if existing_teachers:
+        teachers = existing_teachers
+    else:
+        teachers = []
+        for idx, name in enumerate(["张老师", "李老师", "王老师", "赵老师"], start=1):
+            teacher = User(
+                school_id=school_id,
+                username=f"T{school_id:02d}{idx:02d}",
+                password_hash=hash_password("DemoTeach123"),
+                real_name=name,
+                role="teacher",
+                status=True,
+            )
+            db.add(teacher)
+            db.flush()
+            teachers.append(teacher)
+            if idx - 1 < len(classes):
+                db.add(TeacherClass(teacher_id=teacher.id, class_id=classes[idx - 1].id))
+                classes[idx - 1].head_teacher_id = teacher.id
         db.flush()
-        teachers.append(teacher)
-        if idx - 1 < len(classes):
-            db.add(TeacherClass(teacher_id=teacher.id, class_id=classes[idx - 1].id))
-            classes[idx - 1].head_teacher_id = teacher.id
-    db.flush()
 
     surnames = ["王", "李", "张", "刘", "陈", "杨", "赵", "黄", "周", "吴"]
     names = ["明", "华", "磊", "芳", "婷", "杰", "琳", "浩", "雪", "涛", "思", "晨"]
@@ -47,7 +51,8 @@ def seed_demo_school_data(db: Session, school_id: int) -> bool:
     counter = 1
     for klass in classes[: min(len(classes), 4)]:
         for _ in range(6):
-            username = f"S2024{school_id:02d}{counter:03d}"
+            username = f"DEMO{school_id:03d}{counter:04d}"
+            student_no = f"STU{school_id:03d}{counter:04d}"
             student = User(
                 school_id=school_id,
                 username=username,
@@ -57,7 +62,7 @@ def seed_demo_school_data(db: Session, school_id: int) -> bool:
                 status=True,
                 grade_id=klass.grade_id,
                 class_id=klass.id,
-                student_no=username,
+                student_no=student_no,
             )
             db.add(student)
             db.flush()

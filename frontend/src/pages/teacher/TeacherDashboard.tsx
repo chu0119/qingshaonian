@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Row, Col, Card, Statistic, Typography, message, List, Tag, Empty, Spin } from 'antd';
 import { TeamOutlined, FileTextOutlined, AlertOutlined, SafetyOutlined, BankOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
+import { RISK_LABELS, RISK_COLORS, METHOD_LABELS } from '../../utils/constants';
 
 export default function TeacherDashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [pendingRisks, setPendingRisks] = useState<any[]>([]);
@@ -61,13 +64,7 @@ export default function TeacherDashboard() {
   const stats = data?.stats || {};
 
   const getRiskLevelTag = (level: string) => {
-    const map: Record<string, { color: string; text: string }> = {
-      high: { color: 'red', text: '高' },
-      medium: { color: 'orange', text: '中' },
-      low: { color: 'green', text: '低' },
-    };
-    const entry = map[level] || { color: 'default', text: level || '-' };
-    return <Tag color={entry.color}>{entry.text}</Tag>;
+    return <Tag color={RISK_COLORS[level] || 'default'}>{RISK_LABELS[level] || level || '-'}</Tag>;
   };
 
   return (
@@ -129,7 +126,7 @@ export default function TeacherDashboard() {
                 size="small"
                 dataSource={pendingRisks}
                 renderItem={(item: any) => (
-                  <List.Item>
+                  <List.Item style={{ cursor: 'pointer' }} onClick={() => navigate('/teacher/risks')}>
                     <List.Item.Meta
                       title={
                         <span>
@@ -159,7 +156,7 @@ export default function TeacherDashboard() {
                 size="small"
                 dataSource={pendingInterventions}
                 renderItem={(item: any) => (
-                  <List.Item>
+                  <List.Item style={{ cursor: 'pointer' }} onClick={() => navigate('/teacher/interventions')}>
                     <List.Item.Meta
                       title={
                         <span>
@@ -167,7 +164,7 @@ export default function TeacherDashboard() {
                           <Tag color="orange" style={{ marginLeft: 8 }}>待跟进</Tag>
                         </span>
                       }
-                      description={item.intervention_type || item.type || item.description || '-'}
+                      description={METHOD_LABELS[item.intervention_type || item.method] || item.intervention_type || item.description || '-'}
                     />
                   </List.Item>
                 )}

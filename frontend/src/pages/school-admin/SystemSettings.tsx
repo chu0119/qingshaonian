@@ -892,7 +892,7 @@ export default function SystemSettings() {
                 width: 72,
                 height: 72,
                 borderRadius: 18,
-                background: 'linear-gradient(135deg, #1677ff, #4096ff)',
+                background: 'linear-gradient(135deg, #d4a843, #c49635)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -903,10 +903,10 @@ export default function SystemSettings() {
               <SafetyOutlined style={{ fontSize: 36, color: '#fff' }} />
             </div>
             <Title level={3} style={{ marginBottom: 4, color: '#1677ff' }}>
-              青少年风险防范测评管理系统
+              金盾护苗 · 青少年关爱帮扶信息管理平台
             </Title>
             <Text type="secondary" style={{ fontSize: 16 }}>
-              面向学校的智能化心理健康测评平台
+              面向学校的青少年关爱帮扶信息管理平台
             </Text>
           </div>
 
@@ -962,7 +962,7 @@ export default function SystemSettings() {
             type="secondary"
             style={{ textAlign: 'center', marginTop: 32, fontSize: 12 }}
           >
-            Copyright 2024-2025 · 青少年风险防范测评系统 · 版权所有
+            Copyright 2024-2025 · 金盾护苗 · 版权所有
           </Paragraph>
         </Card>
       ),

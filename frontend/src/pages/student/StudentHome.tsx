@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, List, Button, Tag, Typography, message, Space } from 'antd';
-import { FormOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, List, Button, Typography, message } from 'antd';
+import { FormOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 
@@ -13,19 +13,21 @@ export default function StudentHome() {
   useEffect(() => {
     client.get('/student/tasks/pending').then(r => {
       const tasks = r.data.data || [];
-      setPending(tasks.filter((t: any) => t.status !== 'submitted').slice(0, 5));
-      setPendingCount(tasks.filter((t: any) => t.status !== 'submitted').length);
-      setCompletedCount(tasks.filter((t: any) => t.status === 'submitted').length);
+      const pendingTasks = tasks.filter((t: any) => t.status !== 'submitted');
+      setPending(pendingTasks.slice(0, 5));
+      setPendingCount(pendingTasks.length);
     }).catch(() => message.error('获取任务列表失败'));
+    client.get('/student/tasks/completed').then(r => {
+      setCompletedCount((r.data.data || []).length);
+    }).catch(() => {});
   }, []);
 
   return (
     <div>
       <Typography.Title level={4}>欢迎回来</Typography.Title>
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={8}><Card><Statistic title="待填写问卷" value={pendingCount} prefix={<FormOutlined />} valueStyle={{ color: '#4A90D9' }} /></Card></Col>
-        <Col xs={12} sm={8}><Card><Statistic title="已完成问卷" value={completedCount} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#67C23A' }} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="待填写" value={pendingCount} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#E6A23C' }} /></Card></Col>
+        <Col xs={12} sm={12}><Card><Statistic title="待填写问卷" value={pendingCount} prefix={<FormOutlined />} valueStyle={{ color: '#4A90D9' }} /></Card></Col>
+        <Col xs={12} sm={12}><Card><Statistic title="已完成问卷" value={completedCount} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#67C23A' }} /></Card></Col>
       </Row>
 
       <Typography.Title level={5}>待填写问卷</Typography.Title>

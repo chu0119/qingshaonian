@@ -97,3 +97,8 @@ export async function getDictTeacherTypes() {
   const res = await client.get('/common/dict/teacher-types');
   return res.data.data as { value: string; label: string }[];
 }
+
+export async function resetUserPassword(id: number) {
+  const res = await client.put(`/auth/reset-password/${id}`, { new_password: '' });
+  return res.data;
+}

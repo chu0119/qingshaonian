@@ -6,11 +6,12 @@ import ScreenCard from '../../components/screen/ScreenCard';
 import ScreenChart, { darkTooltip } from '../../components/screen/ScreenChart';
 import RankingList from '../../components/screen/RankingList';
 import { theme, COLORS, fmtNumber, riskLabels, qualityLabels } from '../../components/screen/screenTheme';
+import { DIMENSION_LABELS, INTERVENTION_STATUS_LABELS } from '../../utils/constants';
 import client from '../../api/client';
 
 const textStyle = { color: theme.textDim, fontSize: 11 };
 const axisLine = { lineStyle: { color: theme.border } };
-const splitLine = { lineStyle: { color: 'rgba(255,255,255,0.05)' } };
+const splitLine = { lineStyle: { color: 'rgba(255,255,255,0.04)' } };
 
 export default function DataScreen() {
   const navigate = useNavigate();
@@ -26,9 +27,9 @@ export default function DataScreen() {
         client.get('/quality/statistics/school'),
         client.get('/reports/risk-summary'),
       ]);
-      setData(dRes.data.data);
-      setQuality(qRes.data.data);
-      setRisks(rRes.data.data);
+      setData(dRes.data?.data || {});
+      setQuality(qRes.data?.data || {});
+      setRisks(rRes.data?.data || {});
     } catch {}
   }, []);
 
@@ -53,8 +54,8 @@ export default function DataScreen() {
     { label: '学生总数', value: stats.student_count || 0, color: theme.cyan },
     { label: '教师总数', value: stats.teacher_count || 0, color: theme.blue },
     { label: '班级数量', value: stats.class_count || 0, color: theme.gold },
-    { label: '进行中任务', value: stats.active_tasks || 0, color: theme.green },
-    { label: '答卷总数', value: stats.total_answer_sheets || 0, color: theme.purple },
+    { label: '进行中任务', value: stats.active_tasks || 0, color: theme.purple },
+    { label: '答卷总数', value: stats.total_answer_sheets || 0, color: theme.cyan },
     { label: '风险提示', value: riskCount, color: theme.red },
   ];
   const sideKpis = [
@@ -67,116 +68,185 @@ export default function DataScreen() {
   const dimensionItems = useMemo(() => {
     const dims = quality?.dimensions || quality?.dimension_scores;
     if (!dims) return [];
-    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: k, score: v as number })))
+    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: DIMENSION_LABELS[k] || k, score: v as number })))
       .filter((d: any) => d.score !== undefined)
       .slice(0, 8);
   }, [quality]);
 
   const riskPie = useMemo(() => pieOption(riskDist, riskLabels, COLORS), [riskDist]);
-  const qualityPie = useMemo(() => pieOption(qualityDist, qualityLabels, { normal: COLORS.normal, mild_anomaly: COLORS.medium, moderate_anomaly: COLORS.high, severe_anomaly: COLORS.urgent }), [qualityDist]);
+  const qualityPie = useMemo(() => pieOption(qualityDist, qualityLabels, {
+    normal: COLORS.normal,
+    mild_anomaly: COLORS.medium,
+    moderate_anomaly: COLORS.high,
+    severe_anomaly: COLORS.urgent,
+  }), [qualityDist]);
   const dimensionBar = useMemo(() => horizontalBarOption(dimensionItems, 'score'), [dimensionItems]);
   const interventionBar = useMemo(() => statusBarOption(riskByStatus), [riskByStatus]);
 
   const cockpitGauge = useMemo(() => ({
     tooltip: darkTooltip,
     series: [
-      gaugeSeries('测评完成', completionRate, theme.cyan, ['18%', '52%']),
-      gaugeSeries('答卷有效', effectiveRate, theme.green, ['50%', '52%']),
-      gaugeSeries('干预完成', interventionRate, theme.blue, ['82%', '52%']),
+      gaugeSeries('测评完成', completionRate, theme.cyan, ['17%', '55%']),
+      gaugeSeries('答卷有效', effectiveRate, theme.green, ['50%', '55%']),
+      gaugeSeries('干预完成', interventionRate, theme.blue, ['83%', '55%']),
     ],
   }), [completionRate, effectiveRate, interventionRate]);
 
   const riskLevelBar = useMemo(() => {
-    const items = Object.entries(riskDist).map(([key, value]) => ({ name: riskLabels[key] || key, value: value as number, color: COLORS[key as keyof typeof COLORS] || theme.textDim })).filter(i => i.value > 0);
+    const items = Object.entries(riskDist).map(([key, value]) => ({
+      name: riskLabels[key] || key,
+      value: value as number,
+      color: COLORS[key as keyof typeof COLORS] || theme.textDim,
+    })).filter(i => i.value > 0);
     if (!items.length) return null;
     return {
       tooltip: darkTooltip,
-      grid: { left: 34, right: 18, bottom: 22, top: 12, containLabel: true },
-      xAxis: { type: 'category' as const, data: items.map(i => i.name), axisLabel: textStyle, axisLine },
+      grid: { left: 36, right: 20, bottom: 24, top: 14, containLabel: true },
+      xAxis: { type: 'category' as const, data: items.map(i => i.name), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
       yAxis: { type: 'value' as const, axisLabel: textStyle, splitLine },
-      series: [{ type: 'bar' as const, data: items.map(i => ({ value: i.value, itemStyle: { color: i.color, borderRadius: [4, 4, 0, 0] } })), barMaxWidth: 30, label: { show: true, position: 'top' as const, color: theme.textDim, fontSize: 10 } }],
+      series: [{
+        type: 'bar' as const,
+        data: items.map(i => ({
+          value: i.value,
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: i.color }, { offset: 1, color: `${i.color}33` }]),
+            borderRadius: [6, 6, 0, 0],
+            shadowColor: `${i.color}44`,
+            shadowBlur: 8,
+          },
+        })),
+        barMaxWidth: 40,
+        label: { show: true, position: 'top' as const, color: theme.text, fontSize: 12, fontWeight: 600 },
+      }],
     };
   }, [riskDist]);
 
-  const qualityRanking = useMemo(() => dimensionItems.map((d: any) => ({ name: d.name, value: Math.round(d.score || 0), suffix: '分' })), [dimensionItems]);
+  const qualityRanking = useMemo(
+    () => dimensionItems.map((d: any) => ({ name: d.name, value: Math.round(d.score || 0), suffix: '分' })),
+    [dimensionItems]
+  );
 
   const mobileCards = (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-        {[...topKpis, ...sideKpis].map(k => <CompactKpi key={k.label} {...k} />)}
+        {[...topKpis, ...sideKpis].map(k => <GlowKpi key={k.label} {...k} />)}
       </div>
-      <ScreenCard title="核心态势"><ScreenChart option={cockpitGauge} height={260} /></ScreenCard>
-      <ScreenCard title="风险等级分布"><ChartOrSoftEmpty option={riskPie} height={240} /></ScreenCard>
-      <ScreenCard title="答题质量分布"><ChartOrSoftEmpty option={qualityPie} height={240} /></ScreenCard>
+      <ScreenCard title="核心态势"><ScreenChart option={cockpitGauge} height={280} /></ScreenCard>
+      <ScreenCard title="风险等级分布"><ChartOrSoftEmpty option={riskPie} height={260} /></ScreenCard>
+      <ScreenCard title="答题质量分布"><ChartOrSoftEmpty option={qualityPie} height={260} /></ScreenCard>
       <ScreenCard title="维度关注信号"><ChartOrSoftEmpty option={dimensionBar} height={280} /></ScreenCard>
-      <ScreenCard title="干预处理状态"><ChartOrSoftEmpty option={interventionBar} height={240} /></ScreenCard>
+      <ScreenCard title="干预处理状态"><ChartOrSoftEmpty option={interventionBar} height={260} /></ScreenCard>
     </div>
   );
 
   const desktopCards = (
-    <div style={{ height: 'calc(100vh - 96px)', minHeight: 620, display: 'grid', gridTemplateColumns: '0.95fr 1.36fr 0.95fr', gridTemplateRows: '100%', gap: 12 }}>
-      <div style={{ display: 'grid', gridTemplateRows: '128px 1fr 1fr', gap: 12, minHeight: 0 }}>
+    <div style={{
+      height: 'calc(100vh - 96px)',
+      minHeight: 620,
+      display: 'grid',
+      gridTemplateColumns: '1fr 1.4fr 1fr',
+      gridTemplateRows: '100%',
+      gap: 14,
+    }}>
+      {/* Left column */}
+      <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr 1fr', gap: 14, minHeight: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-          {topKpis.slice(0, 6).map(k => <CompactKpi key={k.label} {...k} />)}
+          {topKpis.slice(0, 6).map(k => <GlowKpi key={k.label} {...k} />)}
         </div>
-        <ScreenCard title="风险等级结构"><ChartOrSoftEmpty option={riskPie} /></ScreenCard>
-        <ScreenCard title="风险等级柱状分布"><ChartOrSoftEmpty option={riskLevelBar} /></ScreenCard>
+        <ScreenCard title="风险等级分布" glow={theme.red}>
+          <ChartOrSoftEmpty option={riskPie} />
+        </ScreenCard>
+        <ScreenCard title="风险等级柱状分布">
+          <ChartOrSoftEmpty option={riskLevelBar} />
+        </ScreenCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateRows: '128px 1.3fr 1fr', gap: 12, minHeight: 0 }}>
+      {/* Center column */}
+      <div style={{ display: 'grid', gridTemplateRows: 'auto 1.4fr 1fr', gap: 14, minHeight: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-          {sideKpis.map(k => <CompactKpi key={k.label} {...k} />)}
+          {sideKpis.map(k => <GlowKpi key={k.label} {...k} />)}
         </div>
         <ScreenCard title="学校测评核心态势" style={{ background: 'linear-gradient(180deg, rgba(4,26,58,0.96), rgba(6,22,48,0.86))' }}>
-          <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 8, minHeight: 0 }}>
+          <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 10, minHeight: 0 }}>
             <ScreenChart option={cockpitGauge} />
             <StatusStrip completionRate={completionRate} effectiveRate={effectiveRate} interventionRate={interventionRate} riskCount={riskCount} pendingRisks={pendingRisks} />
           </div>
         </ScreenCard>
-        <ScreenCard title="维度关注信号分布"><ChartOrSoftEmpty option={dimensionBar} /></ScreenCard>
+        <ScreenCard title="维度关注信号分布">
+          <ChartOrSoftEmpty option={dimensionBar} />
+        </ScreenCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr 1fr', gap: 12, minHeight: 0 }}>
-        <ScreenCard title="答题质量分布"><ChartOrSoftEmpty option={qualityPie} /></ScreenCard>
-        <ScreenCard title="干预处理状态"><ChartOrSoftEmpty option={interventionBar} /></ScreenCard>
-        <ScreenCard title="维度得分排行"><RankingOrSoftEmpty items={qualityRanking} /></ScreenCard>
+      {/* Right column */}
+      <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr 1fr', gap: 14, minHeight: 0 }}>
+        <ScreenCard title="答题质量分布" glow={theme.green}>
+          <ChartOrSoftEmpty option={qualityPie} />
+        </ScreenCard>
+        <ScreenCard title="干预处理状态" glow={theme.orange}>
+          <ChartOrSoftEmpty option={interventionBar} />
+        </ScreenCard>
+        <ScreenCard title="维度得分排行">
+          <RankingOrSoftEmpty items={qualityRanking} />
+        </ScreenCard>
       </div>
     </div>
   );
 
   return (
-    <ScreenShell title="学生风险防范数据驾驶舱" subtitle="风险等级分布、答题质量、干预处理综合态势" onBack={() => navigate(-1)}>
+    <ScreenShell title="金盾护苗 · 学生关爱数据驾驶舱" subtitle="风险等级分布、答题质量、干预处理综合态势" onBack={() => navigate(-1)}>
       {isMobile ? mobileCards : desktopCards}
     </ScreenShell>
   );
 }
 
-function CompactKpi({ label, value, unit, color }: { label: string; value: number; unit?: string; color: string }) {
+/* ─── KPI card with glow ─── */
+function GlowKpi({ label, value, unit, color }: { label: string; value: number; unit?: string; color: string }) {
   return (
     <div style={{
-      minHeight: 56,
-      border: `1px solid ${theme.border}`,
+      minHeight: 58,
+      border: `1px solid ${color}22`,
       borderRadius: theme.radius,
-      background: 'linear-gradient(180deg, rgba(8,32,67,0.92), rgba(5,20,45,0.82))',
-      boxShadow: 'inset 0 0 18px rgba(0,184,240,0.05)',
-      padding: '8px 10px',
+      background: `linear-gradient(135deg, ${color}08 0%, rgba(6,22,48,0.9) 100%)`,
+      boxShadow: `inset 0 1px 0 ${color}15, 0 2px 12px ${color}10`,
+      padding: '10px 12px',
       display: 'flex',
       flexDirection: 'column',
+      alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
+      position: 'relative',
+      textAlign: 'center',
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, minWidth: 0 }}>
-        <span style={{ fontFamily: theme.numberFont, color: '#f0fbff', fontSize: 'clamp(18px, 1.3vw, 28px)', fontWeight: 800, lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmtNumber(value)}</span>
-        {unit && <span style={{ color, fontSize: 11, flexShrink: 0 }}>{unit}</span>}
+      <div style={{
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: color,
+        boxShadow: `0 0 8px ${color}88`,
+        opacity: 0.7,
+      }} />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'center' }}>
+        <span style={{
+          fontFamily: theme.numberFont,
+          color: '#f0fbff',
+          fontSize: theme.kpiFontSize,
+          fontWeight: 800,
+          lineHeight: 1,
+          textShadow: `0 0 20px ${color}33`,
+        }}>{fmtNumber(value)}</span>
+        {unit && <span style={{ color, fontSize: 13, flexShrink: 0, fontWeight: 600 }}>{unit}</span>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 7, minWidth: 0 }}>
-        <span style={{ width: 18, height: 2, borderRadius: 2, background: color, boxShadow: `0 0 10px ${color}`, flexShrink: 0 }} />
-        <span style={{ color: theme.textDim, fontSize: 'clamp(10px, 0.68vw, 12px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ marginTop: 6, minWidth: 0 }}>
+        <span style={{ color: theme.textDim, fontSize: theme.kpiLabelSize, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </div>
     </div>
   );
 }
 
+/* ─── Status strip ─── */
 function StatusStrip({ completionRate, effectiveRate, interventionRate, riskCount, pendingRisks }: { completionRate: number; effectiveRate: number; interventionRate: number; riskCount: number; pendingRisks: number }) {
   const items = [
     { label: '测评完成', value: `${completionRate}%`, color: theme.cyan },
@@ -189,15 +259,23 @@ function StatusStrip({ completionRate, effectiveRate, interventionRate, riskCoun
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8, flexShrink: 0 }}>
       {items.map(item => (
-        <div key={item.label} style={{ padding: '8px 6px', border: `1px solid ${theme.border}`, borderRadius: 6, background: 'rgba(0,20,44,0.48)', textAlign: 'center', minWidth: 0 }}>
-          <div style={{ color: item.color, fontFamily: theme.numberFont, fontWeight: 800, fontSize: 18, lineHeight: 1 }}>{item.value}</div>
-          <div style={{ color: theme.textDim, fontSize: 11, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
+        <div key={item.label} style={{
+          padding: '10px 6px',
+          border: `1px solid ${item.color}22`,
+          borderRadius: 6,
+          background: `linear-gradient(135deg, ${item.color}08, rgba(0,20,44,0.5))`,
+          textAlign: 'center',
+          minWidth: 0,
+        }}>
+          <div style={{ color: item.color, fontFamily: theme.numberFont, fontWeight: 800, fontSize: theme.stripNumSize, lineHeight: 1, textShadow: `0 0 12px ${item.color}33` }}>{item.value}</div>
+          <div style={{ color: theme.textDim, fontSize: 12, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
         </div>
       ))}
     </div>
   );
 }
 
+/* ─── Chart or empty ─── */
 function ChartOrSoftEmpty({ option, height }: { option: any; height?: number }) {
   if (option) return <ScreenChart option={option} height={height} />;
   return <SoftEmpty height={height} />;
@@ -211,81 +289,159 @@ function RankingOrSoftEmpty({ items }: { items: { name: string; value: number; s
 function SoftEmpty({ height }: { height?: number }) {
   return (
     <div style={{ height: height ? `${height}px` : '100%', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '72%', maxWidth: 240, padding: '18px 12px', border: `1px dashed ${theme.border}`, borderRadius: 10, background: 'rgba(0,184,240,0.035)', textAlign: 'center' }}>
-        <div style={{ width: 48, height: 48, margin: '0 auto 10px', borderRadius: '50%', border: `1px solid ${theme.border}`, boxShadow: 'inset 0 0 18px rgba(0,184,240,0.12)' }} />
+      <div style={{
+        width: '72%',
+        maxWidth: 240,
+        padding: '20px 14px',
+        border: `1px dashed ${theme.border}`,
+        borderRadius: 10,
+        background: 'rgba(0,184,240,0.03)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 48,
+          height: 48,
+          margin: '0 auto 10px',
+          borderRadius: '50%',
+          border: `1px solid ${theme.border}`,
+          boxShadow: 'inset 0 0 18px rgba(0,184,240,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: theme.textDim,
+          fontSize: 20,
+        }}>--</div>
         <div style={{ color: theme.textDim, fontSize: 12 }}>暂无数据</div>
       </div>
     </div>
   );
 }
 
+/* ─── Gauge series ─── */
 function gaugeSeries(name: string, value: number, color: string, center: [string, string]) {
   return {
     type: 'gauge' as const,
     center,
-    radius: '58%',
+    radius: '42%',
     min: 0,
     max: 100,
-    startAngle: 210,
-    endAngle: -30,
-    splitNumber: 4,
-    progress: { show: true, width: 9, itemStyle: { color } },
-    axisLine: { lineStyle: { width: 9, color: [[1, 'rgba(255,255,255,0.08)']] } },
+    startAngle: 220,
+    endAngle: -40,
+    splitNumber: 5,
+    progress: {
+      show: true,
+      width: 12,
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${color}66` }, { offset: 1, color }]),
+        shadowColor: `${color}55`,
+        shadowBlur: 10,
+      },
+    },
+    axisLine: { lineStyle: { width: 12, color: [[1, 'rgba(255,255,255,0.04)']] } },
     axisTick: { show: false },
     splitLine: { show: false },
     axisLabel: { show: false },
     pointer: { show: false },
     anchor: { show: false },
-    detail: { valueAnimation: true, formatter: '{value}%', color: '#f0fbff', fontSize: 22, fontWeight: 800, offsetCenter: [0, '-2%'] },
-    title: { color: theme.textDim, fontSize: 12, offsetCenter: [0, '34%'] },
+    detail: {
+      valueAnimation: true,
+      formatter: '{value}%',
+      color: '#f0fbff',
+      fontSize: theme.gaugeDetailSize,
+      fontWeight: 800,
+      fontFamily: theme.numberFont,
+      offsetCenter: [0, '-5%'],
+      textShadowColor: `${color}44`,
+      textShadowBlur: 12,
+    },
+    title: { color: theme.textDim, fontSize: 13, offsetCenter: [0, '30%'] },
     data: [{ value, name }],
   };
 }
 
+/* ─── Pie option ─── */
 function pieOption(dist: Record<string, number>, labels: Record<string, string>, colorMap: Record<string, string>) {
-  const pieData = Object.entries(dist).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({ name: labels[k] || k, value: v, itemStyle: { color: colorMap[k] || theme.textDim } }));
+  const pieData = Object.entries(dist).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({
+    name: labels[k] || k,
+    value: v,
+    itemStyle: { color: colorMap[k] || theme.textDim },
+  }));
   if (!pieData.length) return null;
   return {
     tooltip: darkTooltip,
-    legend: { bottom: 0, textStyle: { color: theme.textDim, fontSize: 10 }, itemWidth: 10, itemHeight: 6 },
+    legend: { bottom: 0, textStyle: { color: theme.textDim, fontSize: 11 }, itemWidth: 12, itemHeight: 8, itemGap: 14 },
     series: [{
       type: 'pie' as const,
-      radius: ['50%', '72%'],
-      center: ['50%', '43%'],
+      radius: ['38%', '72%'],
+      center: ['50%', '42%'],
       data: pieData,
-      label: { show: true, formatter: '{b}\n{d}%', fontSize: 10, color: theme.text },
+      padAngle: 2,
+      itemStyle: { borderRadius: 5 },
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 12, color: theme.text, lineHeight: 16 },
+      emphasis: {
+        scaleSize: 8,
+        itemStyle: { shadowBlur: 16, shadowColor: 'rgba(0,0,0,0.4)' },
+      },
       labelLayout: { hideOverlap: true } as any,
     }],
   };
 }
 
+/* ─── Horizontal bar ─── */
 function horizontalBarOption(items: any[], valueKey: string) {
   if (!items.length) return null;
   const colors = [theme.purple, theme.cyan, theme.orange, theme.green, theme.blue, theme.gold, '#ff85c0', '#87e8de'];
   const sliced = items.slice(0, 8);
   return {
     tooltip: darkTooltip,
-    grid: { left: 52, right: 34, bottom: 18, top: 10, containLabel: true },
+    grid: { left: 60, right: 38, bottom: 18, top: 10, containLabel: true },
     xAxis: { type: 'value' as const, axisLabel: textStyle, splitLine },
-    yAxis: { type: 'category' as const, data: sliced.map((d: any) => d.name.length > 6 ? `${d.name.slice(0, 6)}…` : d.name).reverse(), axisLabel: { color: theme.text, fontSize: 11 }, axisLine },
+    yAxis: {
+      type: 'category' as const,
+      data: sliced.map((d: any) => d.name.length > 6 ? `${d.name.slice(0, 6)}…` : d.name).reverse(),
+      axisLabel: { color: theme.text, fontSize: 12 },
+      axisLine,
+    },
     series: [{
       type: 'bar' as const,
-      data: sliced.slice().reverse().map((d: any, i: number) => ({ value: d[valueKey], itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${colors[i] || theme.cyan}33` }, { offset: 1, color: colors[i] || theme.cyan }]), borderRadius: [0, 4, 4, 0] } })),
-      barMaxWidth: 18,
-      label: { show: true, position: 'right' as const, color: theme.textDim, fontSize: 10 },
+      data: sliced.slice().reverse().map((d: any, i: number) => ({
+        value: d[valueKey],
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${colors[i] || theme.cyan}15` }, { offset: 1, color: colors[i] || theme.cyan }]),
+          borderRadius: [0, 6, 6, 0],
+          shadowColor: `${colors[i] || theme.cyan}33`,
+          shadowBlur: 6,
+        },
+      })),
+      barMaxWidth: 24,
+      label: { show: true, position: 'right' as const, color: theme.textDim, fontSize: 11 },
     }],
   };
 }
 
+/* ─── Status bar ─── */
 function statusBarOption(items: any[]) {
   if (!items.length) return null;
   const colors: Record<string, string> = { pending: COLORS.medium, processing: COLORS.low, in_progress: COLORS.low, completed: COLORS.normal, follow_up: theme.purple, closed: theme.textDim };
-  const labels: Record<string, string> = { pending: '待处理', in_progress: '处理中', processing: '处理中', follow_up: '持续跟进', completed: '已完成', closed: '已关闭' };
+  const labels = INTERVENTION_STATUS_LABELS;
   return {
     tooltip: darkTooltip,
-    grid: { left: 34, right: 18, bottom: 24, top: 14, containLabel: true },
-    xAxis: { type: 'category' as const, data: items.map((s: any) => labels[s.status] || s.status), axisLabel: textStyle, axisLine },
+    grid: { left: 36, right: 20, bottom: 26, top: 16, containLabel: true },
+    xAxis: { type: 'category' as const, data: items.map((s: any) => labels[s.status] || s.status), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
     yAxis: { type: 'value' as const, splitLine, axisLabel: textStyle },
-    series: [{ type: 'bar' as const, data: items.map((s: any) => ({ value: s.count || 0, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: colors[s.status] || theme.cyan }, { offset: 1, color: `${colors[s.status] || theme.cyan}33` }]), borderRadius: [4, 4, 0, 0] } })), barMaxWidth: 34, label: { show: true, position: 'top' as const, color: theme.textDim, fontSize: 10 } }],
+    series: [{
+      type: 'bar' as const,
+      data: items.map((s: any) => ({
+        value: s.count || 0,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: colors[s.status] || theme.cyan }, { offset: 1, color: `${colors[s.status] || theme.cyan}22` }]),
+          borderRadius: [6, 6, 0, 0],
+          shadowColor: `${colors[s.status] || theme.cyan}33`,
+          shadowBlur: 6,
+        },
+      })),
+      barMaxWidth: 40,
+      label: { show: true, position: 'top' as const, color: theme.textDim, fontSize: 11 },
+    }],
   };
 }

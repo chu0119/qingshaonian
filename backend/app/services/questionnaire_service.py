@@ -1,5 +1,8 @@
 from sqlalchemy.orm import Session, joinedload
 from ..models.questionnaire import Questionnaire, Question, Option, ContradictionGroup, QuestionType
+from ..models.task import AnswerSheet, AnswerRecord
+from ..models.risk import ScoringResult, QualityAssessment
+from ..models.user import User
 from ..schemas.questionnaire import QuestionnaireCreate, QuestionnaireUpdate, QuestionCreate, QuestionUpdate, OptionCreate, ContradictionGroupCreate
 
 
@@ -238,3 +241,159 @@ def add_contradiction_group(db: Session, qid: int, data: ContradictionGroupCreat
 def delete_contradiction_group(db: Session, cg_id: int):
     db.query(ContradictionGroup).filter(ContradictionGroup.id == cg_id).delete()
     db.commit()
+
+
+DIMENSION_LABELS = {
+    "emotion": "情绪状态", "sleep": "睡眠状态", "academic_pressure": "学习压力",
+    "interpersonal": "人际关系", "family_support": "家庭支持", "campus_safety": "校园安全",
+    "internet_use": "网络使用", "self_safety": "自我安全", "general": "综合",
+    "somatization": "躯体化", "obsessive": "强迫症状", "interpersonal_sensitivity": "人际敏感",
+    "depression": "抑郁", "anxiety": "焦虑", "hostility": "敌对", "phobic": "恐怖",
+    "paranoid": "偏执", "psychoticism": "精神病性",
+    "force": "强迫", "adaptation": "适应不良", "emotional_instability": "情绪不稳定",
+    "psychological_imbalance": "心理失衡", "stress": "压力",
+    "compulsive_use": "强迫性使用", "withdrawal": "戒断反应", "tolerance": "耐受性",
+    "interpersonal_health": "人际与健康", "time_management": "时间管理",
+    "sleep_quality": "睡眠质量", "sleep_latency": "入睡时间", "sleep_duration": "睡眠时长",
+    "sleep_efficiency": "睡眠效率", "sleep_disturbance": "睡眠障碍",
+    "daytime_dysfunction": "日间功能障碍",
+    "victimization": "受欺凌", "aggression": "攻击行为", "bystander": "旁观行为",
+    "help_seeking": "求助行为", "safety": "安全感", "cyberbullying": "网络欺凌",
+    "rejection": "拒绝", "emotional_warmth": "情感温暖", "overprotection": "过度保护",
+    "hopelessness": "绝望感", "optimism": "乐观", "concealment": "掩饰",
+    "learning_pressure": "学习压力",
+}
+
+
+def get_answer_detail(db: Session, answer_sheet_id: int) -> dict:
+    sheet = db.query(AnswerSheet).filter(AnswerSheet.id == answer_sheet_id).first()
+    if not sheet:
+        raise ValueError("答卷不存在")
+
+    student = db.query(User).filter(User.id == sheet.student_id).first()
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == sheet.questionnaire_id).first()
+    from ..models.task import Task
+    task = db.query(Task).filter(Task.id == sheet.task_id).first()
+
+    scoring = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).first()
+    quality = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).first()
+
+    dim_label_map = {}
+    if questionnaire and questionnaire.dimensions:
+        for d in questionnaire.dimensions:
+            if isinstance(d, dict):
+                dim_label_map[d.get("code", "")] = d.get("title", d.get("code", ""))
+
+    questions = db.query(Question).filter(
+        Question.questionnaire_id == sheet.questionnaire_id
+    ).order_by(Question.sort_order).all()
+
+    options_by_qid = {}
+    for q in questions:
+        opts = db.query(Option).filter(Option.question_id == q.id).order_by(Option.sort_order).all()
+        options_by_qid[q.id] = opts
+
+    records = db.query(AnswerRecord).filter(
+        AnswerRecord.answer_sheet_id == sheet.id
+    ).all()
+    record_map = {r.question_id: r for r in records}
+
+    duration = sheet.total_duration_seconds or 0
+    if not duration and sheet.started_at and sheet.submitted_at:
+        from datetime import timezone as _tz
+        try:
+            s = sheet.started_at.replace(tzinfo=_tz.utc) if sheet.started_at.tzinfo is None else sheet.started_at
+            e = sheet.submitted_at.replace(tzinfo=_tz.utc) if sheet.submitted_at.tzinfo is None else sheet.submitted_at
+            duration = int((e - s).total_seconds())
+        except Exception:
+            pass
+
+    answers = []
+    for q in questions:
+        rec = record_map.get(q.id)
+        all_opts = options_by_qid.get(q.id, [])
+        opt_list = [{"option_id": o.id, "content": o.content, "score": o.score, "is_risk_option": o.is_risk_option} for o in all_opts]
+
+        selected_ids = []
+        selected_opts = []
+        if rec and isinstance(rec.answer_content, dict):
+            sel_id = rec.answer_content.get("selected_option_id")
+            sel_ids = rec.answer_content.get("selected_option_ids")
+            if sel_id:
+                selected_ids = [sel_id]
+            elif sel_ids:
+                selected_ids = sel_ids
+            for o in all_opts:
+                if o.id in selected_ids:
+                    selected_opts.append({"option_id": o.id, "content": o.content, "score": o.score})
+
+        dim = q.dimension or "general"
+        answers.append({
+            "question_id": q.id,
+            "question_code": q.code or "",
+            "question_title": q.title,
+            "question_type": q.type,
+            "dimension": dim,
+            "dimension_label": dim_label_map.get(dim, DIMENSION_LABELS.get(dim, dim)),
+            "sort_order": q.sort_order,
+            "is_reverse": q.is_reverse or False,
+            "is_attention_check": q.is_attention_check or False,
+            "options": opt_list,
+            "answer_content": rec.answer_content if rec else None,
+            "selected_option_ids": selected_ids,
+            "selected_options": selected_opts,
+            "score": rec.score if rec else 0,
+            "duration_seconds": rec.duration_seconds if rec else 0,
+            "risk_tag": q.risk_tag or "",
+        })
+
+    return {
+        "answer_sheet_id": sheet.id,
+        "student_id": sheet.student_id,
+        "student_name": student.real_name if student else "",
+        "student_no": student.student_no if student else "",
+        "school_name": "",
+        "questionnaire_id": sheet.questionnaire_id,
+        "questionnaire_title": questionnaire.title if questionnaire else "",
+        "task_id": sheet.task_id,
+        "task_name": task.name if task else "",
+        "status": sheet.status,
+        "started_at": sheet.started_at.isoformat() if sheet.started_at else None,
+        "submitted_at": sheet.submitted_at.isoformat() if sheet.submitted_at else None,
+        "total_duration_seconds": duration,
+        "scoring": {
+            "total_score": scoring.total_score if scoring else 0,
+            "dimension_scores": scoring.dimension_scores if scoring else {},
+            "risk_level": scoring.risk_level if scoring else "low",
+            "risk_type": scoring.risk_type if scoring else "",
+            "risk_description": scoring.risk_description if scoring else "",
+            "triggered_rules": scoring.triggered_rules if scoring else [],
+        } if scoring else None,
+        "quality": {
+            "quality_score": quality.quality_score if quality else 100,
+            "quality_level": quality.quality_level if quality else "normal",
+            "validity": quality.validity if quality else "valid",
+            "suggest_retest": quality.suggest_retest if quality else False,
+        } if quality else None,
+        "answers": answers,
+    }
+
+
+def list_student_answer_sheets(db: Session, student_id: int) -> list[dict]:
+    sheets = db.query(AnswerSheet).filter(
+        AnswerSheet.student_id == student_id, AnswerSheet.status == "submitted"
+    ).order_by(AnswerSheet.submitted_at.desc()).all()
+
+    results = []
+    for sheet in sheets:
+        questionnaire = db.query(Questionnaire).filter(Questionnaire.id == sheet.questionnaire_id).first()
+        scoring = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).first()
+        results.append({
+            "answer_sheet_id": sheet.id,
+            "questionnaire_id": sheet.questionnaire_id,
+            "questionnaire_title": questionnaire.title if questionnaire else "",
+            "submitted_at": sheet.submitted_at.isoformat() if sheet.submitted_at else None,
+            "total_score": scoring.total_score if scoring else 0,
+            "risk_level": scoring.risk_level if scoring else "low",
+        })
+    return results

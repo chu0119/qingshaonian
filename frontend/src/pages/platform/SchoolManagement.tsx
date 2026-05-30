@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, message, Popconfirm, Tag, Space, Typography, Card, Row, Col, Statistic, Descriptions, Progress, Tabs, Switch, Empty } from 'antd';
-import { PlusOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, EyeOutlined, BankOutlined, TeamOutlined, UserOutlined, AlertOutlined, FileTextOutlined, KeyOutlined, LoginOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, EyeOutlined, BankOutlined, TeamOutlined, UserOutlined, AlertOutlined, FileTextOutlined, KeyOutlined, LoginOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { enterSchool } from '../../api/auth';
 import { useAuthStore } from '../../stores/authStore';
 
-const riskLabels: Record<string, string> = { low: '低风险', medium: '中风险', high: '高风险', urgent: '紧急风险' };
-const riskColors: Record<string, string> = { low: '#1890FF', medium: '#FA8C16', high: '#FF4D4F', urgent: '#CF1322' };
+import { RISK_LABELS, RISK_COLORS, TASK_STATUS_LABELS, ROLE_LABELS, RISK_STATUS_LABELS } from '../../utils/constants';
 
 export default function SchoolManagement() {
   const [data, setData] = useState<any[]>([]);
@@ -22,6 +21,9 @@ export default function SchoolManagement() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<any>(null);
   const [enteringSchool, setEnteringSchool] = useState<number | null>(null);
+  const [keyword, setKeyword] = useState('');
+  const [addAdminOpen, setAddAdminOpen] = useState(false);
+  const [addAdminForm] = Form.useForm();
   const [form] = Form.useForm();
   const [resetForm] = Form.useForm();
   const savePlatformSession = useAuthStore(s => s.savePlatformSession);
@@ -29,11 +31,11 @@ export default function SchoolManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await client.get('/platform/schools', { params: { page, page_size: 20 } });
-      setData(r.data.data.items); setTotal(r.data.data.total);
+      const r = await client.get('/platform/schools', { params: { page, page_size: 20, keyword: keyword || undefined } });
+      setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
     } catch { message.error('获取学校列表失败'); }
     finally { setLoading(false); }
-  }, [page]);
+  }, [page, keyword]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -117,6 +119,33 @@ export default function SchoolManagement() {
     viewDetail(detail);
   };
 
+  const deleteSchool = async (schoolId: number) => {
+    try {
+      await client.delete(`/platform/schools/${schoolId}/force`);
+      message.success('学校已永久删除');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '删除失败');
+    }
+  };
+
+  const openAddAdmin = () => {
+    addAdminForm.resetFields();
+    setAddAdminOpen(true);
+  };
+
+  const handleAddAdmin = async () => {
+    const values = await addAdminForm.validateFields();
+    try {
+      await client.post(`/platform/schools/${detail.id}/admins`, values);
+      message.success('管理员创建成功');
+      setAddAdminOpen(false);
+      viewDetail(detail);
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '创建失败');
+    }
+  };
+
   const columns = [
     { title: '学校名称', dataIndex: 'name', key: 'name', render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '编码', dataIndex: 'code', key: 'code', width: 100 },
@@ -124,16 +153,19 @@ export default function SchoolManagement() {
     { title: '学生', dataIndex: 'student_count', key: 'student_count', width: 60, align: 'right' as const },
     { title: '教师', dataIndex: 'teacher_count', key: 'teacher_count', width: 60, align: 'right' as const },
     { title: '状态', dataIndex: 'status', key: 'status', width: 70, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '正常' : '停用'}</Tag> },
-    { title: '操作', key: 'action', width: 380, render: (_: any, r: any) => (
+    { title: '操作', key: 'action', width: 440, render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
           <Button size="small" icon={<LoginOutlined />} loading={enteringSchool === r.id} onClick={() => handleEnterSchool(r.id)}
             style={{ color: '#1677ff', borderColor: '#1677ff' }}>进入后台</Button>
-          <Popconfirm title={r.status ? '确定停用该学校？' : '确定启用该学校？'} onConfirm={() => toggleStatus(r)}>
+          <Popconfirm title={r.status ? '确定停用该学校？' : '确定启用该学校？'} onConfirm={() => toggleStatus(r)} okText="确定" cancelText="取消">
             <Button size="small" icon={r.status ? <StopOutlined /> : <CheckCircleOutlined />} danger={r.status}>
               {r.status ? '停用' : '启用'}
             </Button>
+          </Popconfirm>
+          <Popconfirm title="永久删除该学校及所有关联数据？此操作不可恢复！" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteSchool(r.id)}>
+            <Button size="small" icon={<DeleteOutlined />} danger>删除</Button>
           </Popconfirm>
         </Space>
     )},
@@ -141,15 +173,19 @@ export default function SchoolManagement() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4}>学校管理</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增学校</Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>学校管理</Typography.Title>
+        <Space>
+          <Input.Search placeholder="搜索学校名称/编码" allowClear style={{ width: 220 }} value={keyword}
+            onChange={e => { setKeyword(e.target.value); setPage(1); }} onSearch={() => fetchData()} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增学校</Button>
+        </Space>
       </div>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 所学校` }} />
 
       {/* 编辑弹窗 */}
-      <Modal title={editing ? '编辑学校' : '新增学校'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} width={520} destroyOnHidden>
+      <Modal title={editing ? '编辑学校' : '新增学校'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} okText="确定" cancelText="取消" width={520} destroyOnHidden>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="学校名称" rules={[{ required: true }]}><Input placeholder="如：明德实验学校" /></Form.Item>
           <Form.Item name="code" label="学校编码" rules={[{ required: true }]}><Input placeholder="如：MINGDE" disabled={!!editing} /></Form.Item>
@@ -206,7 +242,7 @@ export default function SchoolManagement() {
               <Descriptions.Item label="地址">{detail.address || '-'}</Descriptions.Item>
               <Descriptions.Item label="电话">{detail.phone || '-'}</Descriptions.Item>
             </Descriptions>
-            <Card title="学校管理员账号" size="small" style={{ marginTop: 16 }}>
+            <Card title="学校管理员账号" size="small" style={{ marginTop: 16 }} extra={<Button size="small" type="primary" icon={<PlusOutlined />} onClick={openAddAdmin}>添加管理员</Button>}>
               <Table
                 rowKey="id"
                 dataSource={admins}
@@ -227,7 +263,7 @@ export default function SchoolManagement() {
                       <Space>
                         <Button size="small" icon={<KeyOutlined />} onClick={() => openReset(admin)}>重置密码</Button>
                         {admin.status && (
-                          <Popconfirm title="确定停用该学校管理员账号？" onConfirm={() => disableAdmin(admin)}>
+                          <Popconfirm title="确定停用该学校管理员账号？" onConfirm={() => disableAdmin(admin)} okText="确定" cancelText="取消">
                             <Button size="small" danger>停用</Button>
                           </Popconfirm>
                         )}
@@ -244,8 +280,8 @@ export default function SchoolManagement() {
                   const pct = Math.round((count as number) / total * 100);
                   return (
                     <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <Tag color={riskColors[level]}>{riskLabels[level]}</Tag>
-                      <Progress percent={pct} size="small" style={{ flex: 1 }} strokeColor={riskColors[level]} />
+                      <Tag color={RISK_COLORS[level]}>{RISK_LABELS[level]}</Tag>
+                      <Progress percent={pct} size="small" style={{ flex: 1 }} strokeColor={RISK_COLORS[level]} />
                       <span>{count as number}人</span>
                     </div>
                   );
@@ -275,7 +311,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无最近任务" /> }}
                         columns={[
                           { title: '任务名称', dataIndex: 'name' },
-                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{v}</Tag> },
+                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{TASK_STATUS_LABELS[v] || v}</Tag> },
                           { title: '更新时间', dataIndex: 'updated_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />
@@ -293,7 +329,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无登录记录" /> }}
                         columns={[
                           { title: '账号', dataIndex: 'username' },
-                          { title: '角色', dataIndex: 'role' },
+                          { title: '角色', dataIndex: 'role', render: (v: string) => ROLE_LABELS[v] || v },
                           { title: '登录时间', dataIndex: 'login_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />
@@ -311,7 +347,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无风险处理记录" /> }}
                         columns={[
                           { title: '风险提示ID', dataIndex: 'id' },
-                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{v}</Tag> },
+                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{RISK_STATUS_LABELS[v] || v}</Tag> },
                           { title: '最近处理时间', dataIndex: 'latest_handled_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />
@@ -328,11 +364,30 @@ export default function SchoolManagement() {
         open={resetOpen}
         onOk={handleResetPassword}
         onCancel={() => setResetOpen(false)}
+        okText="确定"
+        cancelText="取消"
         destroyOnHidden
       >
         <Form form={resetForm} layout="vertical">
           <Form.Item name="password" label="新初始密码" rules={[{ required: true, min: 10, message: '新密码至少10位' }]}>
             <Input.Password placeholder="请输入至少10位新密码" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title={`添加管理员 - ${detail?.name || ''}`} open={addAdminOpen} onOk={handleAddAdmin} onCancel={() => setAddAdminOpen(false)} okText="确定" cancelText="取消" destroyOnHidden>
+        <Form form={addAdminForm} layout="vertical">
+          <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}>
+            <Input placeholder="如：admin_mingde" />
+          </Form.Item>
+          <Form.Item name="password" label="初始密码" rules={[{ required: true, min: 10, message: '初始密码至少10位' }]}>
+            <Input.Password placeholder="请设置至少10位初始密码" />
+          </Form.Item>
+          <Form.Item name="real_name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
+            <Input placeholder="如：张三" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号">
+            <Input placeholder="可留空" />
           </Form.Item>
         </Form>
       </Modal>

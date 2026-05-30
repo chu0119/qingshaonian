@@ -74,3 +74,46 @@ def get_risk_detail(alert_id: int, request: Request, user: User = Depends(requir
         "answer_sheet_id": alert.answer_sheet_id,
         "student_id": alert.student_id,
     })
+
+
+@router.get("/{alert_id}/answers")
+def risk_answer_detail(alert_id: int, request: Request, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
+    alert = db.query(RiskAlert).filter(RiskAlert.id == alert_id, RiskAlert.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="预警不存在")
+    student = db.query(User).filter(User.id == alert.student_id).first()
+    if not can_access_student(db, user, student):
+        raise HTTPException(status_code=404, detail="预警不存在")
+    if not alert.answer_sheet_id:
+        raise HTTPException(status_code=404, detail="该预警无关联答卷")
+    from ..services.questionnaire_service import get_answer_detail
+    try:
+        detail = get_answer_detail(db, alert.answer_sheet_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    log_operation(db, user, request, module="risk_alert", action="view_detail",
+                  object_type="answer_sheet", object_id=alert.answer_sheet_id,
+                  object_name=student.real_name if student else "", detail="查看答题详情")
+    return APIResponse.success(detail)
+
+
+@router.get("/sheets/{sheet_id}/detail")
+def answer_sheet_detail(sheet_id: int, request: Request, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
+    from ..models.task import AnswerSheet
+    sheet = db.query(AnswerSheet).filter(AnswerSheet.id == sheet_id).first()
+    if not sheet:
+        raise HTTPException(status_code=404, detail="答卷不存在")
+    student = db.query(User).filter(User.id == sheet.student_id).first()
+    if not student or student.school_id != (getattr(user, '_effective_school_id', None) or user.school_id):
+        raise HTTPException(status_code=404, detail="答卷不存在")
+    if not can_access_student(db, user, student):
+        raise HTTPException(status_code=404, detail="答卷不存在")
+    from ..services.questionnaire_service import get_answer_detail
+    try:
+        detail = get_answer_detail(db, sheet_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    log_operation(db, user, request, module="risk_alert", action="view_detail",
+                  object_type="answer_sheet", object_id=sheet_id,
+                  object_name=student.real_name if student else "", detail="查看答题详情")
+    return APIResponse.success(detail)

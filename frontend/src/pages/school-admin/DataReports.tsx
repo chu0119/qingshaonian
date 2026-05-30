@@ -1,32 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Card, Tabs, Table, Typography, Statistic, Row, Col,
-  Progress, Button, Tag, Spin, Space, message,
+  Progress, Button, Tag, Spin, Space, message, Select, Input,
 } from 'antd';
-import { ExportOutlined, ReloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { ExportOutlined, ReloadOutlined, RobotOutlined, LineChartOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import ReactECharts from 'echarts-for-react';
 import {
   getSchoolOverview, getRiskSummary, getQualityStats,
   type SchoolOverviewData, type GradeOverview,
   type RiskSummaryData, type RiskLevelItem, type RiskStatusItem,
   type QualityStatsData, type QualityLevelItem,
+  getStudentLongitudinal, type LongitudinalData,
 } from '../../api/reports';
 import { getQuestionnaires, type QuestionnaireInfo } from '../../api/questionnaires';
 import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
+import client from '../../api/client';
+import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, QUALITY_LABELS, QUESTIONNAIRE_CATEGORY_LABELS, QUESTIONNAIRE_STATUS_LABELS } from '../../utils/constants';
 
 const qualityLevelLabels: Record<string, { label: string; color: string }> = {
-  normal: { label: '正常', color: '#52c41a' },
-  mild_anomaly: { label: '轻度异常', color: '#faad14' },
-  moderate_anomaly: { label: '中度异常', color: '#fa8c16' },
-  severe_anomaly: { label: '高度异常', color: '#ff4d4f' },
+  normal: { label: QUALITY_LABELS.normal, color: '#52c41a' },
+  questionable: { label: QUALITY_LABELS.questionable, color: '#e8b339' },
+  mild_anomaly: { label: QUALITY_LABELS.mild_anomaly, color: '#faad14' },
+  moderate_anomaly: { label: QUALITY_LABELS.moderate_anomaly, color: '#fa8c16' },
+  severe_anomaly: { label: QUALITY_LABELS.severe_anomaly, color: '#ff4d4f' },
 };
 
-const riskLevelColors: Record<string, string> = {
-  low: '#1890ff',
-  medium: '#fa8c16',
-  high: '#ff4d4f',
-  urgent: '#cf1322',
-};
+const riskLevelColors = RISK_COLORS;
 
 const riskStatusColors: Record<string, string> = {
   pending: '#faad14',
@@ -35,21 +35,12 @@ const riskStatusColors: Record<string, string> = {
   closed: '#d9d9d9',
 };
 
-const questionnaireCategoryLabels: Record<string, string> = {
-  mental_health: '心理健康筛查',
-  bullying: '校园欺凌排查',
-  internet_addiction: '网络沉迷评估',
-  family_relationship: '家庭关系调查',
-  safety_awareness: '安全意识测评',
-  interpersonal: '人际关系测评',
-  academic_pressure: '学业压力测评',
-  custom: '综合',
-};
+const questionnaireCategoryLabels = QUESTIONNAIRE_CATEGORY_LABELS;
 
 const questionnaireStatusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: '草稿', color: '#d9d9d9' },
-  active: { label: '已发布', color: '#52c41a' },
-  inactive: { label: '已停用', color: '#ff4d4f' },
+  draft: { label: QUESTIONNAIRE_STATUS_LABELS.draft, color: '#d9d9d9' },
+  active: { label: QUESTIONNAIRE_STATUS_LABELS.active, color: '#52c41a' },
+  inactive: { label: QUESTIONNAIRE_STATUS_LABELS.inactive, color: '#ff4d4f' },
 };
 
 export default function DataReports() {
@@ -76,6 +67,12 @@ export default function DataReports() {
   const [aiType, setAiType] = useState<'overall_report' | 'quality_report'>('overall_report');
   const [aiData, setAiData] = useState<Record<string, any>>({});
   const [aiTitle, setAiTitle] = useState('');
+
+  // ---- 学生纵向追踪 ----
+  const [longitudinalStudentId, setLongitudinalStudentId] = useState<number | null>(null);
+  const [longitudinalData, setLongitudinalData] = useState<LongitudinalData | null>(null);
+  const [longitudinalLoading, setLongitudinalLoading] = useState(false);
+  const [studentSearchResults, setStudentSearchResults] = useState<any[]>([]);
 
   const openAiModal = (type: 'overall_report' | 'quality_report', data: Record<string, any>, title: string) => {
     setAiType(type);
@@ -140,6 +137,23 @@ export default function DataReports() {
     fetchQualityData();
     fetchQuestionnaires();
   }, [fetchOverview, fetchRiskData, fetchQualityData, fetchQuestionnaires]);
+
+  const searchStudents = useCallback(async (keyword: string) => {
+    if (!keyword.trim()) { setStudentSearchResults([]); return; }
+    try {
+      const res = await client.get('/users/students', { params: { keyword, page_size: 10 } });
+      setStudentSearchResults(res.data?.data?.items || []);
+    } catch { setStudentSearchResults([]); }
+  }, []);
+
+  const fetchLongitudinal = useCallback(async (studentId: number) => {
+    setLongitudinalLoading(true);
+    try {
+      const data = await getStudentLongitudinal(studentId);
+      setLongitudinalData(data);
+    } catch { message.error('获取纵向数据失败'); setLongitudinalData(null); }
+    finally { setLongitudinalLoading(false); }
+  }, []);
 
   // ==================== 学校综合报表 columns ====================
 
@@ -529,6 +543,71 @@ export default function DataReports() {
             </div>
           ) : null}
         </Spin>
+      ),
+    },
+
+    // ---- Tab 5: 学生纵向追踪 ----
+    {
+      key: 'longitudinal',
+      label: '学生纵向追踪',
+      children: (
+        <div>
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Select
+              showSearch
+              style={{ width: 260 }}
+              placeholder="搜索学生姓名"
+              filterOption={false}
+              onSearch={searchStudents}
+              onChange={(val: number) => { setLongitudinalStudentId(val); fetchLongitudinal(val); }}
+              options={studentSearchResults.map((s: any) => ({ value: s.id, label: `${s.real_name} (${s.student_no || s.username})` }))}
+              notFoundContent="输入姓名搜索"
+            />
+          </Space>
+
+          <Spin spinning={longitudinalLoading}>
+            {longitudinalData ? (
+              longitudinalData.records.length > 0 ? (
+                <>
+                  <Typography.Text strong style={{ marginBottom: 16, display: 'block' }}>
+                    {longitudinalData.student_name} — 共 {longitudinalData.records.length} 次测评记录
+                  </Typography.Text>
+                  <ReactECharts style={{ height: 350, marginBottom: 16 }} option={{
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: ['总分', ...(longitudinalData.records[0]?.dimension_scores ? Object.keys(longitudinalData.records[0].dimension_scores).map(dim => DIMENSION_LABELS[dim] || dim) : [])], bottom: 0 },
+                    grid: { left: 50, right: 20, top: 20, bottom: 60 },
+                    xAxis: { type: 'category', data: longitudinalData.records.map(r => r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('zh-CN') : '-') },
+                    yAxis: { type: 'value' },
+                    series: [
+                      { name: '总分', type: 'line', data: longitudinalData.records.map(r => r.total_score), smooth: true, lineStyle: { width: 3 } },
+                      ...Object.keys(longitudinalData.records[0]?.dimension_scores || {}).map(dim => ({
+                        name: DIMENSION_LABELS[dim] || dim, type: 'line' as const, smooth: true,
+                        data: longitudinalData.records.map(r => (r.dimension_scores as Record<string, number>)?.[dim] ?? null),
+                      })),
+                    ],
+                  }} />
+                  <Table
+                    rowKey="answer_sheet_id"
+                    dataSource={longitudinalData.records}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                    pagination={false}
+                    columns={[
+                      { title: '测评时间', dataIndex: 'submitted_at', width: 120, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
+                      { title: '问卷', dataIndex: 'questionnaire_title', ellipsis: true },
+                      { title: '总分', dataIndex: 'total_score', width: 80 },
+                      { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => v ? <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> : '-' },
+                    ]}
+                  />
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>该学生暂无测评记录</div>
+              )
+            ) : (
+              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>请选择一位学生查看纵向追踪数据</div>
+            )}
+          </Spin>
+        </div>
       ),
     },
   ];

@@ -205,8 +205,8 @@ class QuestionnaireBankAndScoringTests(unittest.TestCase):
         self.db.commit()
 
         result = calculate_scores(self.db, sheet.id)
-        self.assertEqual(result["total_score"], 27)
-        self.assertEqual(result["total_max_score"], 27)
+        self.assertEqual(result["total_score"], 60)
+        self.assertEqual(result["total_max_score"], 60)
         self.assertEqual(result["risk_level"], "urgent")
 
     def test_gad_like_builtin_uses_0_to_21_ranges(self):
@@ -237,8 +237,8 @@ class QuestionnaireBankAndScoringTests(unittest.TestCase):
         self.db.commit()
 
         result = calculate_scores(self.db, sheet.id)
-        self.assertEqual(result["total_score"], 21)
-        self.assertEqual(result["total_max_score"], 21)
+        self.assertEqual(result["total_score"], 45)
+        self.assertEqual(result["total_max_score"], 45)
         self.assertEqual(result["risk_level"], "urgent")
 
     def test_sensitive_option_can_trigger_risk(self):

@@ -4,6 +4,7 @@ import { CheckCircleOutlined, KeyOutlined, ClockCircleOutlined, FileTextOutlined
 import { useAuthStore } from '../../stores/authStore';
 import { changePassword } from '../../api/auth';
 import client from '../../api/client';
+import { ROLE_LABELS } from '../../utils/constants';
 
 export default function Profile() {
   const { user, logout } = useAuthStore();
@@ -83,7 +84,7 @@ export default function Profile() {
           <Descriptions.Item label="姓名">{user.real_name}</Descriptions.Item>
           <Descriptions.Item label="账号">{user.username}</Descriptions.Item>
           <Descriptions.Item label="角色">
-            <Tag color="blue">{user.role === 'student' ? '学生' : user.role}</Tag>
+            <Tag color="blue">{ROLE_LABELS[user.role] || user.role}</Tag>
           </Descriptions.Item>
           <Descriptions.Item label="学号">{user.student_no || '-'}</Descriptions.Item>
           <Descriptions.Item label="性别">{user.gender || '-'}</Descriptions.Item>
