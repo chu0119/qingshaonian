@@ -246,8 +246,7 @@ export default function AnswerPage() {
   return (
     <div style={{ maxWidth: 700, margin: '0 auto' }}>
       <Card style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ marginTop: 0 }}>{sheet.questionnaire_title || '问卷填写'}</Typography.Title>
-        <Typography.Text strong>{sheet.task_name}</Typography.Text>
+        <Typography.Title level={4} style={{ marginTop: 0 }}>{sheet.task_name || '问卷填写'}</Typography.Title>
         {sheet.description && <div style={{ color: '#595959', marginTop: 8 }}>{sheet.description}</div>}
         <div style={{ color: '#8c8c8c', fontSize: 13, marginTop: 8 }}>
           截止时间：{sheet.end_time ? new Date(sheet.end_time).toLocaleString('zh-CN') : '未设置'}

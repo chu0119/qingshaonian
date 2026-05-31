@@ -95,7 +95,7 @@ export default function QuestionnaireEditor() {
   const isNew = id === 'new';
   const qid = isNew ? null : Number(id);
 
-  const rolePrefix = location.pathname.startsWith('/teacher') ? '/teacher' : '/school-admin';
+  const rolePrefix = location.pathname.startsWith('/platform') ? '/platform' : location.pathname.startsWith('/teacher') ? '/teacher' : '/school-admin';
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -133,7 +133,7 @@ export default function QuestionnaireEditor() {
   useEffect(() => {
     if (!isNew && qid) {
       setLoading(true);
-      getQuestionnaire(qid).then(d => {
+      getQuestionnaire(qid, rolePrefix).then(d => {
         setDetail(d);
         setTitle(d.title); setDescription(d.description); setCategory(d.category); setStatus(d.status);
         setQuestions(d.questions || []); setContradictions(d.contradiction_groups || []);
@@ -148,7 +148,7 @@ export default function QuestionnaireEditor() {
 
   const handleCopyBuiltin = async () => {
     if (!qid) return;
-    const res = await copyQuestionnaire(qid);
+    const res = await copyQuestionnaire(qid, rolePrefix);
     message.success('已复制为可编辑副本');
     navigate(`${rolePrefix}/questionnaires/${res.id}/edit`);
   };
@@ -169,7 +169,7 @@ export default function QuestionnaireEditor() {
         message.success('问卷创建成功，请继续添加题目');
         navigate(`${rolePrefix}/questionnaires/${res.data.id}/edit`, { replace: true });
       } else {
-        await updateQuestionnaire(qid!, { ...payload, status });
+        await updateQuestionnaire(qid!, { ...payload, status }, rolePrefix);
         message.success('保存成功');
       }
     } finally { setSaving(false); }

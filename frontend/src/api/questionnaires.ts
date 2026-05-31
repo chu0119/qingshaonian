@@ -71,8 +71,9 @@ export async function getQuestionnaires(params?: Record<string, unknown>) {
   return res.data.data;
 }
 
-export async function getQuestionnaire(id: number): Promise<QuestionnaireDetail> {
-  const res = await client.get(`/questionnaires/${id}`);
+export async function getQuestionnaire(id: number, prefix?: string): Promise<QuestionnaireDetail> {
+  const base = prefix ? `${prefix}/questionnaires` : '/questionnaires';
+  const res = await client.get(`${base}/${id}`);
   return res.data.data;
 }
 
@@ -81,8 +82,9 @@ export async function createQuestionnaire(data: Record<string, unknown>) {
   return res.data;
 }
 
-export async function updateQuestionnaire(id: number, data: Record<string, unknown>) {
-  const res = await client.put(`/questionnaires/${id}`, data);
+export async function updateQuestionnaire(id: number, data: Record<string, unknown>, prefix?: string) {
+  const base = prefix ? `${prefix}/questionnaires` : '/questionnaires';
+  const res = await client.put(`${base}/${id}`, data);
   return res.data;
 }
 
@@ -91,8 +93,9 @@ export async function deleteQuestionnaire(id: number) {
   return res.data;
 }
 
-export async function copyQuestionnaire(id: number) {
-  const res = await client.post(`/questionnaires/${id}/copy`);
+export async function copyQuestionnaire(id: number, prefix?: string) {
+  const base = prefix ? `${prefix}/questionnaires` : '/questionnaires';
+  const res = await client.post(`${base}/${id}/copy`);
   return res.data.data;
 }
 
