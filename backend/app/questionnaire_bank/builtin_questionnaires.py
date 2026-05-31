@@ -1165,6 +1165,460 @@ def _jindun_family_questions() -> list[dict]:
     return questions
 
 
+# ---------------------------------------------------------------------------
+# 金盾护苗专用问卷 (6 套)
+# ---------------------------------------------------------------------------
+
+JINDUN_GRADES = "四年级,五年级,六年级,初一,初二,初三,高一,高二,高三"
+
+
+def _jindun_selfcognition_questions() -> list[dict]:
+    """青少年自我认知与心理特质调研 — 26 题"""
+    return [
+        _question("antisocial_1", "你认为自己在面对冲突时，最本质的反应是？", "antisocial",
+            options=[{"content": "尝试协商", "score": 1}, {"content": "感到不耐烦", "score": 2}, {"content": "想要压倒对方", "score": 3}, {"content": "极度愤怒并想毁灭对方", "score": 4}],
+            risk_tag="self_safety"),
+        _question("empathy_1", "当你意识到自己做了一件伤害他人的事，你的心情是？", "empathy",
+            options=[{"content": "非常愧疚", "score": 1}, {"content": "觉得无所谓", "score": 2}, {"content": "反而觉得有一种掌控感", "score": 3}, {"content": "觉得对方活该", "score": 4}],
+            risk_tag="self_safety"),
+        _question("egocentrism_1", "你是否觉得这个世界非常虚伪，只有自己才是清醒的？", "egocentrism",
+            options=[{"content": "不认同", "score": 1}, {"content": "有时会这样想", "score": 2}, {"content": "大部分时候如此", "score": 3}, {"content": "绝对如此", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_2", "你是否觉得规矩是用来约束弱者的，强者应当打破规矩？", "antisocial",
+            options=[{"content": "不同意", "score": 1}, {"content": "有时这么想", "score": 2}, {"content": "基本认同", "score": 3}, {"content": "完全同意", "score": 4}],
+            risk_tag="self_safety"),
+        _question("manipulation_1", "在追求目标的过程中，你是否认为采取一些不正当手段是必要的？", "manipulation",
+            options=[{"content": "绝不采取", "score": 1}, {"content": "偶尔尝试边缘手段", "score": 2}, {"content": "手段不重要，结果才重要", "score": 3}, {"content": "只要能成，什么代价都可以付", "score": 4}],
+            risk_tag="self_safety"),
+        _question("egocentrism_2", "你是否感到自己比周围的大部分人更有权利获得更好的待遇？", "egocentrism",
+            options=[{"content": "不觉得", "score": 1}, {"content": "有点", "score": 2}, {"content": "我本来就该优于他人", "score": 3}, {"content": "我是天选之人", "score": 4}],
+            risk_tag="self_safety"),
+        _question("empathy_2", "当你看到别人处于极度痛苦中，你的第一反应是？", "empathy",
+            options=[{"content": "想要帮助", "score": 1}, {"content": "感到不适", "score": 2}, {"content": "毫无波动", "score": 3}, {"content": "感到一丝兴奋", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("manipulation_2", "你是否有过为了获取利益，而欺骗身边最信任的人的经历？", "manipulation",
+            options=[{"content": "从未", "score": 1}, {"content": "小事偶尔", "score": 2}, {"content": "有过", "score": 3}, {"content": "这是生存常态", "score": 4}],
+            risk_tag="self_safety"),
+        _question("egocentrism_3", "你是否觉得自己比周围的人更聪明，总能轻易看透他们的底牌？", "egocentrism",
+            options=[{"content": "不觉得", "score": 1}, {"content": "有时", "score": 2}, {"content": "经常", "score": 3}, {"content": "我总是像上帝一样俯视他们", "score": 4}],
+            risk_tag="self_safety"),
+        _question("manipulation_3", "面对那些限制你自由的人，你内心的真实冲动是？", "manipulation",
+            options=[{"content": "理解并沟通", "score": 1}, {"content": "忍耐", "score": 2}, {"content": "彻底摆脱他们", "score": 3}, {"content": "报复并摧毁他们的权威", "score": 4}],
+            risk_tag="self_safety"),
+        _question("egocentrism_4", "你认为自己是否拥有某种「别人无法察觉」的阴暗特质", "egocentrism",
+            options=[{"content": "没有", "score": 1}, {"content": "可能有", "score": 2}, {"content": "有，且我很享受", "score": 3}, {"content": "那是我最强大的武器", "score": 4}],
+            risk_tag="self_safety"),
+        _question("manipulation_4", "在群体中，你更希望自己是？", "manipulation",
+            options=[{"content": "贡献者", "score": 1}, {"content": "参与者", "score": 2}, {"content": "观察者/引导者", "score": 3}, {"content": "统治者/操控者", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_3", "如果犯错不会被发现，你会考虑做违法的事吗？", "antisocial",
+            options=[{"content": "绝不会", "score": 1}, {"content": "可能会考虑", "score": 2}, {"content": "绝对不会做", "score": 3}, {"content": "我每天都在寻找这种机会", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("egocentrism_5", "你是否认为大多数人都很愚蠢，很容易被煽动？", "egocentrism",
+            options=[{"content": "不同意", "score": 1}, {"content": "偶尔觉得", "score": 2}, {"content": "基本如此", "score": 3}, {"content": "他们就是为了被我利用而存在的", "score": 4}],
+            risk_tag="self_safety"),
+        _question("empathy_3", "当你感到被他人冒犯时，报复行为是否会让你感到快感？", "empathy",
+            options=[{"content": "不会", "score": 1}, {"content": "偶尔会有", "score": 2}, {"content": "经常感到快感", "score": 3}, {"content": "这是我唯一的动力来源", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_4", "你是否认为「法律」是阻止你实现真正抱负的最大障碍", "antisocial",
+            options=[{"content": "不认为", "score": 1}, {"content": "一点点", "score": 2}, {"content": "大部分时间是", "score": 3}, {"content": "它是奴役人类的锁链", "score": 4}],
+            risk_tag="self_safety"),
+        _question("manipulation_5", "在处理人际关系中，你是否倾向于把别人看作「工具」或「资产」", "manipulation",
+            options=[{"content": "视他们为朋友", "score": 1}, {"content": "有时会衡量得失", "score": 2}, {"content": "经常如此", "score": 3}, {"content": "所有人都是我的工具", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_5", "你是否在某些时刻有过极其强烈的破坏冲动？", "antisocial",
+            options=[{"content": "从没", "score": 1}, {"content": "很累时偶尔会有", "score": 2}, {"content": "经常有", "score": 3}, {"content": "我必须随时克制这种冲动", "score": 4}],
+            risk_tag="self_safety"),
+        _question("manipulation_6", "如果让你在「被他人认可」和「拥有掌控他人的力量」中选一个，你选", "manipulation",
+            options=[{"content": "被认可", "score": 1}, {"content": "都会选", "score": 2}, {"content": "掌控力", "score": 3}, {"content": "没有掌控力，认可毫无意义", "score": 4}],
+            risk_tag="self_safety"),
+        _question("empathy_4", "对于那些弱者，你真实的看法是？", "empathy",
+            options=[{"content": "同情", "score": 1}, {"content": "无感", "score": 2}, {"content": "他们理应被淘汰", "score": 3}, {"content": "既然弱，就该被我随意支配", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_6", "你是否有过在情绪极度失控时，完全忘记自己在做什么的经历？", "antisocial",
+            options=[{"content": "没有", "score": 1}, {"content": "极少", "score": 2}, {"content": "有过", "score": 3}, {"content": "那种失控的感觉让我迷醉", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_7", "如果社会秩序崩溃，你觉得你会成为？", "antisocial",
+            options=[{"content": "幸存者", "score": 1}, {"content": "寻找秩序的人", "score": 2}, {"content": "争夺资源的人", "score": 3}, {"content": "制定新规则的掠夺者", "score": 4}],
+            risk_tag="self_safety"),
+        _question("egocentrism_6", "你是否觉得自己与社会格格不入，甚至有一种被放逐的疏离感？", "egocentrism",
+            options=[{"content": "不，我融入得很好", "score": 1}, {"content": "有时", "score": 2}, {"content": "经常", "score": 3}, {"content": "这个世界配不上我", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_8", "对于你未来的犯罪风险，你如何评估？", "antisocial",
+            options=[{"content": "绝无可能", "score": 1}, {"content": "不好说", "score": 2}, {"content": "取决于社会对我的态度", "score": 3}, {"content": "我已经走在了犯罪的边缘，且我喜欢这样", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("empathy_5", "你是否相信人性本恶，一切道德不过是生存的伪装？", "empathy",
+            options=[{"content": "不信", "score": 1}, {"content": "有点信", "score": 2}, {"content": "认同", "score": 3}, {"content": "彻底认同", "score": 4}],
+            risk_tag="self_safety"),
+        _question("antisocial_9", "如果让你给自己写一段墓志铭，你会写什么？", "antisocial",
+            options=[{"content": "一个善良的人", "score": 1}, {"content": "一个普通的一生", "score": 2}, {"content": "一个试图改变现状的人", "score": 3}, {"content": "一个征服过这个世界的掠夺者", "score": 4}],
+            risk_tag="self_safety"),
+    ]
+
+
+def _jindun_socialrule_questions() -> list[dict]:
+    """青少年社会规则与生存技能认知问卷 — 25 题"""
+    return [
+        _question("violent_1", "你是否有过为了「教训」某人，而组织或参与「叫人」堵截的经历", "violent_behavior",
+            options=[{"content": "从无", "score": 1}, {"content": "偶尔看热闹", "score": 2}, {"content": "参与过", "score": 3}, {"content": "经常带头组织", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("violent_2", "当你感到愤怒时，是否尝试过通过暴力手段（打、砸、抢）解决问题？", "violent_behavior",
+            options=[{"content": "从不", "score": 1}, {"content": "想过但没做", "score": 2}, {"content": "有过几次", "score": 3}, {"content": "这是我的惯用手段", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("marginal_1", "你身边是否有朋友携带管制器具（如刀具、弩）？你对此怎么看？", "marginal_contact",
+            options=[{"content": "很危险，离他们远点", "score": 1}, {"content": "偶尔见过", "score": 2}, {"content": "觉得挺酷的", "score": 3}, {"content": "我自己也会携带", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_2", "你是否曾私下阅览、散布带有色情或极端暴力内容的网络链接？", "marginal_contact",
+            options=[{"content": "从未接触", "score": 1}, {"content": "偶然看到过", "score": 2}, {"content": "经常分享", "score": 3}, {"content": "甚至会主动寻找", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_3", "在网络游戏或社交群中，是否有过涉及「大额赌资」的交易或参与", "marginal_contact",
+            options=[{"content": "从不", "score": 1}, {"content": "偶尔小玩", "score": 2}, {"content": "参与过几次", "score": 3}, {"content": "经常赌，金额较大", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_4", "你是否有过进入未成年人禁止入内的场所（如KTV包厢、酒吧、网咖）的经历？", "marginal_contact",
+            options=[{"content": "从不去", "score": 1}, {"content": "因为好奇进去过", "score": 2}, {"content": "经常去", "score": 3}, {"content": "那是我的常驻点", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_5", "对于非法借贷或「看场子」、「拿钱买平安」这种事，你觉得", "marginal_contact",
+            options=[{"content": "非法，坚决抵制", "score": 1}, {"content": "跟我没关系", "score": 2}, {"content": "有时不得不做", "score": 3}, {"content": "这是我的生存方式", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("violent_3", "你是否有过拿走或毁坏他人财物（不限于学校公物）的经历？", "violent_behavior",
+            options=[{"content": "从未", "score": 1}, {"content": "偶尔无心之失", "score": 2}, {"content": "有过", "score": 3}, {"content": "经常，觉得刺激", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("violent_4", "如果有人邀请你参与「搞点钱」（如盗窃、抢夺），你会", "violent_behavior",
+            options=[{"content": "报警", "score": 1}, {"content": "拒绝", "score": 2}, {"content": "听听具体怎么做", "score": 3}, {"content": "立刻加入", "score": 4}],
+            risk_tag="self_safety"),
+        _question("marginal_6", "你是否有过在不知情或被引诱的情况下，尝试接触违禁药物/毒品的经历？", "marginal_contact",
+            options=[{"content": "绝不接触", "score": 1}, {"content": "听人提过", "score": 2}, {"content": "见过但没动", "score": 3}, {"content": "尝试过", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("rule_1", "你认为在学校里「以多欺少」是否是建立威信的捷径", "rule_disregard",
+            options=[{"content": "不是", "score": 1}, {"content": "有点", "score": 2}, {"content": "有时有效", "score": 3}, {"content": "这是唯一的真理", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("rule_2", "如果你看到有人在霸凌他人，你是否会加入以确保自己不被盯上？", "rule_disregard",
+            options=[{"content": "绝不加入", "score": 1}, {"content": "犹豫", "score": 2}, {"content": "为了安全会加入", "score": 3}, {"content": "经常参与", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_7", "你是否有过离家出走并结伙在社会上流浪的经历？", "marginal_contact",
+            options=[{"content": "从无", "score": 1}, {"content": "有过一次", "score": 2}, {"content": "经常", "score": 3}, {"content": "已经习惯", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_8", "对于网络上的淫秽色情表演或买卖，你是否有过付费参与？", "marginal_contact",
+            options=[{"content": "从未", "score": 1}, {"content": "偶然点过", "score": 2}, {"content": "有过", "score": 3}, {"content": "常态化参与", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("violent_5", "你是否曾因为抢夺他人财物或索要财物而受到过警告？", "violent_behavior",
+            options=[{"content": "从未", "score": 1}, {"content": "有过争执", "score": 2}, {"content": "有过一次", "score": 3}, {"content": "经常", "score": 4, "is_risk_option": True}],
+            risk_tag="self_safety"),
+        _question("marginal_9", "如果有人让你帮忙传带「违禁品」（刀具、违禁药），你会", "marginal_contact",
+            options=[{"content": "拒绝", "score": 1}, {"content": "问清楚是什么", "score": 2}, {"content": "看在钱的份上", "score": 3}, {"content": "经常帮这类人跑腿", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("rule_3", "在网络论坛或社群里，你是否喜欢发表针对他人进行「人肉」或恐吓的言论", "rule_disregard",
+            options=[{"content": "从不", "score": 1}, {"content": "偶尔", "score": 2}, {"content": "经常", "score": 3}, {"content": "以此为乐", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("rule_4", "你是否认为自己还没到「判刑年龄」，所以做点坏事也没什么大不了", "rule_disregard",
+            options=[{"content": "法律很有威慑力", "score": 1}, {"content": "有时心存侥幸", "score": 2}, {"content": "觉得没关系", "score": 3}, {"content": "这是我敢作恶的底气", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("violent_6", "你是否有过通过虚假交易、诱骗他人获取利益的行为？", "violent_behavior",
+            options=[{"content": "没有", "score": 1}, {"content": "偶尔", "score": 2}, {"content": "有过", "score": 3}, {"content": "这是主要收入来源", "score": 4}],
+            risk_tag="self_safety"),
+        _question("violent_7", "在参与群体争斗时，你通常是负责指挥、动手还是旁观？", "violent_behavior",
+            options=[{"content": "从不参与", "score": 1}, {"content": "旁观", "score": 2}, {"content": "动手", "score": 3}, {"content": "指挥者", "score": 4}],
+            risk_tag="self_safety"),
+        _question("violent_8", "你是否有过非法进入他人居住地、翻越围墙的经历？", "violent_behavior",
+            options=[{"content": "没有", "score": 1}, {"content": "好奇做过", "score": 2}, {"content": "有过", "score": 3}, {"content": "经常", "score": 4}],
+            risk_tag="self_safety"),
+        _question("rule_5", "对于法律规定的禁止事项，你觉得「只要不被抓到」就是安全的吗", "rule_disregard",
+            options=[{"content": "不是", "score": 1}, {"content": "某种意义上是", "score": 2}, {"content": "对的", "score": 3}, {"content": "这是常识", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("rule_6", "如果你的同伙因为做坏事被抓了，你会第一时间？", "rule_disregard",
+            options=[{"content": "提供线索", "score": 1}, {"content": "撇清关系", "score": 2}, {"content": "担心被供出", "score": 3}, {"content": "策划营救/报复", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("rule_7", "你是否觉得生活在法律边缘的感觉很「带劲」", "rule_disregard",
+            options=[{"content": "不，很恐惧", "score": 1}, {"content": "平平淡淡", "score": 2}, {"content": "确实有点", "score": 3}, {"content": "那是我的追求", "score": 4}],
+            risk_tag="safety_awareness"),
+        _question("marginal_10", "在你的社交圈中，有谁是经常因为违法违纪被警察带走的吗？", "marginal_contact",
+            options=[{"content": "没有", "score": 1}, {"content": "听说过", "score": 2}, {"content": "有我的朋友", "score": 3}, {"content": "那就是我经常出入的圈子", "score": 4}],
+            risk_tag="safety_awareness"),
+    ]
+
+
+def _jindun_familyenv_questions() -> list[dict]:
+    """家庭成长环境与亲子互动观察调研 — 23 题"""
+    return [
+        _question("comm_1", "当你和父母意见不一致时，他们通常会？", "communication",
+            options=[{"content": "坐下来讨论", "score": 1}, {"content": "听之任之", "score": 2}, {"content": "强迫我听从", "score": 3}, {"content": "只要我闹，他们就答应", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("comm_2", "在家中，你觉得你的感受会被认真倾听吗？", "communication",
+            options=[{"content": "是的，经常", "score": 1}, {"content": "有时", "score": 2}, {"content": "很少", "score": 3}, {"content": "完全不被关心", "score": 4, "is_risk_option": True}],
+            risk_tag="family_support"),
+        _question("parent_1", "当你在学习或生活中遇到挫折，父母的第一反应是？", "parenting_style",
+            options=[{"content": "鼓励并陪我解决", "score": 1}, {"content": "询问原因", "score": 2}, {"content": "指责我没做好", "score": 3}, {"content": "替我全部处理好", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("support_1", "你父母是否经常向你抱怨工作或生活中的烦恼？", "emotional_support",
+            options=[{"content": "从不，他们保护我", "score": 1}, {"content": "偶尔", "score": 2}, {"content": "经常，把我也卷进去", "score": 3}, {"content": "他们只顾自己", "score": 4}],
+            risk_tag="family_support"),
+        _question("parent_2", "在家里，关于你的事情，多大程度上由你自己做主？", "parenting_style",
+            options=[{"content": "大部分事务由我参与决定", "score": 1}, {"content": "只要不闯祸就行", "score": 2}, {"content": "必须完全按要求做", "score": 3}, {"content": "我想干什么就干什么", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("support_2", "你父母是否关注你学校之外的朋友圈？", "emotional_support",
+            options=[{"content": "了解并尊重", "score": 1}, {"content": "基本不问", "score": 2}, {"content": "严厉盘查", "score": 3}, {"content": "完全不在意", "score": 4}],
+            risk_tag="family_support"),
+        _question("support_3", "当你取得进步时，父母会？", "emotional_support",
+            options=[{"content": "肯定我的努力", "score": 1}, {"content": "点头认可", "score": 2}, {"content": "觉得这是应该的", "score": 3}, {"content": "物质奖励", "score": 4}],
+            risk_tag="family_support"),
+        _question("parent_3", "你是否感到家中的规矩多到让人窒息？", "parenting_style",
+            options=[{"content": "规矩适度且合理", "score": 1}, {"content": "没什么规矩", "score": 2}, {"content": "非常多且严苛", "score": 3}, {"content": "家里完全没规矩", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("parent_4", "如果犯了错，父母最常用的惩罚方式是？", "parenting_style",
+            options=[{"content": "讲道理/共同承担后果", "score": 1}, {"content": "没收电子产品", "score": 2}, {"content": "打骂或冷暴力", "score": 3}, {"content": "只要道歉就原谅", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("comm_3", "你和父母在一起的时间里，大家的状态是？", "communication",
+            options=[{"content": "互动交流", "score": 1}, {"content": "各自玩手机", "score": 2}, {"content": "父母说教", "score": 3}, {"content": "互不干扰", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("parent_5", "你认为父母对你的期待是？", "parenting_style",
+            options=[{"content": "健康成长", "score": 1}, {"content": "平安就好", "score": 2}, {"content": "出人头地/按他们设想走", "score": 3}, {"content": "没期待/无所谓", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("comm_4", "家里如果有重大的经济或生活变动，你会知道吗？", "communication",
+            options=[{"content": "会一起商量", "score": 1}, {"content": "隐约知道", "score": 2}, {"content": "绝口不提", "score": 3}, {"content": "从不关心", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("comm_5", "你是否觉得父母在感情上更关注他们自己，而非你？", "communication",
+            options=[{"content": "不是，我很被重视", "score": 1}, {"content": "说不好", "score": 2}, {"content": "经常感到被忽视", "score": 3}, {"content": "确实如此", "score": 4}],
+            risk_tag="family_support"),
+        _question("support_4", "父母会干涉你的个人空间（如翻看日记、房间）吗？", "emotional_support",
+            options=[{"content": "不会，尊重隐私", "score": 1}, {"content": "偶尔查看", "score": 2}, {"content": "经常随意进出", "score": 3}, {"content": "我没有个人空间", "score": 4}],
+            risk_tag="family_support"),
+        _question("support_5", "当你生病或情绪低落时，家庭的支持力是？", "emotional_support",
+            options=[{"content": "全力照顾", "score": 1}, {"content": "简单的关怀", "score": 2}, {"content": "催促赶快好起来", "score": 3}, {"content": "无人过问", "score": 4, "is_risk_option": True}],
+            risk_tag="family_support"),
+        _question("autonomy_1", "你觉得家里最缺乏的是什么？", "autonomy",
+            options=[{"content": "沟通", "score": 1}, {"content": "钱", "score": 2}, {"content": "自由", "score": 3}, {"content": "爱与关心", "score": 4}],
+            risk_tag="family_support"),
+        _question("support_6", "父母之间如果吵架，会影响到你的心情吗？", "emotional_support",
+            options=[{"content": "较少/会事后解释", "score": 1}, {"content": "会影响一点", "score": 2}, {"content": "经常波及到我", "score": 3}, {"content": "我已经习惯了", "score": 4}],
+            risk_tag="family_support"),
+        _question("parent_6", "对于你的未来规划，父母的做法是？", "parenting_style",
+            options=[{"content": "尊重我的兴趣", "score": 1}, {"content": "不管", "score": 2}, {"content": "强行规划", "score": 3}, {"content": "完全没有规划", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("parent_7", "如果让你评价父母，你会说是？", "parenting_style",
+            options=[{"content": "良师益友", "score": 1}, {"content": "房东", "score": 2}, {"content": "严厉的管教者", "score": 3}, {"content": "陌生人", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("support_7", "你是否曾因为父母的教育方式感到绝望？", "emotional_support",
+            options=[{"content": "从没想过", "score": 1}, {"content": "偶尔会有", "score": 2}, {"content": "经常有", "score": 3}, {"content": "一直很绝望", "score": 4}],
+            risk_tag="family_support"),
+        _question("support_8", "父母是否会当着外人的面数落你的短处？", "emotional_support",
+            options=[{"content": "从不，会维护我的自尊", "score": 1}, {"content": "偶尔开玩笑", "score": 2}, {"content": "经常，为了让我脸红", "score": 3}, {"content": "随便说", "score": 4}],
+            risk_tag="family_support"),
+        _question("comm_6", "当你想和父母交流内心想法时，你通常是？", "communication",
+            options=[{"content": "主动且顺畅", "score": 1}, {"content": "试探性地聊", "score": 2}, {"content": "觉得没用而放弃", "score": 3}, {"content": "完全不交流", "score": 4}],
+            risk_tag="family_relationship"),
+        _question("autonomy_2", "你认为家庭在你成长中的作用是？", "autonomy",
+            options=[{"content": "最坚强的后盾", "score": 1}, {"content": "维持基本生活", "score": 2}, {"content": "压力来源", "score": 3}, {"content": "可有可无", "score": 4, "is_risk_option": True}],
+            risk_tag="family_support"),
+    ]
+
+
+def _jindun_lifestyle_questions() -> list[dict]:
+    """成长阶段生活习惯与环境适应性调研 — 50 题"""
+    q = []
+    # Part 1: 生活作息与自我管理 (1-15)
+    daily = [
+        ("daily_1", "周末或假期，你最常待的地方是？", ["家里", "图书馆", "书店/球场", "网吧/游戏厅/娱乐场所"]),
+        ("daily_2", "当你感到压力或无聊时，你更倾向于？", ["运动/听歌", "睡觉", "打游戏", "找朋友聚会或去消遣"]),
+        ("daily_3", "对于「深夜在外玩耍」这件事，你怎么看？", ["很危险，要回家", "偶尔可以，看情况", "很酷，没人管的感觉", "常态，甚至觉得没意思"]),
+        ("daily_4", "你是否有过因为玩乐而不想回家的经历？", ["从未", "很少", "有过几次", "经常"]),
+        ("daily_5", "你觉得如果老师没查考勤，不去上课会有什么后果？", ["影响学习，必须去", "没必要去", "无所谓，自由支配时间", "如果不查，我巴不得每天都不去"]),
+        ("daily_6", "晚上你会因为玩手机/电脑而熬夜吗？", ["从不", "偶尔", "经常", "每晚必熬"]),
+        ("daily_7", "你身边有同学会抽烟吗？你对此的看法是？", ["很反感", "不关心", "无所谓", "觉得很成熟，想尝试"]),
+        ("daily_8", "你觉得喝酒对年轻人来说是？", ["伤害身体", "社交工具", "缓解烦恼", "必经的成长礼"]),
+        ("daily_9", "你是否曾经为了躲避某件事而选择逃避校园生活（逃学）？", ["从不", "只有一次", "偶尔", "习惯性"]),
+        ("daily_10", "你觉得学校规定的校外离校时间合理吗？", ["很合理", "有点严", "没意义", "我想什么时候走就什么时候走"]),
+        ("daily_11", "如果让你选择，你更喜欢待在学校还是在社会上打拼？", ["学校", "学校但也想赚钱", "社会上，自由", "社会上，学校太压抑"]),
+        ("daily_12", "你是否会对父母隐瞒自己的行踪？", ["从不", "很少", "有时", "经常，为了不被管"]),
+        ("daily_13", "你觉得一个人在外面过夜的难度在于？", ["安全", "没地方住", "没钱", "父母会找"]),
+        ("daily_14", "你是否尝试过在没有家人的情况下长时间外出？", ["从不", "偶尔", "常有", "已多次离家出走"]),
+        ("daily_15", "你是否觉得学校的纪律是对你自由的限制？", ["不限制", "有一点", "很大程度", "极度讨厌"]),
+    ]
+    for code, title, opts in daily:
+        is_risk = code == "daily_14" and True or False
+        q.append(_question(code, title, "daily_habits",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="safety_awareness"))
+
+    # Part 2: 数字环境与内容接触 (16-30)
+    digital = [
+        ("digital_1", "你每天在网络（游戏/短视频）上花费的时间大约是？", ["<1小时", "1-3小时", "3-6小时", "6小时以上"]),
+        ("digital_2", "你平时关注的网络博主，内容多倾向于？", ["学习/科普", "生活娱乐", "游戏/八卦", "暴力/猎奇/社会负面"]),
+        ("digital_3", "当网络信息与现实发生冲突，你觉得？", ["以现实为准", "半信半疑", "谁更有道理信谁", "网络更有趣"]),
+        ("digital_4", "你是否看过带有暴力、色情等内容的视频？", ["从没", "偶然点开", "偶尔看", "这是我的兴趣"]),
+        ("digital_5", "你是否在玩游戏时，因为输了而产生极其强烈的暴力冲动？", ["没有", "偶尔吐槽", "有过破坏行为", "习惯性砸键盘鼠标"]),
+        ("digital_6", "你是否加入过特定的游戏群或社交群，讨论一些「刺激」的话题？", ["没有", "很少", "经常", "那是我的核心圈子"]),
+        ("digital_7", "如果网络上的朋友邀请你去线下聚会，你会？", ["拒绝", "带上好友", "偷偷去", "毫不犹豫去"]),
+        ("digital_8", "你觉得网络上的负面言论是？", ["有害的", "无所谓", "正常的抒发", "我喜欢发表这种言论"]),
+        ("digital_9", "你是否有过利用网络进行欺凌或传播他人隐私的经历？", ["从没", "想过但没做", "开玩笑做过", "经常以此为乐"]),
+        ("digital_10", "你是否觉得网络世界比现实世界更公平？", ["不是", "有时觉得", "差不多", "绝对是"]),
+        ("digital_11", "看到宣扬极端思想的内容，你会？", ["举报", "忽视", "觉得挺有道理", "产生共鸣并传播"]),
+        ("digital_12", "你是否购买过网络账号或违规游戏道具？", ["没有", "买过一个", "常买", "以此交易获利"]),
+        ("digital_13", "你在网络上遇到纠纷时，倾向于？", ["沟通", "拉黑", "对骂", "线下寻仇"]),
+        ("digital_14", "你觉得网络上的内容是否应该受到严格过滤？", ["应该", "无所谓", "限制太多", "没必要"]),
+        ("digital_15", "你是否曾因为网络内容而模仿过里面的危险行为？", ["从没", "偶尔", "常有", "觉得很有挑战"]),
+    ]
+    for code, title, opts in digital:
+        is_risk = code == "digital_15" and True or False
+        q.append(_question(code, title, "digital_env",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="internet_use"))
+
+    # Part 3: 社交圈层与法治意识 (31-50)
+    social = [
+        ("social_1", "你觉得学校外面的「混混」看起来怎么样？", ["很危险", "不好说", "有点羡慕", "想和他们交朋友"]),
+        ("social_2", "当有人带头组织对抗学校/权威时，你会？", ["远离", "看热闹", "参与", "带头起哄"]),
+        ("social_3", "你是否参加过打架斗殴或旁观过群体性冲突？", ["从没", "旁观过", "参与过", "是组织者"]),
+        ("social_4", "你认为「讲义气」是指？", ["互相帮助学习", "困难时支援", "哪怕错也要一起", "不计代价服从大哥"]),
+        ("social_5", "你是否见过同学参与赌博（包括打牌赌钱等）？", ["没见过", "见过但没参与", "参与过少量", "经常参与"]),
+        ("social_6", "你觉得变相赌博（如抽奖、博彩）是？", ["违法", "娱乐", "发财之道", "人生必玩"]),
+        ("social_7", "你是否接触过封建迷信、算命等活动？", ["从不", "偶尔", "感兴趣", "经常参与"]),
+        ("social_8", "你是否出入过酒吧、网吧、KTV等未成年人禁入场所？", ["从不", "偶尔好奇", "常去", "那是我的日常"]),
+        ("social_9", "面对法律规定，你觉得？", ["必须遵守", "看情况", "那是管弱者的", "我有办法规避"]),
+        ("social_10", "如果有人邀请你加入一个「秘密组织」，你会？", ["拒绝", "先观察", "很兴奋", "立刻加入"]),
+        ("social_11", "当你看到有人欺负弱者，你的立场通常是？", ["站出来制止", "走开", "默许", "加入欺负的一方"]),
+        ("social_12", "你觉得「法律」和「帮规」哪个在学校更好使？", ["法律", "都不好使", "看情况", "拳头/势力最好使"]),
+        ("social_13", "你是否尝试过盗窃或损坏公物？", ["没有", "无意损坏", "有过", "觉得刺激"]),
+        ("social_14", "对于社会新闻中关于犯罪的内容，你感到？", ["恐惧", "反思", "无动于衷", "甚至想研究"]),
+        ("social_15", "你觉得在社会上立足需要具备什么？", ["知识", "能力", "狠劲", "背景/势力"]),
+        ("social_16", "如果警察找上门，你的第一反应是？", ["不知情", "紧张", "试图掩盖", "觉得麻烦"]),
+        ("social_17", "你是否有过离家出走并与社会不良人员共处的经历？", ["没有", "短暂接触", "有过", "习惯与他们共处"]),
+        ("social_18", "你认为「不良行为」的标准是谁定的？", ["国家", "社会", "学校", "强加给我们的枷锁"]),
+        ("social_19", "当你感到孤独时，你更倾向于找谁？", ["家人", "朋友", "社会上的玩伴", "一个人待着"]),
+        ("social_20", "你未来最想成为什么样的人？", ["对社会有贡献", "普通人", "有钱有势", "不受任何人约束的王者"]),
+    ]
+    for code, title, opts in social:
+        is_risk = code in ("social_3", "social_17") and True or False
+        q.append(_question(code, title, "social_law",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="self_safety"))
+
+    return q
+
+
+def _jindun_socialvalue_questions() -> list[dict]:
+    """青少年社会价值观与校内外认知调研 — 30 题"""
+    q = []
+    # Part 1: 秩序与规则认知 (1-10)
+    rule = [
+        ("rule_cog_1", "对于校园内严格的规章制度，你认为？", ["保护秩序", "有待商榷", "毫无意义的枷锁", "用来扼杀个性的工具"]),
+        ("rule_cog_2", "你觉得「法律」在现实社会中是？", ["公平的正义", "有钱人的游戏", "约束弱者的工具", "应当被推翻的束缚"]),
+        ("rule_cog_3", "看到学校设施被破坏，你的第一反应是？", ["心疼/惋惜", "不关我事", "这种东西早该坏了", "破坏的感觉很解气"]),
+        ("rule_cog_4", "如果让你评价「权威」（老师/长辈/管理层），你倾向于？", ["尊重", "中立", "怀疑", "本能抵触"]),
+        ("rule_cog_5", "你认为群体暴乱或大规模抵制活动通常是？", ["不可取的", "无奈之举", "正义的呐喊", "改变世界的唯一途径"]),
+        ("rule_cog_6", "面对社会上的不平等现象，你觉得最有效的解决方法是？", ["通过法律途径改进", "努力提升自己", "以暴制暴", "彻底毁灭旧秩序"]),
+        ("rule_cog_7", "你认为「人性」本质上是？", ["善良的", "复杂的", "自私且丑陋的", "恶毒且不可救药的"]),
+        ("rule_cog_8", "如果学校发生群体性违纪，你觉得参与者是？", ["捣乱者", "跟风者", "勇士", "反抗压迫的先锋"]),
+        ("rule_cog_9", "你是否觉得世界上的资源分配应该由强力部门重新洗牌？", ["不同意", "无所谓", "有时想过", "非常赞同"]),
+        ("rule_cog_10", "你对「社会责任感」这个词的看法是？", ["很重要", "无感", "空话套话", "统治者的谎言"]),
+    ]
+    for code, title, opts in rule:
+        q.append(_question(code, title, "rule_cognition",
+            options=[{"content": o, "score": i+1} for i, o in enumerate(opts)],
+            risk_tag="safety_awareness"))
+
+    # Part 2: 破坏性倾向探测 (11-20)
+    destructive = [
+        ("destr_1", "如果你可以随意修改一条学校准则且无人知晓，你会？", ["增加福利", "什么都不改", "删除所有约束", "让学校彻底瘫痪"]),
+        ("destr_2", "对于造成群体恐慌的新闻事件，你通常会？", ["感到担忧", "不关心", "觉得刺激", "希望能看到更多这种失控场面"]),
+        ("destr_3", "你认为那些被社会公认的「坏人」，其实是？", ["罪有应得", "不幸的", "看透世俗的人", "被体制逼出来的英雄"]),
+        ("destr_4", "当看到社会失控的情景（如骚乱、火灾），你的第一反应是？", ["紧张/报警", "旁观", "兴奋", "想加入进去"]),
+        ("destr_5", "你是否觉得「校园暴力」在某种程度上是权力的正常体现？", ["不正常", "错误", "合理的阶级演化", "非常合理"]),
+        ("destr_6", "如果你感到被某人冒犯，你倾向于？", ["沟通", "冷处理", "诋毁他", "报复让他毁灭"]),
+        ("destr_7", "你觉得人类文明的存续是？", ["宝贵的", "平淡的", "充满谎言的", "多余的/应该重置的"]),
+        ("destr_8", "对待「异见者」，你的做法是？", ["包容", "忽视", "排挤", "让他消失"]),
+        ("destr_9", "当你看到他人痛苦时，你感到？", ["同情", "无感", "一丝快意", "甚至觉得可笑"]),
+        ("destr_10", "你认为「善良」的人在现代社会是？", ["可贵的", "普通的", "愚蠢的", "软弱且注定被欺负的"]),
+    ]
+    for code, title, opts in destructive:
+        is_risk = code == "destr_4" and True or False
+        q.append(_question(code, title, "destructive",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="self_safety"))
+
+    # Part 3: 深度投射与极端测试 (21-30)
+    projection = [
+        ("proj_1", "你是否认为现有的社会管理系统应该被彻底瘫痪？", ["绝对不", "不可能", "想过但没做", "这是我的人生理想"]),
+        ("proj_2", "如果你发现有人在做坏事，你会？", ["阻止", "走开", "默许", "想参与并给予指导"]),
+        ("proj_3", "你觉得「死亡」或「毁灭」在人生观中意味着？", ["终点", "必然", "一种解脱", "最终的终极平等"]),
+        ("proj_4", "你认为那些维护秩序的人（警察/老师）是？", ["保护者", "普通职员", "压迫工具", "敌对目标"]),
+        ("proj_5", "在你最阴暗的心理活动里，你最想做的一件事是？", ["帮助他人", "自我提升", "羞辱他人", "制造混乱破坏一切"]),
+        ("proj_6", "你觉得校园里的「规训」是？", ["必要的", "无聊的", "奴化训练", "对灵魂的摧残"]),
+        ("proj_7", "如果社会陷入混乱，你觉得这对你而言是？", ["灾难", "混乱", "机会", "狂欢"]),
+        ("proj_8", "你在评价他人的成就时，倾向于？", ["认可", "羡慕", "嫉妒", "认为他是靠肮脏手段得来的"]),
+        ("proj_9", "你对「正义」的定义是？", ["法律与道德", "相对的", "胜利者书写的", "并不存在"]),
+        ("proj_10", "如果有选择，你是否愿意成为一个破坏现状的「反面角色」？", ["不，我想做正面", "无所谓", "愿意尝试", "这是我渴望的身份"]),
+    ]
+    for code, title, opts in projection:
+        is_risk = code in ("proj_1", "proj_7") and True or False
+        q.append(_question(code, title, "projection",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="self_safety"))
+
+    return q
+
+
+def _jindun_schoolsupport_questions() -> list[dict]:
+    """校园生活与个人成长支持度问卷 — 30 题"""
+    q = []
+    # Part 1: 家庭环境与监护 (1-10)
+    family = [
+        ("guard_1", "每天放学后，你最希望家里有人吗？", ["当然希望", "有时想", "无所谓", "家里没人我也习惯了"]),
+        ("guard_2", "当你在学校遇到麻烦，第一个想到的求助对象是？", ["父母", "亲戚", "老师", "没人可以求助"]),
+        ("guard_3", "父母或监护人对你平时在学校的情况了解多少？", ["非常了解", "偶尔关心", "基本不管", "完全不关心"]),
+        ("guard_4", "你和父母/监护人有深度交流吗？", ["经常谈心", "偶尔聊聊", "只谈吃饭睡觉", "基本不说话"]),
+        ("guard_5", "你是否经常需要独自一人在家过夜？", ["从不", "偶尔", "经常", "大部分时间都是独自居住"]),
+        ("guard_6", "家里发生大事时，你会被告知或参与决策吗？", ["是的", "偶尔", "从来不", "不知道家里发生了什么"]),
+        ("guard_7", "如果父母长期不在身边，你会感到？", ["孤独", "习惯了", "自由", "被抛弃"]),
+        ("guard_8", "你觉得父母对你的爱是否带条件（如成绩好才爱）？", ["不，无论如何都爱", "有时觉得", "有条件", "感觉不到爱"]),
+        ("guard_9", "你在家里是否有明确的依靠（如祖父母或可靠的长辈）？", ["有", "有一个", "很少", "没有"]),
+        ("guard_10", "你是否曾因为家里没人管而感到自卑？", ["没有", "偶尔", "经常", "已经是常态"]),
+    ]
+    for code, title, opts in family:
+        is_risk = code == "guard_5" and True or False
+        q.append(_question(code, title, "family_guardian",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="family_support"))
+
+    # Part 2: 学习状态与未来预期 (11-20)
+    learning = [
+        ("learn_1", "对于现在的学习生活，你感到？", ["充满希望", "平淡", "迷茫", "想要逃离"]),
+        ("learn_2", "你是否曾经想过辍学，理由通常是？", ["从没想过", "偶尔压力大想歇歇", "觉得读书没用", "家里没钱或不让读"]),
+        ("learn_3", "如果初中毕业，你的选择是？", ["读高中/职校", "犹豫中", "没想过", "直接去打工"]),
+        ("learn_4", "你认为学历对你未来的重要性是？", ["非常重要", "挺重要", "无所谓", "一点用没有"]),
+        ("learn_5", "在学校里，你是否有因为「经济条件」或「家庭原因」而不想参加班级活动？", ["从不", "很少", "有时", "经常"]),
+        ("learn_6", "你对未来的职业规划是？", ["有明确目标", "有个大概方向", "走一步看一步", "没想过，活着就行"]),
+        ("learn_7", "当看到同学有父母接送或给予物质支持，你的感受是？", ["平常心", "小羡慕", "酸楚", "很难过"]),
+        ("learn_8", "你觉得老师对你的关注度如何？", ["很关注", "正常", "很少关注", "完全被忽视"]),
+        ("learn_9", "如果学校提供助学金，你会申请吗？", ["不需要", "可能", "需要但不敢说", "很需要且正在争取"]),
+        ("learn_10", "你认为自己是一个「受欢迎」的孩子吗？", ["是的", "还好", "不太确定", "我是多余的"]),
+    ]
+    for code, title, opts in learning:
+        q.append(_question(code, title, "learning_future",
+            options=[{"content": o, "score": i+1} for i, o in enumerate(opts)],
+            risk_tag="academic_pressure"))
+
+    # Part 3: 社会支持与困境感知 (21-30)
+    support = [
+        ("supp_1", "你是否有过因为家庭变故（如家人服刑、生病、离异）感到人生崩塌？", ["没有", "有过短暂情绪", "经常为此难过", "生活已经彻底改变"]),
+        ("supp_2", "当遇到突发困难（如没钱吃饭、生病），你会选择？", ["告诉长辈", "告诉好友", "自己硬扛", "不知道怎么办"]),
+        ("supp_3", "你是否有过与不熟悉的人接触并感到「被诱惑」的经历？", ["没有", "不确定", "有过", "经常"]),
+        ("supp_4", "你对这个社会的基本感觉是？", ["温暖", "平平淡淡", "冷漠", "残酷"]),
+        ("supp_5", "遇到不开心的事，你会选择？", ["运动/谈心", "写日记", "发呆", "自暴自弃"]),
+        ("supp_6", "如果社会组织（如政府、公益）愿意帮助你，你希望得到哪方面的支持？", ["学习用品", "心理陪伴", "生活费", "改变我的家庭环境"]),
+        ("supp_7", "你觉得自己目前的「监护状态」安全吗？", ["很安全", "基本安全", "不太安全", "完全没保障"]),
+        ("supp_8", "你是否有过那种「没人管我」的失落感？", ["从未", "偶尔", "经常", "每时每刻"]),
+        ("supp_9", "当有人关心你时，你的第一反应是？", ["感激", "奇怪", "不适应", "防备"]),
+        ("supp_10", "如果给你的现状打分（满分10），你会打几分？", ["8-10分", "6-7分", "4-5分", "0-3分"]),
+    ]
+    for code, title, opts in support:
+        is_risk = code == "supp_8" and True or False
+        q.append(_question(code, title, "social_support",
+            options=[{"content": o, "score": i+1, **({"is_risk_option": True} if (is_risk and i == 3) else {})} for i, o in enumerate(opts)],
+            risk_tag="interpersonal"))
+
+    return q
+
+
 BUILTIN_QUESTIONNAIRES = [
     _questionnaire(
         "builtin-comprehensive-risk-v1",
@@ -2443,6 +2897,224 @@ BUILTIN_QUESTIONNAIRES = [
                 "low": "考试焦虑评估正常，考试应对能力良好。",
                 "medium": "考试方面存在一定焦虑感受，建议引导学生建立积极的考试心态。",
                 "high": "考试焦虑信号较为明显，建议了解具体焦虑来源并提供应对策略支持。",
+            },
+        },
+    ),
+
+    # =========================================================================
+    # 金盾护苗专用问卷 (6 套)
+    # =========================================================================
+
+    # 33. 青少年自我认知与心理特质调研
+    _questionnaire(
+        "builtin-jindun-selfcognition-v1",
+        "青少年自我认知与心理特质调研",
+        "custom",
+        "通过隐性测试捕捉青少年性格裂痕，评估同理心缺失、自我中心、操控倾向和反社会冲动等人格特质风险。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("empathy", "同理心与道德感知"),
+            ("egocentrism", "自我中心与优越感"),
+            ("manipulation", "控制欲与操控倾向"),
+            ("antisocial", "反社会与冲动倾向"),
+        ),
+        _jindun_selfcognition_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 26, "max": 50, "level": "low"},
+                {"min": 51, "max": 75, "level": "medium"},
+                {"min": 76, "max": 104, "level": "urgent"},
+            ],
+            "risk_tag_rules": {
+                "self_safety": {"level": "urgent", "type_label": "人格特质风险信号"},
+            },
+            "messages": {
+                "low": "性格内核健康，具备良好的自我调节能力。建议保持常规关注。",
+                "medium": "存在明显的性格缺陷信号，如自私、冷漠、冲动等，需重点关注其压力来源。",
+                "urgent": "具备典型的高风险人格倾向（如缺乏罪恶感、操控欲强、无视社会契约），建议学校按学生关怀流程及时跟进。",
+            },
+        },
+    ),
+
+    # 34. 青少年社会规则与生存技能认知问卷
+    _questionnaire(
+        "builtin-jindun-socialrule-v1",
+        "青少年社会规则与生存技能认知问卷",
+        "safety_awareness",
+        "评估青少年在社会规则遵守、违法接触和暴力行为等方面的风险程度，识别潜在违法行为倾向。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("violent_behavior", "暴力与违法行为"),
+            ("marginal_contact", "社会边缘接触"),
+            ("rule_disregard", "规则漠视与侥幸心理"),
+        ),
+        _jindun_socialrule_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 25, "max": 40, "level": "low"},
+                {"min": 41, "max": 70, "level": "medium"},
+                {"min": 71, "max": 100, "level": "urgent"},
+            ],
+            "risk_tag_rules": {
+                "self_safety": {"level": "urgent", "type_label": "违法行为风险信号"},
+                "safety_awareness": {"level": "high", "type_label": "规则意识薄弱信号"},
+            },
+            "messages": {
+                "low": "无明显违规倾向，社会规则意识良好。建议保持常规教育。",
+                "medium": "社交圈存在严重违规隐患，需进行个别排查和引导。",
+                "urgent": "极大概率有相关行为史，建议学校按学生安全流程尽快跟进，必要时联系公安机关进行风险评估。",
+            },
+        },
+    ),
+
+    # 35. 家庭成长环境与亲子互动观察调研
+    _questionnaire(
+        "builtin-jindun-familyenv-v1",
+        "家庭成长环境与亲子互动观察调研",
+        "family_relationship",
+        "评估家庭沟通方式、教育风格、情感支持和自主权等维度，识别家庭教育缺失或高压控制风险。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("communication", "沟通与倾听方式"),
+            ("parenting_style", "教育与管教方式"),
+            ("emotional_support", "情感支持与关怀"),
+            ("autonomy", "自主权与个人空间"),
+        ),
+        _jindun_familyenv_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 23, "max": 40, "level": "low"},
+                {"min": 41, "max": 65, "level": "medium"},
+                {"min": 66, "max": 92, "level": "high"},
+            ],
+            "risk_tag_rules": {
+                "family_relationship": {"level": "high", "type_label": "亲子关系关注信号"},
+                "family_support": {"level": "high", "type_label": "家庭支持缺失信号"},
+            },
+            "messages": {
+                "low": "亲子关系健康，教育方式科学。建议保持良好沟通。",
+                "medium": "存在教育方式不当的信号，建议调整沟通频率或方式，关注学生情绪变化。",
+                "high": "存在明显的教育缺失或高压控制，极易导致孩子出现行为偏差，建议学校进行家庭走访并提供指导支持。",
+            },
+        },
+    ),
+
+    # 36. 成长阶段生活习惯与环境适应性调研
+    _questionnaire(
+        "builtin-jindun-lifestyle-v1",
+        "成长阶段生活习惯与环境适应性调研",
+        "custom",
+        "从生活作息、数字环境接触和社交圈层三个维度评估青少年的行为偏差与环境适应风险。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("daily_habits", "生活作息与自我管理"),
+            ("digital_env", "数字环境与内容接触"),
+            ("social_law", "社交圈层与法治意识"),
+        ),
+        _jindun_lifestyle_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 50, "max": 80, "level": "low"},
+                {"min": 81, "max": 130, "level": "medium"},
+                {"min": 131, "max": 200, "level": "urgent"},
+            ],
+            "dimension_pct_rules": [
+                {"dimension": "social_law", "min_pct": 80, "level": "urgent"},
+            ],
+            "risk_tag_rules": {
+                "self_safety": {"level": "urgent", "type_label": "高风险行为信号"},
+                "internet_use": {"level": "high", "type_label": "网络内容风险信号"},
+                "safety_awareness": {"level": "high", "type_label": "安全意识薄弱信号"},
+            },
+            "messages": {
+                "low": "生活习惯良好，具备较强的自我管理能力与避险意识。建议保持常规关注。",
+                "medium": "存在生活习惯紊乱或同伴压力影响的信号，需要关注其社交圈和日常行为。",
+                "urgent": "存在严重的行为偏差与高风险活动倾向，建议重点排查并及时跟进支持。",
+            },
+        },
+    ),
+
+    # 37. 青少年社会价值观与校内外认知调研
+    _questionnaire(
+        "builtin-jindun-socialvalue-v1",
+        "青少年社会价值观与校内外认知调研",
+        "custom",
+        "从秩序认知、破坏性倾向和深度投射三个层面探测青少年的反社会价值观和破坏行为动机。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("rule_cognition", "秩序与规则认知"),
+            ("destructive", "破坏性倾向探测"),
+            ("projection", "深度投射与极端测试"),
+        ),
+        _jindun_socialvalue_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 30, "max": 50, "level": "low"},
+                {"min": 51, "max": 85, "level": "medium"},
+                {"min": 86, "max": 120, "level": "urgent"},
+            ],
+            "dimension_pct_rules": [
+                {"dimension": "destructive", "min_pct": 80, "level": "urgent"},
+                {"dimension": "projection", "min_pct": 80, "level": "urgent"},
+            ],
+            "risk_tag_rules": {
+                "self_safety": {"level": "urgent", "type_label": "破坏性倾向信号"},
+                "safety_awareness": {"level": "high", "type_label": "规则认知偏差信号"},
+            },
+            "messages": {
+                "low": "具备基本的社会契约精神和规则意识。建议保持常规教育引导。",
+                "medium": "存在明显的抵触情绪或愤世嫉俗的认知信号，建议结合日常观察进行针对性引导。",
+                "urgent": "具备强烈的反体制、反社会人格特征，潜藏潜在的破坏行为动机，建议学校按学生安全流程尽快跟进。",
+            },
+        },
+    ),
+
+    # 38. 校园生活与个人成长支持度问卷
+    _questionnaire(
+        "builtin-jindun-schoolsupport-v1",
+        "校园生活与个人成长支持度问卷",
+        "interpersonal",
+        "从家庭监护、学习状态和社会支持三个维度评估青少年的困境程度和支持需求，识别监护缺失和社交孤立。",
+        JINDUN_GRADES,
+        "reference_screening",
+        _dimensions(
+            ("family_guardian", "家庭环境与监护"),
+            ("learning_future", "学习状态与未来预期"),
+            ("social_support", "社会支持与困境感知"),
+        ),
+        _jindun_schoolsupport_questions(),
+        deepcopy(SCORING_RULE_DEFAULT),
+        {
+            "basis": "total_score",
+            "total_score_ranges": [
+                {"min": 30, "max": 50, "level": "low"},
+                {"min": 51, "max": 80, "level": "medium"},
+                {"min": 81, "max": 120, "level": "high"},
+            ],
+            "risk_tag_rules": {
+                "family_support": {"level": "high", "type_label": "监护缺失信号"},
+                "academic_pressure": {"level": "medium", "type_label": "学业困境信号"},
+                "interpersonal": {"level": "high", "type_label": "社交孤立信号"},
+            },
+            "messages": {
+                "low": "有良好的监护与支持系统，生活状态稳定。建议保持常规关怀。",
+                "medium": "存在明显的监护薄弱环节或社交孤立感，建议班主任加强日常关注和沟通。",
+                "high": "极度缺乏社会支撑，急需介入进行家庭走访与心理关怀，建议学校启动帮扶流程。",
             },
         },
     ),

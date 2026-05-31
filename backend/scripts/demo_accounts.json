@@ -1,0 +1,170 @@
+[
+  {
+    "role": "school_admin",
+    "school": "青云中学(演示)",
+    "name": "朱杰(演示)",
+    "username": "DEMO_QY_admin",
+    "password": "admin123"
+  },
+  {
+    "role": "counselor",
+    "school": "青云中学(演示)",
+    "name": "马思(演示)",
+    "username": "DEMO_QY_c01",
+    "password": "QY_c01"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "张晨(演示)",
+    "username": "DEMO_QY_t01",
+    "password": "QY_t01"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "胡伟(演示)",
+    "username": "DEMO_QY_t02",
+    "password": "QY_t02"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "何鑫(演示)",
+    "username": "DEMO_QY_t03",
+    "password": "QY_t03"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "罗丽(演示)",
+    "username": "DEMO_QY_t04",
+    "password": "QY_t04"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "胡浩(演示)",
+    "username": "DEMO_QY_t05",
+    "password": "QY_t05"
+  },
+  {
+    "role": "teacher",
+    "school": "青云中学(演示)",
+    "name": "林伟(演示)",
+    "username": "DEMO_QY_t06",
+    "password": "QY_t06"
+  },
+  {
+    "role": "school_admin",
+    "school": "明德中学(演示)",
+    "name": "李杰(演示)",
+    "username": "DEMO_MD_admin",
+    "password": "admin123"
+  },
+  {
+    "role": "counselor",
+    "school": "明德中学(演示)",
+    "name": "吴涛(演示)",
+    "username": "DEMO_MD_c01",
+    "password": "MD_c01"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "周浩(演示)",
+    "username": "DEMO_MD_t07",
+    "password": "MD_t07"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "陈鑫(演示)",
+    "username": "DEMO_MD_t08",
+    "password": "MD_t08"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "王慧(演示)",
+    "username": "DEMO_MD_t09",
+    "password": "MD_t09"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "张浩(演示)",
+    "username": "DEMO_MD_t10",
+    "password": "MD_t10"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "孙浩(演示)",
+    "username": "DEMO_MD_t11",
+    "password": "MD_t11"
+  },
+  {
+    "role": "teacher",
+    "school": "明德中学(演示)",
+    "name": "林琳(演示)",
+    "username": "DEMO_MD_t12",
+    "password": "MD_t12"
+  },
+  {
+    "role": "school_admin",
+    "school": "星河中学(演示)",
+    "name": "周杰(演示)",
+    "username": "DEMO_XH_admin",
+    "password": "admin123"
+  },
+  {
+    "role": "counselor",
+    "school": "星河中学(演示)",
+    "name": "马婷(演示)",
+    "username": "DEMO_XH_c01",
+    "password": "XH_c01"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "赵杰(演示)",
+    "username": "DEMO_XH_t13",
+    "password": "XH_t13"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "胡婷(演示)",
+    "username": "DEMO_XH_t14",
+    "password": "XH_t14"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "胡鑫(演示)",
+    "username": "DEMO_XH_t15",
+    "password": "XH_t15"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "吴浩(演示)",
+    "username": "DEMO_XH_t16",
+    "password": "XH_t16"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "黄伟(演示)",
+    "username": "DEMO_XH_t17",
+    "password": "XH_t17"
+  },
+  {
+    "role": "teacher",
+    "school": "星河中学(演示)",
+    "name": "徐涛(演示)",
+    "username": "DEMO_XH_t18",
+    "password": "XH_t18"
+  }
+]
