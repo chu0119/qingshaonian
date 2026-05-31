@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Tag, Modal, Form, Input, DatePicker, Switch, message, Typography, Space, Row, Col, Statistic, Tabs, Select, Progress, Empty, Popconfirm, Descriptions, List } from 'antd';
-import { PlusOutlined, EditOutlined, FieldTimeOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, FieldTimeOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../../api/client';
 import { TASK_STATUS_LABELS } from '../../utils/constants';
@@ -229,7 +229,7 @@ export default function TaskManagement() {
     { title: '质量检测', dataIndex: 'enable_quality_check', key: 'enable_quality_check', render: (v: boolean) => v !== false ? <Tag color="green">开</Tag> : <Tag>关</Tag> },
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     {
-      title: '操作', key: 'actions', width: 280,
+      title: '操作', key: 'actions', width: 340,
       render: (_: any, r: any) => (
         <Space size="small" wrap>
           <Button size="small" icon={<EyeOutlined />} onClick={() => previewQuestionnaire(r)}>预览</Button>
@@ -250,6 +250,12 @@ export default function TaskManagement() {
               try { await client.post(`/tasks/${r.id}/archive`); message.success('任务已归档'); fetchData(); }
               catch { message.error('操作失败'); }
             }}><Button size="small">归档</Button></Popconfirm>
+          )}
+          {(r.status === 'draft' || r.status === 'archived') && (
+            <Popconfirm title="确定删除此任务？" description="删除后不可恢复" onConfirm={async () => {
+              try { await client.delete(`/tasks/${r.id}`); message.success('任务已删除'); fetchData(); }
+              catch (err: any) { message.error(err?.response?.data?.detail || '删除失败'); }
+            }}><Button size="small" danger icon={<DeleteOutlined />}>删除</Button></Popconfirm>
           )}
         </Space>
       ),

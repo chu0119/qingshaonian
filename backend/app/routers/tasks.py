@@ -4,7 +4,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, Grade, Class
-from ..models.task import Task, AnswerSheet
+from ..models.task import Task, AnswerSheet, AnswerRecord
+from ..models.risk import RiskAlert, ScoringResult, QualityAssessment
 from ..models.questionnaire import Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services.audit_service import log_operation
@@ -291,6 +292,28 @@ def archive_task(task_id: int, request: Request, user: User = Depends(require_ro
     db.commit()
     log_operation(db, user, request, module="questionnaire_task", action="archive", object_type="task", object_id=task.id, object_name=task.name)
     return APIResponse.success(message="任务已归档")
+
+
+@router.delete("/{task_id}")
+def delete_task(task_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    school_id = getattr(user, '_effective_school_id', None) or user.school_id
+    task = db.query(Task).filter(Task.id == task_id, Task.school_id == school_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.status not in ("draft", "archived"):
+        raise HTTPException(status_code=400, detail="只能删除草稿或已归档的任务")
+    task_name = task.name
+    sheet_ids = [s.id for s in db.query(AnswerSheet.id).filter(AnswerSheet.task_id == task_id).all()]
+    if sheet_ids:
+        db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(RiskAlert).filter(RiskAlert.task_id == task_id).delete(synchronize_session=False)
+        db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).delete(synchronize_session=False)
+    db.delete(task)
+    db.commit()
+    log_operation(db, user, request, module="questionnaire_task", action="delete", object_type="task", object_id=task_id, object_name=task_name)
+    return APIResponse.success(message="任务已删除")
 
 
 @router.get("/{task_id}/uncompleted")
