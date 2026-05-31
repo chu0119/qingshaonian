@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, message, Modal, Space } from 'antd';
+import { Form, Input, Button, Typography, message, Modal, Space, Spin } from 'antd';
 import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons';
-import { login } from '../api/auth';
+import { login, getCaptcha } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
 
 const { Title, Text } = Typography;
@@ -25,14 +25,36 @@ export default function LoginPage() {
   const [resetUsername, setResetUsername] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaImage, setCaptchaImage] = useState('');
+  const [captchaKey, setCaptchaKey] = useState('');
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const isMobile = useIsMobile();
 
-  const onFinish = async (values: { username: string; password: string }) => {
+  const fetchCaptcha = async () => {
+    setCaptchaLoading(true);
+    try {
+      const data = await getCaptcha();
+      setCaptchaImage(data.captcha_image);
+      setCaptchaKey(data.captcha_key);
+    } catch {
+      message.error('获取验证码失败');
+    } finally {
+      setCaptchaLoading(false);
+    }
+  };
+
+  const onFinish = async (values: { username: string; password: string; captcha_code?: string }) => {
     setLoading(true);
     try {
-      const result = await login(values);
+      const loginData: any = { username: values.username, password: values.password };
+      if (captchaRequired) {
+        loginData.captcha_key = captchaKey;
+        loginData.captcha_code = values.captcha_code;
+      }
+      const result = await login(loginData);
       setAuth(result.user, result.access_token);
       message.success('登录成功');
       if (result.user.must_change_password) {
@@ -40,14 +62,28 @@ export default function LoginPage() {
         return;
       }
       const rolePathMap: Record<string, string> = {
+        platform_admin: '/platform/dashboard',
         school_admin: '/school-admin/dashboard',
         teacher: '/teacher/dashboard',
         counselor: '/counselor/dashboard',
         student: '/student/home',
       };
       navigate(rolePathMap[result.user.role] || '/', { replace: true });
-    } catch {
-      message.error('账号或密码错误，请重试');
+    } catch (error: any) {
+      const errorDetail = error.response?.data?.detail;
+      const errorMsg = typeof errorDetail === 'object' && errorDetail?.message
+        ? errorDetail.message
+        : '账号或密码错误，请重试';
+      const needsCaptcha = typeof errorDetail === 'object' && errorDetail?.captcha_required;
+
+      message.error(errorMsg);
+
+      if (needsCaptcha && !captchaRequired) {
+        setCaptchaRequired(true);
+        fetchCaptcha();
+      } else if (captchaRequired) {
+        fetchCaptcha();
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +191,25 @@ export default function LoginPage() {
               <Input.Password prefix={<LockOutlined style={{ color: '#5a8aaf' }} />} placeholder="请输入密码"
                 style={{ height: 50, borderRadius: 10, fontSize: 15, background: 'rgba(0,16,40,0.5)', border: '1px solid rgba(0,212,255,0.15)', color: '#e0f0ff' }} />
             </Form.Item>
+            {captchaRequired && (
+              <Form.Item name="captcha_code" rules={[{ required: true, message: '请输入验证码' }]}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Input placeholder="请输入验证码" maxLength={4}
+                    style={{ flex: 1, height: 50, borderRadius: 10, fontSize: 15, background: 'rgba(0,16,40,0.5)', border: '1px solid rgba(0,212,255,0.15)', color: '#e0f0ff', letterSpacing: 4 }} />
+                  <div onClick={captchaLoading ? undefined : fetchCaptcha}
+                    style={{ width: 130, height: 50, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(0,212,255,0.15)', cursor: captchaLoading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,16,40,0.5)' }}
+                    title="点击刷新验证码">
+                    {captchaLoading ? (
+                      <Spin size="small" />
+                    ) : captchaImage ? (
+                      <img src={captchaImage} alt="验证码" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ color: '#5a8aaf', fontSize: 12 }}>点击获取</span>
+                    )}
+                  </div>
+                </div>
+              </Form.Item>
+            )}
             <div style={{ textAlign: 'right', marginTop: -12, marginBottom: 16 }}>
               <a onClick={() => setForgotOpen(true)} style={{ color: '#5a8aaf', fontSize: 13 }}>忘记密码？</a>
             </div>

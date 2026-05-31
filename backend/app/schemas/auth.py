@@ -4,6 +4,13 @@ from pydantic import BaseModel
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_key: str | None = None
+    captcha_code: str | None = None
+
+
+class CaptchaResponse(BaseModel):
+    captcha_key: str
+    captcha_image: str
 
 
 class LoginResponse(BaseModel):

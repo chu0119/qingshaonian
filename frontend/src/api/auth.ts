@@ -1,5 +1,5 @@
 import client from './client';
-import type { LoginRequest, LoginResponse, UserInfo } from '../types/auth';
+import type { LoginRequest, LoginResponse, UserInfo, CaptchaResponse } from '../types/auth';
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
   const res = await client.post('/auth/login', data);
@@ -23,5 +23,10 @@ export async function resetPassword(user_id: number, new_password: string) {
 
 export async function enterSchool(school_id: number): Promise<LoginResponse> {
   const res = await client.post(`/platform/schools/${school_id}/enter`);
+  return res.data.data;
+}
+
+export async function getCaptcha(): Promise<CaptchaResponse> {
+  const res = await client.get('/auth/captcha');
   return res.data.data;
 }

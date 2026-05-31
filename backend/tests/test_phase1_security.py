@@ -89,12 +89,22 @@ class Phase1SecurityTests(unittest.TestCase):
     def test_login_attempts_are_written_to_login_logs(self):
         from app.database import SessionLocal
         from app.models.audit import LoginLog
+        from app.services import auth_service
 
         self.client.post(
             "/api/v1/auth/login",
             json={"username": "admin", "password": "wrong-password"},
         )
-        self._login("admin", "admin123")
+
+        # After first failure, CAPTCHA is required - get one and login with it
+        captcha = auth_service.generate_captcha()
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "admin123",
+                  "captcha_key": captcha["captcha_key"],
+                  "captcha_code": auth_service._captcha_store[captcha["captcha_key"]]["answer"]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
 
         db = SessionLocal()
         try:

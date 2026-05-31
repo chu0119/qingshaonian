@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User
 from ..models.external import SMSLog
-from ..schemas.auth import LoginRequest, ChangePasswordRequest, ResetPasswordRequest
+from ..schemas.auth import LoginRequest, ChangePasswordRequest, ResetPasswordRequest, CaptchaResponse
 from ..schemas.common import PaginationParams
 from ..services import auth_service
 from ..dependencies import get_current_user, require_role
@@ -66,22 +66,32 @@ def _verify_code(phone: str, username: str, code: str, purpose: str) -> bool:
     return True
 
 
+@router.get("/captcha")
+def get_captcha():
+    """Generate a new image CAPTCHA. Returns base64 PNG + captcha_key."""
+    result = auth_service.generate_captcha()
+    return APIResponse.success(result)
+
+
 @router.post("/login")
 def login(request_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == request_data.username).first()
     try:
-        result = auth_service.authenticate(db, request_data)
+        result = auth_service.authenticate(db, request_data, request)
         logged_user = db.query(User).filter(User.id == result.user.id).first() if result.user else user
         log_login(db, username=request_data.username, user=logged_user, request=request, result="success")
         return APIResponse.success(result.model_dump())
     except HTTPException as exc:
+        # Extract structured detail for logging
+        detail = exc.detail
+        log_msg = detail.get("message", str(detail)) if isinstance(detail, dict) else str(detail)
         log_login(
             db,
             username=request_data.username,
             user=user,
             request=request,
             result="failure",
-            failure_reason=str(exc.detail),
+            failure_reason=log_msg,
         )
         raise
 
