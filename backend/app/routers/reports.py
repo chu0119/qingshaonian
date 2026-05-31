@@ -7,6 +7,7 @@ from ..models.task import Task, AnswerSheet
 from ..models.risk import RiskAlert, Intervention, QualityAssessment, ScoringResult
 from ..models.questionnaire import Questionnaire
 from ..dependencies import require_role
+from ..utils.access_control import can_access_student
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/reports", tags=["报表"])
@@ -105,13 +106,8 @@ def student_longitudinal(student_id: int, user: User = Depends(require_role("sch
     if not student or student.school_id != school_id:
         raise HTTPException(status_code=404, detail="学生不存在")
     if user.role in ("teacher", "counselor"):
-        teacher_classes = [tc.class_id for tc in db.query(func.distinct(Class.id)).join(
-            User, User.id == user.id
-        ).filter(Class.id == student.class_id).scalar()]
-        if not teacher_classes:
-            teacher_class_ids = [tc.class_id for tc in user.teacher_classes] if hasattr(user, 'teacher_classes') else []
-            if student.class_id not in teacher_class_ids:
-                raise HTTPException(status_code=403, detail="无权限查看该学生")
+        if not can_access_student(db, user, student):
+            raise HTTPException(status_code=403, detail="无权限查看该学生")
 
     sheets = db.query(AnswerSheet).filter(
         AnswerSheet.student_id == student_id, AnswerSheet.status == "submitted"
