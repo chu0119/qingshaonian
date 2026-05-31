@@ -125,3 +125,103 @@ export async function sortQuestions(qid: number, questionIds: number[]) {
   const res = await client.put(`/questionnaires/${qid}/questions/sort`, { question_ids: questionIds });
   return res.data;
 }
+
+// ---------------------------------------------------------------------------
+// 问卷导入导出
+// ---------------------------------------------------------------------------
+
+export interface ImportError {
+  row: number;
+  field: string;
+  message: string;
+}
+
+export interface ImportResult {
+  success: boolean;
+  questionnaire_id?: number;
+  title?: string;
+  question_count?: number;
+  status?: string;
+  message?: string;
+  errors?: ImportError[];
+  total_errors?: number;
+}
+
+/** 下载问卷导入模板 (学校端) */
+export async function downloadQuestionnaireTemplate() {
+  const res = await client.get('/questionnaires/import-template', { responseType: 'blob' });
+  _triggerDownload(res.data, 'questionnaire_template.xlsx');
+}
+
+/** 导入问卷 (学校端) */
+export async function importQuestionnaire(file: File): Promise<ImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await client.post('/questionnaires/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  } catch (error: any) {
+    const detail = error.response?.data;
+    if (detail?.data) {
+      return { success: false, ...detail.data, message: detail.message };
+    }
+    return { success: false, errors: [{ row: 0, field: '文件', message: detail?.detail || '导入失败' }], total_errors: 1 };
+  }
+}
+
+/** 导出单个问卷 (学校端) */
+export async function exportQuestionnaire(id: number, title?: string) {
+  const res = await client.get(`/questionnaires/${id}/export`, { responseType: 'blob' });
+  const safeName = (title || 'questionnaire').replace(/[\\/*?:"<>|]/g, '').replace(/ /g, '_').slice(0, 80);
+  _triggerDownload(res.data, `${safeName}.xlsx`);
+}
+
+/** 下载问卷导入模板 (平台端) */
+export async function downloadPlatformTemplate() {
+  const res = await client.get('/platform/questionnaires/import-template', { responseType: 'blob' });
+  _triggerDownload(res.data, 'questionnaire_template.xlsx');
+}
+
+/** 导入问卷 (平台端) */
+export async function importPlatformQuestionnaire(file: File): Promise<ImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await client.post('/platform/questionnaires/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  } catch (error: any) {
+    const detail = error.response?.data;
+    if (detail?.data) {
+      return { success: false, ...detail.data, message: detail.message };
+    }
+    return { success: false, errors: [{ row: 0, field: '文件', message: detail?.detail || '导入失败' }], total_errors: 1 };
+  }
+}
+
+/** 导出单个问卷 (平台端) */
+export async function exportPlatformQuestionnaire(id: number, title?: string) {
+  const res = await client.get(`/platform/questionnaires/${id}/export`, { responseType: 'blob' });
+  const safeName = (title || 'questionnaire').replace(/[\\/*?:"<>|]/g, '').replace(/ /g, '_').slice(0, 80);
+  _triggerDownload(res.data, `${safeName}.xlsx`);
+}
+
+/** 批量导出问卷 (平台端) */
+export async function batchExportQuestionnaires(ids: number[]) {
+  const res = await client.post('/platform/questionnaires/batch-export', { questionnaire_ids: ids }, { responseType: 'blob' });
+  _triggerDownload(res.data, 'questionnaires_export.zip');
+}
+
+function _triggerDownload(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}

@@ -1,7 +1,8 @@
 import json
 import httpx
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import case, func
 from ..database import get_db
@@ -13,6 +14,9 @@ from ..utils.validators import mask_id_card, mask_phone
 from ..models.questionnaire import Questionnaire
 from ..models.external import SMSLog, AIAnalysisLog
 from ..dependencies import require_role
+from ..services.questionnaire_import_service import (
+    generate_import_template, import_questionnaire, export_questionnaire_to_excel, batch_export_to_zip,
+)
 from ..utils.response import APIResponse
 from ..utils.password import hash_password
 from ..utils.jwt import create_access_token
@@ -1420,6 +1424,93 @@ def platform_questionnaires(
     return APIResponse.success(result)
 
 
+# ---------------------------------------------------------------------------
+# 平台问卷导入导出（必须在 {qid} 路由之前定义，避免路径冲突）
+# ---------------------------------------------------------------------------
+
+@router.get("/questionnaires/import-template")
+def platform_download_import_template(user: User = Depends(require_role("platform_admin"))):
+    """下载问卷导入 Excel 模板"""
+    data = generate_import_template()
+    import io
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=questionnaire_template.xlsx"},
+    )
+
+
+@router.post("/questionnaires/import")
+def platform_import_questionnaire(
+    file: UploadFile = File(...),
+    user: User = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """平台级导入问卷（school_id=None）"""
+    if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 格式的 Excel 文件")
+
+    file_bytes = file.file.read()
+    result = import_questionnaire(db, file_bytes, school_id=None, created_by=user.id)
+
+    if not result.get("success"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=400, content={
+            "code": 400,
+            "message": f"导入失败，共发现 {result.get('total_errors', 0)} 个错误",
+            "data": {"errors": result.get("errors", []), "total_errors": result.get("total_errors", 0)},
+        })
+
+    log_operation(db, user, None, module="questionnaire", action="import",
+                  object_type="questionnaire", object_id=str(result["questionnaire_id"]),
+                  detail=f"平台导入问卷: {result['title']}")
+    return APIResponse.success(data=result, message=result.get("message", "导入成功"))
+
+
+@router.get("/questionnaires/{qid}/export")
+def platform_export_questionnaire(
+    qid: int,
+    user: User = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """导出单个问卷为 Excel"""
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+    try:
+        data = export_questionnaire_to_excel(db, q.id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    import io, re, urllib.parse
+    safe_name = re.sub(r'[\\/*?:"<>|]', "", q.title or "questionnaire").replace(" ", "_")[:80]
+    encoded_name = urllib.parse.quote(f"{safe_name}.xlsx")
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+    )
+async def platform_batch_export(
+    request: Request,
+    user: User = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """批量导出多个问卷为 ZIP"""
+    body_bytes = await request.body()
+    body = json.loads(body_bytes.decode())
+    ids = body.get("questionnaire_ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择要导出的问卷")
+
+    import io
+    zip_data = batch_export_to_zip(db, ids)
+    return StreamingResponse(
+        io.BytesIO(zip_data),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=questionnaires_export.zip"},
+    )
+
+
 @router.get("/questionnaires/{qid}")
 def platform_questionnaire_detail(qid: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     from ..services.questionnaire_service import get_questionnaire_detail
@@ -1556,6 +1647,8 @@ def platform_questionnaire_usage(
         "schools": [{"id": sid, "name": school_names.get(sid, "")} for sid in school_ids],
         "copies": copies,
     })
+
+
 
 
 @router.get("/system-info")

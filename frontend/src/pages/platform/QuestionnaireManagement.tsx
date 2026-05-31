@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Tag, Select, Input, Typography, Space, Button, Drawer, Descriptions, Card, Modal, message, Row, Col, Statistic, Empty, Spin } from 'antd';
-import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, EditOutlined, SendOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Input, Typography, Space, Button, Drawer, Descriptions, Card, Modal, message, Row, Col, Statistic, Empty, Spin, Upload } from 'antd';
+import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, EditOutlined, SendOutlined, FileTextOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import client from '../../api/client';
+import { downloadPlatformTemplate, importPlatformQuestionnaire, exportPlatformQuestionnaire, batchExportQuestionnaires } from '../../api/questionnaires';
+import type { ImportError } from '../../api/questionnaires';
 import { QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS, QUESTION_TYPE_LABELS, SOURCE_TYPE_LABELS, DIMENSION_LABELS } from '../../utils/constants';
 
 export default function PlatformQuestionnaireManagement() {
@@ -24,6 +26,11 @@ export default function PlatformQuestionnaireManagement() {
   const [pushLoading, setPushLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [stats, setStats] = useState({ total: 0, builtin: 0, platform: 0, school: 0 });
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importErrors, setImportErrors] = useState<ImportError[]>([]);
+  const [importSuccess, setImportSuccess] = useState<any>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -109,6 +116,48 @@ export default function PlatformQuestionnaireManagement() {
     message.info('问卷已创建，请在学校端编辑题目');
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      await downloadPlatformTemplate();
+      message.success('模板下载成功');
+    } catch { message.error('下载模板失败'); }
+  };
+
+  const handleImport = async (file: File) => {
+    setImportLoading(true);
+    setImportErrors([]);
+    setImportSuccess(null);
+    try {
+      const result = await importPlatformQuestionnaire(file);
+      if (result.success) {
+        setImportSuccess(result);
+        message.success(`导入成功：${result.title}，共 ${result.question_count} 题`);
+        fetchData();
+      } else {
+        setImportErrors(result.errors || []);
+        message.error(`导入失败，共发现 ${result.total_errors || 0} 个错误`);
+      }
+    } catch {
+      setImportErrors([{ row: 0, field: '文件', message: '导入失败，请检查文件格式' }]);
+    } finally { setImportLoading(false); }
+    return false;
+  };
+
+  const handleExport = async (record: any) => {
+    try {
+      await exportPlatformQuestionnaire(record.id, record.title);
+      message.success('导出成功');
+    } catch { message.error('导出失败'); }
+  };
+
+  const handleBatchExport = async () => {
+    if (!selectedRowKeys.length) { message.warning('请先选择要导出的问卷'); return; }
+    try {
+      await batchExportQuestionnaires(selectedRowKeys as number[]);
+      message.success(`已导出 ${selectedRowKeys.length} 套问卷`);
+    } catch { message.error('批量导出失败'); }
+  };
+
   const columns = [
     { title: '标题', dataIndex: 'title', key: 'title', width: 200, ellipsis: true,
       render: (v: string, r: any) => <a onClick={() => viewDetail(r.id)}>{v}</a> },
@@ -133,6 +182,7 @@ export default function PlatformQuestionnaireManagement() {
         {!r.is_builtin && <Button size="small" type="link" icon={<EditOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>编辑</Button>}
         {!r.is_builtin && <Button size="small" type="link" icon={<CopyOutlined />} onClick={() => handleCopy(r.id)}>复制</Button>}
         <Button size="small" type="link" icon={<SendOutlined />} onClick={() => { setPushQid(r.id); setPushOpen(true); }}>推送</Button>
+        <Button size="small" type="link" icon={<DownloadOutlined />} onClick={() => handleExport(r)}>导出</Button>
         {!r.is_builtin && r.status === 'draft' && (
           <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => Modal.confirm({
             title: '确定删除？', content: '删除后不可恢复', onOk: () => handleDelete(r.id),
@@ -163,8 +213,16 @@ export default function PlatformQuestionnaireManagement() {
           options={Object.entries(SOURCE_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
         <Input.Search placeholder="搜索问卷标题" style={{ width: 200 }} value={filters.keyword}
           onChange={e => setFilters(f => ({ ...f, keyword: e.target.value }))} onSearch={fetchData} />
+        <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>下载模板</Button>
+        <Button icon={<UploadOutlined />} onClick={() => { setImportModalOpen(true); setImportErrors([]); setImportSuccess(null); }}>导入问卷</Button>
+        {selectedRowKeys.length > 0 && (
+          <Button icon={<DownloadOutlined />} type="primary" ghost onClick={handleBatchExport}>
+            批量导出 ({selectedRowKeys.length})
+          </Button>
+        )}
       </Space>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 套问卷` }} />
 
       <Drawer title="问卷详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={720} destroyOnClose>
@@ -221,6 +279,43 @@ export default function PlatformQuestionnaireManagement() {
         <Select mode="multiple" placeholder="选择学校" style={{ width: '100%' }}
           value={selectedSchools} onChange={setSelectedSchools}
           options={schools} showSearch optionFilterProp="label" />
+      </Modal>
+
+      <Modal title="导入问卷" open={importModalOpen} onCancel={() => setImportModalOpen(false)}
+        footer={null} destroyOnClose width={700}>
+        {!importSuccess && (
+          <>
+            <Upload.Dragger accept=".xlsx,.xls" maxCount={1} showUploadList={false}
+              beforeUpload={(file) => { handleImport(file); return false; }}
+              disabled={importLoading}>
+              <p className="ant-upload-drag-icon"><UploadOutlined style={{ fontSize: 32, color: '#1890ff' }} /></p>
+              <p>点击或拖拽 Excel 文件到此处上传</p>
+              <p style={{ color: '#999', fontSize: 12 }}>仅支持 .xlsx 格式</p>
+            </Upload.Dragger>
+            {importLoading && <Spin style={{ display: 'block', margin: '16px auto' }} tip="正在导入..." />}
+            {importErrors.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <Typography.Text type="danger">发现 {importErrors.length} 个错误，请修正后重新导入：</Typography.Text>
+                <Table rowKey={(_, i) => String(i)} dataSource={importErrors} size="small" pagination={false}
+                  style={{ marginTop: 8 }}
+                  columns={[
+                    { title: '行号', dataIndex: 'row', width: 60, render: (v: number) => v > 0 ? `第 ${v} 行` : '-' },
+                    { title: '字段', dataIndex: 'field', width: 120 },
+                    { title: '错误信息', dataIndex: 'message' },
+                  ]} />
+              </div>
+            )}
+          </>
+        )}
+        {importSuccess && (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Typography.Title level={4} style={{ color: '#52c41a' }}>导入成功</Typography.Title>
+            <p>问卷：<strong>{importSuccess.title}</strong></p>
+            <p>题目数：<strong>{importSuccess.question_count}</strong></p>
+            <p>状态：<Tag>{importSuccess.status || 'draft'}</Tag></p>
+            <Button type="primary" onClick={() => setImportModalOpen(false)} style={{ marginTop: 16 }}>完成</Button>
+          </div>
+        )}
       </Modal>
     </div>
   );
