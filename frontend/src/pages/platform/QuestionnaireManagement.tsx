@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Tag, Select, Input, Typography, Space, Button, Drawer, Descriptions, Card, Modal, message, Row, Col, Statistic, Empty, Spin, Upload } from 'antd';
-import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, EditOutlined, SendOutlined, FileTextOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Input, Typography, Space, Button, Card, Modal, message, Row, Col, Statistic, Empty, Spin, Upload } from 'antd';
+import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, EditOutlined, SendOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { downloadPlatformTemplate, importPlatformQuestionnaire, exportPlatformQuestionnaire, batchExportQuestionnaires } from '../../api/questionnaires';
 import type { ImportError } from '../../api/questionnaires';
-import { QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS, QUESTION_TYPE_LABELS, SOURCE_TYPE_LABELS, DIMENSION_LABELS } from '../../utils/constants';
+import { QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS, SOURCE_TYPE_LABELS } from '../../utils/constants';
 
 export default function PlatformQuestionnaireManagement() {
   const navigate = useNavigate();
@@ -14,9 +14,6 @@ export default function PlatformQuestionnaireManagement() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ category: '', status: '', keyword: '', source_type: '' });
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detail, setDetail] = useState<any>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usage, setUsage] = useState<any>(null);
   const [pushOpen, setPushOpen] = useState(false);
@@ -60,15 +57,6 @@ export default function PlatformQuestionnaireManagement() {
   }, [page, filters]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const viewDetail = async (qid: number) => {
-    setDetailLoading(true); setDetailOpen(true); setDetail(null);
-    try {
-      const r = await client.get(`/platform/questionnaires/${qid}`);
-      setDetail(r.data.data);
-    } catch { setDetail(null); }
-    finally { setDetailLoading(false); }
-  };
 
   const viewUsage = async (qid: number) => {
     try {
@@ -160,7 +148,7 @@ export default function PlatformQuestionnaireManagement() {
 
   const columns = [
     { title: '标题', dataIndex: 'title', key: 'title', width: 200, ellipsis: true,
-      render: (v: string, r: any) => <a onClick={() => viewDetail(r.id)}>{v}</a> },
+      render: (v: string, r: any) => <a onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>{v}</a> },
     { title: '类别', dataIndex: 'category', key: 'category', width: 90,
       render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || v || '-'}</Tag> },
     { title: '来源', key: 'source', width: 100,
@@ -177,7 +165,7 @@ export default function PlatformQuestionnaireManagement() {
       render: (v: string) => <Tag color={v === 'published' ? 'green' : v === 'draft' ? 'default' : 'blue'}>{QUESTIONNAIRE_STATUS_LABELS[v] || v}</Tag> },
     { title: '操作', key: 'action', width: 260, render: (_: any, r: any) => (
       <Space>
-        <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r.id)}>详情</Button>
+        <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>详情</Button>
         <Button size="small" type="link" onClick={() => viewUsage(r.id)}>统计</Button>
         {!r.is_builtin && <Button size="small" type="link" icon={<EditOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>编辑</Button>}
         {!r.is_builtin && <Button size="small" type="link" icon={<CopyOutlined />} onClick={() => handleCopy(r.id)}>复制</Button>}
@@ -224,36 +212,6 @@ export default function PlatformQuestionnaireManagement() {
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 套问卷` }} />
-
-      <Drawer title="问卷详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={720} destroyOnClose>
-        {detailLoading ? <Spin /> : detail ? (
-          <div>
-            <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="标题" span={2}>{detail.title}</Descriptions.Item>
-              <Descriptions.Item label="类别">{QUESTIONNAIRE_CATEGORY_LABELS[detail.category] || detail.category || '-'}</Descriptions.Item>
-              <Descriptions.Item label="来源">{detail.is_builtin ? '内置' : detail.school_id ? '学校' : '平台'}</Descriptions.Item>
-              <Descriptions.Item label="状态">{QUESTIONNAIRE_STATUS_LABELS[detail.status] || detail.status}</Descriptions.Item>
-              <Descriptions.Item label="题目数">{detail.questions?.length || 0}</Descriptions.Item>
-              <Descriptions.Item label="说明" span={2}>{detail.description || '-'}</Descriptions.Item>
-              {detail.applicable_grades && <Descriptions.Item label="适用年级" span={2}>{detail.applicable_grades}</Descriptions.Item>}
-            </Descriptions>
-
-            {detail.questions?.length ? (
-              <Card title={`题目列表 (${detail.questions.length} 题)`} size="small">
-                <Table rowKey="id" dataSource={detail.questions} pagination={false} size="small" scroll={{ y: 500 }}
-                  columns={[
-                    { title: '序号', width: 50, render: (_: any, __: any, i: number) => i + 1 },
-                    { title: '题目', dataIndex: 'title', ellipsis: true },
-                    { title: '类型', dataIndex: 'type', width: 80, render: (v: string) => QUESTION_TYPE_LABELS[v] || v },
-                    { title: '维度', dataIndex: 'dimension', width: 80, render: (v: string) => DIMENSION_LABELS[v] || v || '-' },
-                    { title: '选项数', width: 60, render: (_: any, r: any) => r.options?.length || 0 },
-                  ]}
-                />
-              </Card>
-            ) : null}
-          </div>
-        ) : <Empty />}
-      </Drawer>
 
       <Modal title="使用统计" open={usageOpen} onCancel={() => setUsageOpen(false)} footer={null} width={500} destroyOnClose>
         {usage ? (
