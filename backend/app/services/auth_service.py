@@ -75,11 +75,11 @@ def _cleanup_stale_entries():
 
 
 def _check_ip_rate(request: Request):
-    """Limit each IP to 100 login attempts per 15-minute window."""
+    """Limit each IP to 300 login attempts per 15-minute window."""
     ip = _get_client_ip(request)
     now = time.time()
     attempts = [t for t in _ip_login_attempts.get(ip, []) if now - t < 900]
-    if len(attempts) >= 100:
+    if len(attempts) >= 300:
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后重试")
     _ip_login_attempts[ip] = attempts
 
