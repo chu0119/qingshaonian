@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from ..models.questionnaire import Questionnaire, Question, Option, ContradictionGroup, QuestionType
-from ..models.task import AnswerSheet, AnswerRecord
-from ..models.risk import ScoringResult, QualityAssessment
+from ..models.task import Task, AnswerSheet, AnswerRecord
+from ..models.risk import ScoringResult, QualityAssessment, RiskAlert
 from ..models.user import User
 from ..schemas.questionnaire import QuestionnaireCreate, QuestionnaireUpdate, QuestionCreate, QuestionUpdate, OptionCreate, ContradictionGroupCreate
 
@@ -98,6 +98,18 @@ def delete_questionnaire(db: Session, qid: int):
     q = db.query(Questionnaire).filter(Questionnaire.id == qid, Questionnaire.status == "draft").first()
     if not q:
         raise ValueError("只能删除草稿状态的问卷")
+    # 级联删除关联的任务和答卷数据
+    task_ids = [t.id for t in db.query(Task.id).filter(Task.questionnaire_id == qid).all()]
+    if task_ids:
+        sheet_ids = [s.id for s in db.query(AnswerSheet.id).filter(AnswerSheet.task_id.in_(task_ids)).all()]
+        if sheet_ids:
+            db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(RiskAlert).filter(RiskAlert.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(AnswerSheet).filter(AnswerSheet.id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(Task).filter(Task.id.in_(task_ids)).delete(synchronize_session=False)
+    # 删除问卷本身
     db.query(Option).filter(Option.question_id.in_(db.query(Question.id).filter(Question.questionnaire_id == qid))).delete(synchronize_session=False)
     db.query(ContradictionGroup).filter(ContradictionGroup.questionnaire_id == qid).delete()
     db.query(Question).filter(Question.questionnaire_id == qid).delete()
