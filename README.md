@@ -11,7 +11,7 @@
 | 数据库 | MySQL 8（生产）/ SQLite（开发） |
 | 部署 | Nginx 反代 + systemd 托管后端，域名 `a.annanyun.com`（HTTPS） |
 
-**代码规模**：164 个源文件，约 33,000 行代码（Python 17,765 行 + TypeScript 15,290 行）
+**代码规模**：161 个源文件，约 31,600 行代码（Python 16,252 行 + TypeScript 15,363 行）
 
 ## 项目结构
 
@@ -90,15 +90,15 @@ qingshaonian/
 │   │   │   ├── ai/                 AI 分析弹窗
 │   │   │   └── answer/             答卷详情
 │   │   ├── pages/
-│   │   │   ├── platform/           公安监管端（13 个页面）
+│   │   │   ├── platform/           公安监管端（14 个页面）
 │   │   │   │   ├── Dashboard.tsx           数据看板
 │   │   │   │   ├── SchoolManagement.tsx    学校管理
 │   │   │   │   ├── QuestionnaireManagement.tsx  问卷管理（含导入导出）
 │   │   │   │   ├── TaskSupervision.tsx     任务监管（含发布任务）
-│   │   │   │   ├── RiskCenter.tsx          风险中心
+│   │   │   │   ├── RiskCenter.tsx          风险中心（含完整质量检测、AI分析）
 │   │   │   │   ├── KeyStudents.tsx         重点关注学生
+│   │   │   │   ├── StudentManagement.tsx   学生管理（含档案入口）
 │   │   │   │   ├── InterventionSupervision.tsx  干预督办
-│   │   │   │   ├── StudentManagement.tsx   学生管理
 │   │   │   │   ├── AIAnalysis.tsx          AI 分析
 │   │   │   │   ├── Notifications.tsx       短信通知
 │   │   │   │   ├── AuditLogs.tsx           操作日志
@@ -107,6 +107,7 @@ qingshaonian/
 │   │   │   ├── school-admin/       学校管理端（15 个页面）
 │   │   │   │   ├── Dashboard.tsx           数据看板
 │   │   │   │   ├── StudentManagement.tsx   学生管理（含批量导入）
+│   │   │   │   ├── StudentProfile.tsx      一生一档心理档案（含趋势图）
 │   │   │   │   ├── TeacherManagement.tsx   教师管理
 │   │   │   │   ├── ClassManagement.tsx     班级管理
 │   │   │   │   ├── QuestionnaireLibrary.tsx    问卷库（含导入导出）
@@ -115,7 +116,6 @@ qingshaonian/
 │   │   │   │   ├── RiskWarning.tsx         风险预警
 │   │   │   │   ├── RiskDetail.tsx          风险详情
 │   │   │   │   ├── InterventionRecords.tsx 干预记录
-│   │   │   │   ├── StudentProfile.tsx      一生一档心理档案
 │   │   │   │   ├── DataReports.tsx         数据报表（5 个标签页）
 │   │   │   │   ├── DataScreen.tsx          数据大屏
 │   │   │   │   ├── AuditLogs.tsx           操作日志
@@ -205,7 +205,7 @@ npm run dev                   # 开发服务器 http://localhost:3000
 
 ## 环境变量
 
-复制 `backend/.env.example` 为 `backend/.env`，关键配置（共 25 个）：
+复制 `backend/.env.example` 为 `backend/.env`，关键配置（共 26 个）：
 
 | 变量 | 说明 | 开发默认值 |
 |------|------|-----------|
@@ -255,6 +255,36 @@ npm run dev                   # 开发服务器 http://localhost:3000
 4. 自动保存（每 30 秒）+ 手动保存
 5. 提交 → 服务端校验必填题（未答则跳转到对应题目）
 6. 自动评分 → 风险判定 → 质量检测 → 生成风险预警
+
+## 风险评分体系
+
+### 分数阈值（以综合问卷为例，100 题 × 1-4 分）
+
+| 等级 | 分数范围 | 每题均分 | 预期占比 |
+|------|---------|---------|---------|
+| 低风险（关注） | 100-180 | 1.0-1.8 | 60-70% |
+| 中风险（预警） | 181-240 | 1.8-2.4 | 15-25% |
+| 高风险（警告） | 241-310 | 2.4-3.1 | 5-12% |
+| 紧急风险（危急） | 311-400 | 3.1-4.0 | 1-3% |
+
+### 风险判定逻辑
+
+```
+最终风险等级 = MAX(
+    分数等级,           # 来自 total_score_ranges
+    维度提升等级,        # 来自 dimension_pct_rules
+    风险标签提升等级     # 来自 risk_tag_rules（需达到 min_count）
+)
+```
+
+### 质量检测
+
+- 快速作答检测（按题型阈值）
+- 连续同选项检测
+- 注意力检测题验证
+- 矛盾题检测
+- 规律作答检测（ABAB、ABCDABCD）
+- 综合质量评分（0-100）
 
 ## 数据库迁移
 

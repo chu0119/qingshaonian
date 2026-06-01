@@ -23,7 +23,7 @@ backend/
     services/  — scoring_service(评分+质量检测), questionnaire_service, seed_service 等
     models/    — user, questionnaire, task, risk, audit, external, system_config, notification
     schemas/   — Pydantic 请求/响应模型
-    questionnaire_bank/ — 38 套内置问卷 + 1 套综合问卷
+    questionnaire_bank/ — 39 套内置问卷
     alembic/   — 6 个迁移 (001→002→003_qrf→003→004→005, 单 head)
     tests/     — 7 个测试模块
 ```
@@ -31,7 +31,7 @@ backend/
 ## 角色体系
 | 角色 | 路由前缀 | 权限范围 |
 |------|---------|---------|
-| platform_admin | /platform/ | 公安监管端, 13 项菜单, 可进入学校后台 |
+| platform_admin | /platform/ | 公安监管端, 14 项菜单, 可进入学校后台 |
 | school_admin | /school-admin/ | 本校完整管理 |
 | teacher/counselor | /teacher/ | 所负责班级 |
 | student | /student/ | 本人问卷 |
