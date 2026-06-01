@@ -22,7 +22,7 @@ from ..utils.password import hash_password
 from ..utils.jwt import create_access_token
 from ..config import settings
 from ..services.audit_service import log_operation
-from ..services.stats_service import platform_summary, recent_school_activity, school_metrics
+from ..services.stats_service import platform_summary, recent_school_activity, school_metrics, target_student_ids
 
 router = APIRouter(prefix="/api/v1/platform", tags=["平台管理"])
 
