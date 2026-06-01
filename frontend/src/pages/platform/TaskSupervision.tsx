@@ -30,6 +30,13 @@ export default function PlatformTaskSupervision() {
   const [editTask, setEditTask] = useState<any>(null);
   const [editForm] = Form.useForm();
 
+  // 发布任务相关状态
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm] = Form.useForm();
+  const [createClasses, setCreateClasses] = useState<any[]>([]);
+  const [createQuestionnaires, setCreateQuestionnaires] = useState<any[]>([]);
+  const [createSchoolId, setCreateSchoolId] = useState<number | null>(null);
+
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
       .then(r => setSchools((r.data.data.items || []).map((s: any) => ({ value: s.id, label: s.name }))))
@@ -147,6 +154,57 @@ export default function PlatformTaskSupervision() {
     }
   };
 
+  // 发布任务 - 学校变更时加载班级和问卷
+  const handleCreateSchoolChange = async (schoolId: number) => {
+    setCreateSchoolId(schoolId);
+    createForm.setFieldsValue({ target_ids: undefined, questionnaire_id: undefined });
+    setCreateClasses([]);
+    setCreateQuestionnaires([]);
+    if (!schoolId) return;
+    try {
+      const [classRes, qRes] = await Promise.all([
+        client.get(`/platform/schools/${schoolId}/classes`),
+        client.get('/platform/questionnaires', { params: { page: 1, page_size: 200, status: 'active' } }),
+      ]);
+      setCreateClasses(classRes.data.data || []);
+      setCreateQuestionnaires((qRes.data.data?.items || []).filter((q: any) => q.status === 'active'));
+    } catch { message.error('加载班级或问卷失败'); }
+  };
+
+  // 发布任务 - 提交
+  const handleCreate = async () => {
+    try {
+      const values = await createForm.validateFields();
+      setSubmitting(true);
+      const timeRange = values.time_range;
+      await client.post('/platform/tasks', {
+        school_id: values.school_id,
+        name: values.name,
+        questionnaire_id: values.questionnaire_id,
+        target_type: 'class',
+        target_ids: values.target_ids || [],
+        description: values.description || '',
+        start_time: timeRange?.[0]?.toISOString(),
+        end_time: timeRange?.[1]?.toISOString(),
+        allow_edit: values.allow_edit || false,
+        shuffle_questions: values.shuffle_questions || false,
+        shuffle_options: values.shuffle_options || false,
+        enable_quality_check: values.enable_quality_check !== false,
+        reminder_strategy: values.reminder_strategy ? { type: values.reminder_strategy } : {},
+      });
+      message.success('任务发布成功');
+      setCreateModalOpen(false);
+      createForm.resetFields();
+      setCreateSchoolId(null);
+      setCreateClasses([]);
+      setCreateQuestionnaires([]);
+      fetchData();
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.detail || '发布失败');
+    } finally { setSubmitting(false); }
+  };
+
   // 归档任务
   const handleArchive = async (task: any) => {
     try {
@@ -208,7 +266,10 @@ export default function PlatformTaskSupervision() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>测评任务监管</Typography.Title>
-        <Button icon={<ExportOutlined />} onClick={exportCSV} disabled={!data.length}>导出 CSV</Button>
+        <Space>
+          <Button type="primary" onClick={() => setCreateModalOpen(true)}>发布任务</Button>
+          <Button icon={<ExportOutlined />} onClick={exportCSV} disabled={!data.length}>导出 CSV</Button>
+        </Space>
       </div>
       <Space wrap style={{ marginBottom: 16 }}>
         <Select placeholder="学校" allowClear style={{ width: 180 }} value={filters.school_id || undefined}
@@ -303,6 +364,81 @@ export default function PlatformTaskSupervision() {
           </Form.Item>
           <Form.Item name="end_time" label="截止时间">
             <DatePicker showTime style={{ width: '100%' }} placeholder="选择截止时间" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 发布任务弹窗 */}
+      <Modal
+        title="发布测评任务"
+        open={createModalOpen}
+        onOk={handleCreate}
+        onCancel={() => { setCreateModalOpen(false); createForm.resetFields(); setCreateSchoolId(null); setCreateClasses([]); setCreateQuestionnaires([]); }}
+        confirmLoading={submitting}
+        destroyOnClose
+        width={600}
+        style={{ maxWidth: '95vw' }}
+        okText="发布"
+        cancelText="取消"
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item name="school_id" label="选择学校" rules={[{ required: true, message: '请选择学校' }]}>
+            <Select
+              placeholder="先选择学校"
+              options={schools}
+              showSearch
+              optionFilterProp="label"
+              onChange={handleCreateSchoolChange}
+            />
+          </Form.Item>
+          <Form.Item name="questionnaire_id" label="选择问卷" rules={[{ required: true, message: '请选择问卷' }]}>
+            <Select
+              placeholder={createSchoolId ? '请选择问卷' : '请先选择学校'}
+              disabled={!createSchoolId}
+              options={createQuestionnaires.map((q: any) => ({ value: q.id, label: q.title }))}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+          <Form.Item name="target_ids" label="发布班级" rules={[{ required: true, message: '请选择班级' }]}>
+            <Select
+              mode="multiple"
+              placeholder={createSchoolId ? '请选择班级' : '请先选择学校'}
+              disabled={!createSchoolId}
+              options={createClasses.map((c: any) => ({ value: c.id, label: c.grade_name ? `${c.grade_name} ${c.name}` : c.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+            <Input placeholder="如：初一年级心理健康筛查" />
+          </Form.Item>
+          <Form.Item name="description" label="任务说明">
+            <Input.TextArea rows={3} placeholder="填写给学生查看的任务说明，可留空" />
+          </Form.Item>
+          <Form.Item name="time_range" label="起止时间">
+            <DatePicker.RangePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="allow_edit" label="允许提交后修改" valuePropName="checked">
+            <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
+          </Form.Item>
+          <Space wrap>
+            <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked">
+              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
+            </Form.Item>
+            <Form.Item name="shuffle_options" label="选项随机" valuePropName="checked">
+              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
+            </Form.Item>
+            <Form.Item name="enable_quality_check" label="质量检测" valuePropName="checked" initialValue={true}>
+              <Select options={[{ value: true, label: '开' }, { value: false, label: '关' }]} defaultValue={true} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="reminder_strategy" label="提醒策略" initialValue="none">
+            <Select
+              options={[
+                { value: 'none', label: '不自动提醒' },
+                { value: 'deadline_24h', label: '截止前 24 小时提醒' },
+                { value: 'deadline_2h', label: '截止前 2 小时提醒' },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>

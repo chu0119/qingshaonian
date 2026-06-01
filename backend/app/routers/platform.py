@@ -851,6 +851,80 @@ def platform_archive_task(task_id: int, request: Request, user: User = Depends(r
     log_operation(db, user, request, module="task_supervision", action="archive", object_type="task", object_id=task.id, object_name=task.name)
     return APIResponse.success(message="任务已归档")
 
+
+@router.get("/schools/{school_id}/classes")
+def platform_school_classes(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """获取指定学校的班级列表（用于发布任务）"""
+    school = db.query(School).filter(School.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="学校不存在")
+    classes = db.query(Class).filter(Class.school_id == school_id).order_by(Class.grade_id, Class.name).all()
+    items = []
+    for c in classes:
+        grade = db.query(Grade).filter(Grade.id == c.grade_id).first()
+        items.append({"id": c.id, "name": c.name, "grade_name": grade.name if grade else ""})
+    return APIResponse.success(items)
+
+
+@router.post("/tasks")
+def platform_create_task(data: dict, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """平台管理员发布测评任务（需指定学校）"""
+    school_id = data.get("school_id")
+    if not school_id:
+        raise HTTPException(status_code=400, detail="请选择学校")
+    school = db.query(School).filter(School.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="学校不存在")
+
+    questionnaire_id = data.get("questionnaire_id")
+    if not questionnaire_id:
+        raise HTTPException(status_code=400, detail="问卷ID不能为空")
+    qnr = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
+    if not qnr:
+        raise HTTPException(status_code=404, detail="问卷不存在")
+
+    target_type = data.get("target_type", "class")
+    target_ids = [int(x) for x in (data.get("target_ids") or []) if str(x).isdigit()]
+    # Validate classes belong to the school
+    if target_type == "class" and target_ids:
+        valid_ids = {c.id for c in db.query(Class).filter(Class.school_id == school_id, Class.id.in_(target_ids)).all()}
+        invalid = set(target_ids) - valid_ids
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"班级不属于该校: {invalid}")
+
+    def parse_dt(value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+
+    status_value = data.get("status") or "in_progress"
+    if status_value == "active":
+        status_value = "in_progress"
+    if status_value not in ("draft", "not_started", "in_progress"):
+        status_value = "in_progress"
+    published_at = datetime.now() if status_value != "draft" else None
+
+    task = Task(
+        school_id=school_id, questionnaire_id=questionnaire_id,
+        name=data.get("name", ""), target_type=target_type,
+        target_ids=target_ids, start_time=parse_dt(data.get("start_time")),
+        end_time=parse_dt(data.get("end_time")), shuffle_questions=data.get("shuffle_questions", False),
+        shuffle_options=data.get("shuffle_options", False),
+        allow_edit=data.get("allow_edit", False),
+        description=data.get("description", ""),
+        reminder_strategy=data.get("reminder_strategy") or {},
+        enable_quality_check=data.get("enable_quality_check", True),
+        status=status_value, published_at=published_at, created_by=user.id,
+    )
+    task.target_snapshot = {"student_ids": target_student_ids(db, task), "target_type": target_type, "target_ids": target_ids}
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    log_operation(db, user, request, module="task_supervision", action="create", object_type="task", object_id=task.id, object_name=task.name)
+    return APIResponse.success({"id": task.id}, message="任务发布成功")
+
 @router.delete("/tasks/{task_id}")
 def platform_delete_task(task_id: int, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
