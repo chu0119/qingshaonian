@@ -189,6 +189,18 @@ export default function AnswerPage() {
     setAnswers(a => ({ ...a, [qid]: value }));
   };
 
+  const setAnswerAndAdvance = (qid: number, value: any) => {
+    setAnswers(a => ({ ...a, [qid]: value }));
+    // 短暂延迟后自动跳转下一题（最后一题不跳）
+    if (currentIndex < questions.length - 1) {
+      setTimeout(() => {
+        recordTime();
+        setCurrentIndex(i => i + 1);
+        setQuestionStart(Date.now());
+      }, 350);
+    }
+  };
+
   const renderQuestion = () => {
     if (!q) return null;
     const ans = answers[q.id];
@@ -203,7 +215,7 @@ export default function AnswerPage() {
         {q.description && <div style={{ color: '#888', fontSize: 13, marginBottom: 16, padding: '8px 12px', background: '#fafafa', borderRadius: 4 }}>{q.description}</div>}
 
         {(q.type === 'single_choice' || q.type === 'scale') && (
-          <Radio.Group value={ans?.selected_option_id} onChange={e => setAnswer(q.id, { selected_option_id: e.target.value })}
+          <Radio.Group value={ans?.selected_option_id} onChange={e => setAnswerAndAdvance(q.id, { selected_option_id: e.target.value })}
             style={{ width: '100%' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               {q.options?.map((opt: any) => (
@@ -228,7 +240,7 @@ export default function AnswerPage() {
           </Checkbox.Group>
         )}
         {q.type === 'true_false' && (
-          <Radio.Group value={ans?.value} onChange={e => setAnswer(q.id, { value: e.target.value })}>
+          <Radio.Group value={ans?.value} onChange={e => setAnswerAndAdvance(q.id, { value: e.target.value })}>
             <Space size="large">
               <Radio.Button value="true" style={{ padding: '8px 32px' }}>是</Radio.Button>
               <Radio.Button value="false" style={{ padding: '8px 32px' }}>否</Radio.Button>
