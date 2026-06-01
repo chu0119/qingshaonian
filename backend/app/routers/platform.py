@@ -1672,10 +1672,11 @@ def platform_update_questionnaire(
     q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
     if not q:
         raise HTTPException(status_code=404, detail="问卷不存在")
-    if q.is_builtin:
-        raise HTTPException(status_code=400, detail="内置问卷不可编辑")
     from ..services.questionnaire_service import update_questionnaire
     from ..schemas.questionnaire import QuestionnaireUpdate
+    # 内置问卷只允许修改基本信息，不允许修改状态
+    if q.is_builtin:
+        data.pop("status", None)
     update_data = QuestionnaireUpdate(**data)
     updated = update_questionnaire(db, qid, update_data)
     log_operation(db, user, request, module="questionnaire", action="update",
@@ -1695,7 +1696,7 @@ def platform_delete_questionnaire(
         raise HTTPException(status_code=400, detail="内置问卷不可删除")
     from ..services.questionnaire_service import delete_questionnaire
     try:
-        delete_questionnaire(db, qid)
+        delete_questionnaire(db, qid, force=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     log_operation(db, user, request, module="questionnaire", action="delete",

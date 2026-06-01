@@ -94,10 +94,14 @@ def update_questionnaire(db: Session, qid: int, data: QuestionnaireUpdate) -> Qu
     return q
 
 
-def delete_questionnaire(db: Session, qid: int):
-    q = db.query(Questionnaire).filter(Questionnaire.id == qid, Questionnaire.status == "draft").first()
+def delete_questionnaire(db: Session, qid: int, force: bool = False):
+    q = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
     if not q:
+        raise ValueError("问卷不存在")
+    if not force and q.status != "draft":
         raise ValueError("只能删除草稿状态的问卷")
+    if q.is_builtin and not force:
+        raise ValueError("内置问卷不可删除")
     # 级联删除关联的任务和答卷数据
     task_ids = [t.id for t in db.query(Task.id).filter(Task.questionnaire_id == qid).all()]
     if task_ids:

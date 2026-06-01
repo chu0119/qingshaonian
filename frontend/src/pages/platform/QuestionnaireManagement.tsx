@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Tag, Select, Input, Typography, Space, Button, Card, Modal, message, Row, Col, Statistic, Empty, Spin, Upload } from 'antd';
+import { Table, Tag, Select, Input, Typography, Space, Button, Card, Modal, Form, message, Row, Col, Statistic, Empty, Spin, Upload } from 'antd';
 import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, EditOutlined, SendOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { downloadPlatformTemplate, importPlatformQuestionnaire, exportPlatformQuestionnaire, batchExportQuestionnaires } from '../../api/questionnaires';
@@ -28,6 +28,10 @@ export default function PlatformQuestionnaireManagement() {
   const [importErrors, setImportErrors] = useState<ImportError[]>([]);
   const [importSuccess, setImportSuccess] = useState<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editRecord, setEditRecord] = useState<any>(null);
+  const [editForm] = Form.useForm();
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -146,6 +150,35 @@ export default function PlatformQuestionnaireManagement() {
     } catch { message.error('批量导出失败'); }
   };
 
+  const openEdit = async (record: any) => {
+    try {
+      const r = await client.get(`/platform/questionnaires/${record.id}`);
+      const d = r.data.data;
+      setEditRecord(d);
+      editForm.setFieldsValue({
+        title: d.title, description: d.description, category: d.category,
+        applicable_grades: d.applicable_grades, disclaimer: d.disclaimer,
+      });
+      setEditModalOpen(true);
+    } catch { message.error('获取问卷信息失败'); }
+  };
+
+  const handleEdit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      setEditLoading(true);
+      await client.put(`/platform/questionnaires/${editRecord.id}`, values);
+      message.success('更新成功');
+      setEditModalOpen(false);
+      setEditRecord(null);
+      editForm.resetFields();
+      fetchData();
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.detail || '更新失败');
+    } finally { setEditLoading(false); }
+  };
+
   const columns = [
     { title: '标题', dataIndex: 'title', key: 'title', width: 200, ellipsis: true,
       render: (v: string, r: any) => <a onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>{v}</a> },
@@ -163,17 +196,18 @@ export default function PlatformQuestionnaireManagement() {
     { title: '答卷数', dataIndex: 'answer_count', key: 'answer_count', width: 70, align: 'center' as const },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (v: string) => <Tag color={v === 'published' ? 'green' : v === 'draft' ? 'default' : 'blue'}>{QUESTIONNAIRE_STATUS_LABELS[v] || v}</Tag> },
-    { title: '操作', key: 'action', width: 260, render: (_: any, r: any) => (
+    { title: '操作', key: 'action', width: 340, render: (_: any, r: any) => (
       <Space>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>详情</Button>
         <Button size="small" type="link" onClick={() => viewUsage(r.id)}>统计</Button>
-        {!r.is_builtin && <Button size="small" type="link" icon={<EditOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>编辑</Button>}
+        <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
         {!r.is_builtin && <Button size="small" type="link" icon={<CopyOutlined />} onClick={() => handleCopy(r.id)}>复制</Button>}
         <Button size="small" type="link" icon={<SendOutlined />} onClick={() => { setPushQid(r.id); setPushOpen(true); }}>推送</Button>
         <Button size="small" type="link" icon={<DownloadOutlined />} onClick={() => handleExport(r)}>导出</Button>
-        {!r.is_builtin && r.status === 'draft' && (
+        {!r.is_builtin && (
           <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => Modal.confirm({
-            title: '确定删除？', content: '删除后不可恢复', onOk: () => handleDelete(r.id),
+            title: '确定删除？', content: r.status !== 'draft' ? `该问卷状态为「${QUESTIONNAIRE_STATUS_LABELS[r.status] || r.status}」，删除后关联的任务和答卷数据将一并清除，不可恢复！` : '删除后不可恢复',
+            okType: 'danger', onOk: () => handleDelete(r.id),
           })}>删除</Button>
         )}
       </Space>
@@ -274,6 +308,30 @@ export default function PlatformQuestionnaireManagement() {
             <Button type="primary" onClick={() => setImportModalOpen(false)} style={{ marginTop: 16 }}>完成</Button>
           </div>
         )}
+      </Modal>
+
+      <Modal title={`编辑问卷 - ${editRecord?.title || ''}`} open={editModalOpen}
+        onOk={handleEdit} confirmLoading={editLoading}
+        onCancel={() => { setEditModalOpen(false); setEditRecord(null); editForm.resetFields(); }}
+        destroyOnClose width={600} style={{ maxWidth: '95vw' }} okText="保存" cancelText="取消">
+        <Form form={editForm} layout="vertical">
+          <Form.Item name="title" label="问卷标题" rules={[{ required: true, message: '请输入问卷标题' }]}>
+            <Input placeholder="请输入问卷标题" />
+          </Form.Item>
+          <Form.Item name="description" label="问卷描述">
+            <Input.TextArea rows={3} placeholder="请输入问卷描述" />
+          </Form.Item>
+          <Form.Item name="category" label="分类">
+            <Select placeholder="选择分类"
+              options={Object.entries(QUESTIONNAIRE_CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
+          </Form.Item>
+          <Form.Item name="applicable_grades" label="适用年级">
+            <Input placeholder="如：初一,初二,初三" />
+          </Form.Item>
+          <Form.Item name="disclaimer" label="免责声明">
+            <Input.TextArea rows={2} placeholder="学生答题前显示的知情同意内容" />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
