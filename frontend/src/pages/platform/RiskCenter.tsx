@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Select, Input, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Progress, Empty, Row, Col, Statistic, Modal, message } from 'antd';
-import { ExportOutlined, EyeOutlined } from '@ant-design/icons';
+import { ExportOutlined, EyeOutlined, RobotOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { maskIdCard, translateRiskType } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
+import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
 import { RISK_LABELS, RISK_COLORS, TRIGGER_METHOD_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS, QUALITY_LABELS, DIMENSION_LABELS } from '../../utils/constants';
 
 const statusLabels = INTERVENTION_STATUS_LABELS;
@@ -31,6 +32,7 @@ export default function PlatformRiskCenter() {
   const [exportVerifying, setExportVerifying] = useState(false);
   const [answerOpen, setAnswerOpen] = useState(false);
   const [answerAlertId, setAnswerAlertId] = useState<number>();
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -185,12 +187,55 @@ export default function PlatformRiskCenter() {
 
             <Card title="答卷质量" size="small" style={{ marginBottom: 16 }}>
               {detail.quality_level ? (
-                <Descriptions bordered size="small" column={2}>
-                  <Descriptions.Item label="质量等级">{qualityLabels[detail.quality_level] || detail.quality_level}</Descriptions.Item>
-                  <Descriptions.Item label="质量评分">{detail.quality_score || 0}</Descriptions.Item>
-                </Descriptions>
+                <>
+                  <Row gutter={[16, 8]} style={{ marginBottom: 12 }}>
+                    <Col span={8}><Statistic title="质量评分" value={detail.quality_score || 0} suffix="分"
+                      valueStyle={{ color: (detail.quality_score || 0) >= 70 ? '#67C23A' : (detail.quality_score || 0) >= 50 ? '#E6A23C' : '#FF4D4F', fontSize: 20 }} /></Col>
+                    <Col span={8}><Statistic title="质量等级" value={qualityLabels[detail.quality_level] || detail.quality_level}
+                      valueStyle={{ fontSize: 20 }} /></Col>
+                    <Col span={8}><Statistic title="建议复测" value={detail.suggest_retest ? '是' : '否'}
+                      valueStyle={{ color: detail.suggest_retest ? '#FF4D4F' : '#67C23A', fontSize: 20 }} /></Col>
+                  </Row>
+                  <Descriptions bordered size="small" column={2}>
+                    <Descriptions.Item label="答题时长">{detail.quality_duration || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="有效性">{qualityLabels[detail.validity] || detail.validity || '-'}</Descriptions.Item>
+                    {detail.attention_passed !== undefined && <Descriptions.Item label="注意力检测">{detail.attention_passed ? '通过' : '未通过'}</Descriptions.Item>}
+                    {detail.max_consecutive_same !== undefined && <Descriptions.Item label="连续同选">{detail.max_consecutive_same} 题</Descriptions.Item>}
+                    {detail.contradiction_count !== undefined && <Descriptions.Item label="矛盾检测">{detail.contradiction_count} 组</Descriptions.Item>}
+                    {detail.pattern_detected !== undefined && <Descriptions.Item label="规律作答">{detail.pattern_detected ? '检测到' : '未检测到'}</Descriptions.Item>}
+                    {detail.fast_question_count !== undefined && <Descriptions.Item label="快速作答">{detail.fast_question_count} 题</Descriptions.Item>}
+                  </Descriptions>
+                  {detail.quality_deductions?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      {detail.quality_deductions.map((d: string, i: number) => (
+                        <Tag key={i} color="orange" style={{ marginBottom: 4 }}>{d}</Tag>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : <Empty description="暂无质量评估" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
             </Card>
+
+            {detail.risk_description && (
+              <Card title="综合评估" size="small" style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, lineHeight: 1.8, color: '#666' }}>{detail.risk_description}</div>
+              </Card>
+            )}
+
+            {detail.dimension_analysis?.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).length > 0 && (
+              <Card title="维度分析" size="small" style={{ marginBottom: 16 }}>
+                {detail.dimension_analysis.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).map((item: any, i: number) => (
+                  <div key={i} style={{ marginBottom: 8, padding: '6px 10px', background: '#fafafa', borderRadius: 4 }}>
+                    <Space>
+                      <Tag color={item.level === 'high' ? 'red' : item.level === 'medium' ? 'orange' : 'blue'}>
+                        {dimensionLabels[item.dimension] || item.dimension || item.risk_tag || ''}
+                      </Tag>
+                      <span style={{ fontSize: 13 }}>{item.label || item.suggestion || ''}</span>
+                    </Space>
+                  </div>
+                ))}
+              </Card>
+            )}
 
             <Card title={`干预记录 (${detail.interventions?.length || 0})`} size="small">
               {detail.interventions?.length ? (
@@ -207,9 +252,10 @@ export default function PlatformRiskCenter() {
               ) : <Empty description="暂无干预记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
             </Card>
 
-            <div style={{ marginTop: 16 }}>
+            <Space style={{ marginTop: 16 }}>
               <Button type="primary" onClick={() => { setAnswerAlertId(detail.id); setAnswerOpen(true); }}>查看原始答题详情</Button>
-            </div>
+              <Button icon={<RobotOutlined />} onClick={() => setAiModalOpen(true)}>AI 分析</Button>
+            </Space>
           </div>
         ) : <Empty description="加载失败" />}
       </Drawer>
@@ -227,6 +273,22 @@ export default function PlatformRiskCenter() {
       </Modal>
 
       <AnswerDetail alertId={answerAlertId} platformMode open={answerOpen} onClose={() => setAnswerOpen(false)} />
+
+      {detail && (
+        <AiAnalysisModal
+          open={aiModalOpen}
+          type="student_risk"
+          title={`AI 风险分析 - ${detail.student_name}`}
+          data={{
+            student_id: detail.student_id, student_name: detail.student_name,
+            risk_level: detail.risk_level, risk_type: detail.risk_type,
+            total_score: detail.total_score, dimension_scores: detail.dimension_scores,
+            quality_level: detail.quality_level, quality_score: detail.quality_score,
+            risk_description: detail.risk_description,
+          }}
+          onClose={() => setAiModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

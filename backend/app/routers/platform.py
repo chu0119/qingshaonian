@@ -1228,13 +1228,30 @@ def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(r
     interventions = db.query(Intervention).filter(Intervention.risk_alert_id == alert.id).all()
     log_operation(db, user, request, module="platform_risk", action="view_detail",
                   object_type="risk_alert", object_id=alert_id, object_name=student.real_name if student else "")
+    import json
+    dim_analysis = []
+    if sr and sr.triggered_rules:
+        try:
+            dim_analysis = json.loads(sr.triggered_rules) if isinstance(sr.triggered_rules, str) else sr.triggered_rules
+        except: pass
     return APIResponse.success({
         "id": alert.id, "risk_level": alert.risk_level, "risk_type": alert.risk_type or "",
         "status": alert.status, "trigger_method": alert.trigger_method or "",
         "student_name": student.real_name if student else "", "student_id": alert.student_id,
         "school_name": school.name if school else "", "school_id": alert.school_id,
         "total_score": sr.total_score if sr else 0, "dimension_scores": sr.dimension_scores if sr else {},
+        "risk_description": sr.risk_description if sr else "",
+        "dimension_analysis": dim_analysis,
         "quality_level": qa.quality_level if qa else "", "quality_score": qa.quality_score if qa else 0,
+        "quality_duration": str(qa.total_duration_seconds or 0) + "秒" if qa else "-",
+        "validity": qa.validity if qa else "",
+        "suggest_retest": qa.suggest_retest if qa else False,
+        "attention_passed": qa.attention_passed if qa else None,
+        "max_consecutive_same": qa.max_consecutive_same if qa else None,
+        "contradiction_count": qa.contradiction_count if qa else None,
+        "pattern_detected": qa.pattern_detected if qa else None,
+        "fast_question_count": qa.fast_question_count if qa else None,
+        "quality_deductions": (qa.details or {}).get("deductions", []) if qa else [],
         "interventions": [{"id": iv.id, "method": iv.method, "status": iv.status, "content": iv.content or "",
             "created_at": iv.created_at.isoformat() if iv.created_at else None} for iv in interventions],
         "created_at": alert.created_at.isoformat() if alert.created_at else None,
