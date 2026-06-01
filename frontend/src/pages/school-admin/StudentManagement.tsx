@@ -416,6 +416,15 @@ export default function StudentManagement() {
                   disabled={!!editingStudent}
                   placeholder="请输入18位身份证号"
                   maxLength={18}
+                  onChange={e => {
+                    const id = e.target.value.trim();
+                    if (id.length >= 17 && /^\d{17}[\dXx]$/.test(id)) {
+                      const genderDigit = parseInt(id[16], 10);
+                      if (!isNaN(genderDigit)) {
+                        form.setFieldsValue({ gender: genderDigit % 2 === 1 ? '男' : '女' });
+                      }
+                    }
+                  }}
                 />
               </Form.Item>
             </Col>
@@ -439,7 +448,7 @@ export default function StudentManagement() {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
-              <Form.Item name="grade_id" label="年级">
+              <Form.Item name="grade_id" label="年级" rules={[{ required: true, message: '请选择年级' }]}>
                 <Select
                   placeholder="选择年级"
                   options={grades.map((g) => ({ value: g.value, label: g.label }))}
@@ -449,7 +458,7 @@ export default function StudentManagement() {
           </Row>
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item name="class_id" label="班级">
+              <Form.Item name="class_id" label="班级" rules={[{ required: true, message: '请选择班级' }]}>
                 <Select
                   placeholder="选择班级"
                   options={classes.map((c) => ({ value: c.id, label: c.name }))}
