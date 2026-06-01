@@ -75,12 +75,12 @@ def _cleanup_stale_entries():
 
 
 def _check_ip_rate(request: Request):
-    """Limit each IP to 20 login attempts per 15-minute window."""
+    """Limit each IP to 100 login attempts per 15-minute window."""
     ip = _get_client_ip(request)
     now = time.time()
     attempts = [t for t in _ip_login_attempts.get(ip, []) if now - t < 900]
-    if len(attempts) >= 20:
-        raise HTTPException(status_code=429, detail="请求过于频繁，请15分钟后重试")
+    if len(attempts) >= 100:
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后重试")
     _ip_login_attempts[ip] = attempts
 
 
@@ -154,8 +154,8 @@ def _record_auth_failure(username: str):
     sec["failure_count"] += 1
     sec["last_failure_ts"] = time.time()
 
-    # After first failure, CAPTCHA becomes required
-    if sec["failure_count"] >= 1:
+    # After 3 failures, CAPTCHA becomes required
+    if sec["failure_count"] >= 3:
         sec["captcha_required"] = True
 
     # After 10 failures, trigger progressive lockout
