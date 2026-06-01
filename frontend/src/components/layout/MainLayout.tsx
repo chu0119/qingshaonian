@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { changePassword } from '../../api/auth';
+import NotificationBell from '../common/NotificationBell';
 import type { MenuProps } from 'antd';
 
 const { Header, Sider, Content } = Layout;
@@ -202,7 +203,9 @@ export default function MainLayout() {
             </Typography.Text>
           </div>
 
-          <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} placement="bottomRight" trigger={['click']}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <NotificationBell />
+            <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} placement="bottomRight" trigger={['click']}>
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px 4px 4px', borderRadius: 10, transition: 'all 0.2s', background: 'transparent' }}>
               <Avatar icon={<UserOutlined />} size={isMobile ? 30 : 34} style={{ backgroundColor: '#1677ff', boxShadow: '0 2px 6px rgba(22,119,255,0.3)' }} />
               {!isMobile && (
@@ -213,6 +216,7 @@ export default function MainLayout() {
               )}
             </div>
           </Dropdown>
+          </div>
         </Header>
 
         {isImpersonating && (

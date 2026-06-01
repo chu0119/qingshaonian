@@ -73,6 +73,7 @@ from .routers import system as system_router
 from .routers import ai_analysis as ai_router
 from .routers import platform as platform_router
 from .routers import sms as sms_router
+from .routers import notifications as notifications_router
 
 app.include_router(auth.router)
 app.include_router(common.router)
@@ -91,6 +92,7 @@ app.include_router(system_router.router)
 app.include_router(ai_router.router)
 app.include_router(platform_router.router)
 app.include_router(sms_router.router)
+app.include_router(notifications_router.router)
 
 
 @app.get("/api/v1/health")
