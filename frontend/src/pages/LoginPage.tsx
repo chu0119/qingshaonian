@@ -71,12 +71,21 @@ export default function LoginPage() {
       navigate(rolePathMap[result.user.role] || '/', { replace: true });
     } catch (error: any) {
       const errorDetail = error.response?.data?.detail;
-      const errorMsg = typeof errorDetail === 'object' && errorDetail?.message
-        ? errorDetail.message
-        : '账号或密码错误，请重试';
-      const needsCaptcha = typeof errorDetail === 'object' && errorDetail?.captcha_required;
+      let errorMsg = '登录失败，请重试';
+      let needsCaptcha = false;
 
-      message.error(errorMsg);
+      if (typeof errorDetail === 'object' && errorDetail !== null) {
+        errorMsg = errorDetail.message || errorMsg;
+        needsCaptcha = !!errorDetail.captcha_required;
+      } else if (typeof errorDetail === 'string') {
+        errorMsg = errorDetail;
+      } else if (error.response?.status === 429) {
+        errorMsg = '当前网络登录请求过多，请稍后重试';
+      } else if (error.response?.status === 423) {
+        errorMsg = '账号已被锁定，请稍后重试';
+      }
+
+      message.error(errorMsg, 5);
 
       if (needsCaptcha && !captchaRequired) {
         setCaptchaRequired(true);

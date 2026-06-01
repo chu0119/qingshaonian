@@ -80,7 +80,7 @@ def _check_ip_rate(request: Request):
     now = time.time()
     attempts = [t for t in _ip_login_attempts.get(ip, []) if now - t < 900]
     if len(attempts) >= 300:
-        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后重试")
+        raise HTTPException(status_code=429, detail={"message": "当前网络登录请求过多，请稍后重试", "captcha_required": False})
     _ip_login_attempts[ip] = attempts
 
 
@@ -235,7 +235,8 @@ def authenticate(db: Session, request_data: LoginRequest, request: Request) -> L
         )
 
     if not user.status:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用，请联系管理员")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail={"message": "账号已被禁用，请联系管理员", "captcha_required": False})
 
     # 7. Success - clear all failure state
     _clear_auth_failures(request_data.username)
