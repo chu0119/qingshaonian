@@ -89,9 +89,13 @@ export default function AnswerPage() {
       message.warning('当前任务暂不可提交，请留意任务状态和截止时间');
       return;
     }
-    const unansweredRequired = sheet.questions.filter((q: any) => q.required && !hasAnswer(answers[q.id]));
-    if (unansweredRequired.length > 0) {
-      message.warning(`还有 ${unansweredRequired.length} 道必答题未回答`);
+    // 检查未答必填题，跳转到第一道未答题
+    const firstUnansweredIdx = questions.findIndex((q: any) => q.required && !hasAnswer(answers[q.id]));
+    if (firstUnansweredIdx >= 0) {
+      const q = questions[firstUnansweredIdx];
+      message.warning(`第 ${firstUnansweredIdx + 1} 题「${q.title.slice(0, 20)}...」为必答题，请先作答`);
+      setCurrentIndex(firstUnansweredIdx);
+      setQuestionStart(Date.now());
       return;
     }
     Modal.confirm({
@@ -103,7 +107,10 @@ export default function AnswerPage() {
           await saveToServer(answers, false);
           await client.post(`/student/answer-sheets/${answerSheetId}/submit`);
           setSubmitted(true);
-        } catch { message.error('提交失败，请重试'); }
+        } catch (err: any) {
+          const detail = err?.response?.data?.detail || '提交失败，请重试';
+          message.error(detail, 5);
+        }
         finally { setSaving(false); }
       },
     });
