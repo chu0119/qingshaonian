@@ -691,6 +691,66 @@ def platform_risk_alerts(
     })
 
 
+@router.get("/risk-alerts/export")
+def platform_risk_alerts_export(
+    school_id: int | None = Query(None), risk_level: str = Query(""),
+    status: str = Query(""), keyword: str = Query(""),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+    request: Request = None,
+):
+    """风险预警导出——返回全量 CSV（含完整身份证号）"""
+    import io, csv
+
+    q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id)
+    if school_id:
+        q = q.filter(RiskAlert.school_id == school_id)
+    if risk_level:
+        q = q.filter(RiskAlert.risk_level == risk_level)
+    if status:
+        q = q.filter(RiskAlert.status == status)
+    if keyword:
+        q = q.filter(User.real_name.contains(keyword))
+    items = q.order_by(RiskAlert.id.desc()).all()
+
+    students = {u.id: u for u in db.query(User).filter(User.id.in_([a.student_id for a in items])).all()} if items else {}
+    school_names = dict(db.query(School.id, School.name).filter(School.id.in_([a.school_id for a in items])).all()) if items else {}
+    grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
+    class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
+
+    risk_level_labels = {"low": "低风险", "medium": "中风险", "high": "高风险", "urgent": "危急"}
+    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "completed": "已完成"}
+
+    buf = io.StringIO()
+    buf.write('﻿')  # BOM for Excel
+    writer = csv.writer(buf)
+    writer.writerow(["学生姓名", "身份证号", "学校", "年级", "班级", "风险等级", "风险类型", "状态", "总分", "触发方式", "创建时间"])
+
+    for a in items:
+        stu = students.get(a.student_id)
+        id_card = stu.username if stu else ""  # 完整身份证号，不做脱敏
+        student_name = stu.real_name if stu else ""
+        school_name = school_names.get(a.school_id, "")
+        grade_name = grade_names.get(stu.grade_id, "") if stu and stu.grade_id else ""
+        class_name = class_names.get(stu.class_id, "") if stu and stu.class_id else ""
+        writer.writerow([
+            student_name, id_card, school_name, grade_name, class_name,
+            risk_level_labels.get(a.risk_level, a.risk_level),
+            a.risk_type or "", status_labels.get(a.status, a.status),
+            a.total_score or 0, a.trigger_method or "",
+            a.created_at.strftime("%Y-%m-%d %H:%M:%S") if a.created_at else "",
+        ])
+
+    log_operation(db, user, request, module="platform_risk", action="export",
+                  object_type="risk_alerts", object_name=f"导出{len(items)}条风险预警")
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=risk_alerts_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
 @router.get("/key-students")
 def platform_key_students(
     page: int = Query(1), page_size: int = Query(20),

@@ -15,6 +15,15 @@ interface Props {
 export default function AnswerDetail({ answerSheetId, alertId, platformMode = false, open, onClose }: Props) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(960);
+
+  useEffect(() => {
+    const w = Math.min(window.innerWidth - 40, 1200);
+    setDrawerWidth(w);
+    const handleResize = () => setDrawerWidth(Math.min(window.innerWidth - 40, 1200));
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +102,7 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
   ];
 
   return (
-    <Drawer title="答题详情" open={open} onClose={onClose} width={960} destroyOnClose>
+    <Drawer title="答题详情" open={open} onClose={onClose} width={drawerWidth} destroyOnClose>
       {loading ? <Spin /> : detail ? (
         <div>
           <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
