@@ -47,6 +47,10 @@ export const DIMENSION_LABELS: Record<string, string> = {
   emotion: '情绪状态', sleep: '睡眠状态', academic_pressure: '学习压力',
   interpersonal: '人际关系', family_support: '家庭支持', campus_safety: '校园安全',
   internet_use: '网络使用', self_safety: '自我安全', general: '综合',
+  self_trait: '自我认知与心理特质', family: '家庭环境与亲子关系',
+  school_life: '校园生活与学习状态', digital: '数字环境与网络行为',
+  social_rule: '社会规则与行为规范', social_support: '社会支持与求助意识',
+  antisocial: '反社会倾向', digital_risk: '网络风险行为',
 };
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
