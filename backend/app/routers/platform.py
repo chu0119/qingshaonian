@@ -693,10 +693,10 @@ def platform_risk_alerts(
 
 @router.get("/risk-alerts/export")
 def platform_risk_alerts_export(
+    request: Request,
     school_id: int | None = Query(None), risk_level: str = Query(""),
     status: str = Query(""), keyword: str = Query(""),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
-    request: Request = None,
 ):
     """风险预警导出——返回全量 CSV（含完整身份证号）"""
     import io, csv
