@@ -173,7 +173,7 @@ def import_students_from_excel(db: Session, school_id: int, file_bytes: bytes) -
 
     for i, row in enumerate(rows):
         try:
-            student_no = str(get_val(row, "学号", 0) or "").strip()
+            student_no = str(get_val(row, "学号") or "").strip()
             name = str(get_val(row, "姓名", 1) or "").strip()
             id_card = str(get_val(row, "身份证号") or "").strip() if "身份证号" in col_map else ""
             gender = str(get_val(row, "性别", 2) or "").strip()
