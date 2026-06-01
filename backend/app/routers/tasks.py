@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, Grade, Class
 from ..models.task import Task, AnswerSheet, AnswerRecord
-from ..models.risk import RiskAlert, ScoringResult, QualityAssessment
+from ..models.risk import RiskAlert, ScoringResult, QualityAssessment, Intervention
 from ..models.questionnaire import Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services.audit_service import log_operation
