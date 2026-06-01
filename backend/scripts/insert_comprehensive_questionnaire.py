@@ -103,10 +103,10 @@ def insert():
         risk_rules={
             "basis": "total_score",
             "total_score_ranges": [
-                {"min": 100, "max": 185, "level": "low"},
-                {"min": 186, "max": 245, "level": "medium"},
-                {"min": 246, "max": 325, "level": "high"},
-                {"min": 326, "max": 400, "level": "urgent"},
+                {"min": 100, "max": 180, "level": "low"},
+                {"min": 181, "max": 240, "level": "medium"},
+                {"min": 241, "max": 310, "level": "high"},
+                {"min": 311, "max": 400, "level": "urgent"},
             ],
             "dimension_pct_rules": [
                 {"dimension": "self_trait", "min_pct": 75, "level": "high"},
@@ -115,10 +115,10 @@ def insert():
                 {"dimension": "digital", "min_pct": 70, "level": "medium"},
             ],
             "risk_tag_rules": {
-                "self_safety": {"level": "medium", "type_label": "自我安全关注信号"},
-                "antisocial": {"level": "medium", "type_label": "反社会倾向信号"},
-                "family_support": {"level": "medium", "type_label": "家庭支持缺失信号"},
-                "digital_risk": {"level": "medium", "type_label": "网络风险行为信号"},
+                "self_safety": {"level": "high", "type_label": "自我安全关注信号", "min_count": 2},
+                "antisocial": {"level": "medium", "type_label": "反社会倾向信号", "min_count": 3},
+                "family_support": {"level": "medium", "type_label": "家庭支持缺失信号", "min_count": 3},
+                "digital_risk": {"level": "medium", "type_label": "网络风险行为信号", "min_count": 3},
             },
             "messages": {
                 "low": "综合评估未发现明显风险信号，学生心理状态和生活环境总体健康。建议保持常规关注。",

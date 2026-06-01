@@ -200,7 +200,7 @@ def calculate_scores(db: Session, sheet_id: int) -> dict:
     dimension_scores: dict[str, float] = {}
     dimension_max_scores: dict[str, float] = {}
     triggered_rules = []
-    risk_types = set()
+    risk_types: dict[str, int] = {}  # tag -> count of risk options selected
     risk_type_labels: dict[str, str] = {}
 
     for record in records:
@@ -224,7 +224,7 @@ def calculate_scores(db: Session, sheet_id: int) -> dict:
             })
 
         for risk_tag in selected_risk_tags:
-            risk_types.add(risk_tag)
+            risk_types[risk_tag] = risk_types.get(risk_tag, 0) + 1
 
         if not _should_include_in_score(question, scoring_rule):
             continue
@@ -351,7 +351,7 @@ def _resolve_risk_level(
     total_max_score: float,
     total_score_pct: float,
     dimension_breakdown: dict[str, dict],
-    risk_types: set[str],
+    risk_types: dict[str, int],
 ) -> tuple[str, dict[str, str], list[dict]]:
     risk_rules = questionnaire.risk_rules or {} if questionnaire else {}
     triggered_rules: list[dict] = []
@@ -386,9 +386,12 @@ def _resolve_risk_level(
                 "rule_version": questionnaire.rule_version if questionnaire else "default",
             })
 
-    for risk_tag in sorted(risk_types):
+    for risk_tag, tag_count in sorted(risk_types.items()):
         tag_rule = risk_tag_rules.get(risk_tag) or {}
         if tag_rule:
+            min_count = tag_rule.get("min_count", 1)
+            if tag_count < min_count:
+                continue  # Not enough risk selections to trigger
             rule_level = tag_rule.get("level", "high")
             risk_level = _max_risk(risk_level, rule_level)
             if tag_rule.get("type_label"):
@@ -397,6 +400,8 @@ def _resolve_risk_level(
                 "type": "risk_tag_rule",
                 "risk_tag": risk_tag,
                 "level": rule_level,
+                "count": tag_count,
+                "min_count": min_count,
                 "label": tag_rule.get("type_label", ""),
                 "rule_version": questionnaire.rule_version if questionnaire else "default",
             })
@@ -428,7 +433,7 @@ def _match_range_level(value: float, ranges: list[dict], default_level: str = "l
     return default_level
 
 
-def _risk_types_chinese(risk_types: set, risk_type_labels: dict[str, str] | None = None) -> str:
+def _risk_types_chinese(risk_types: dict | set, risk_type_labels: dict[str, str] | None = None) -> str:
     tag_map = {
         "mental_pressure": "心理压力关注信号", "bullying": "校园欺凌关注信号",
         "internet_addiction": "网络使用关注信号", "family_relationship": "家庭关系关注信号",
@@ -447,7 +452,7 @@ def _risk_types_chinese(risk_types: set, risk_type_labels: dict[str, str] | None
     return ",".join(dict.fromkeys(labels)) if labels else ""
 
 
-def _generate_risk_description(questionnaire: Questionnaire | None, risk_level: str, risk_types: set) -> str:
+def _generate_risk_description(questionnaire: Questionnaire | None, risk_level: str, risk_types: dict | set) -> str:
     risk_rules = questionnaire.risk_rules or {} if questionnaire else {}
     messages = risk_rules.get("messages") or {}
     if risk_level in messages:
