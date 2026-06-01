@@ -72,21 +72,21 @@ export default function SchoolAuditLogs() {
       dataIndex: 'operator_role',
       key: 'operator_role',
       width: 110,
-      render: (v: string) => <Tag>{ROLE_LABELS[v] || v}</Tag>,
+      render: (v: string) => <Tag>{ROLE_LABELS[v] || '未知'}</Tag>,
     },
     {
       title: '模块',
       dataIndex: 'module',
       key: 'module',
       width: 100,
-      render: (v: string) => <Tag>{moduleLabels[v] || v || '-'}</Tag>,
+      render: (v: string) => <Tag>{moduleLabels[v] || '未知' || '-'}</Tag>,
     },
     {
       title: '操作',
       dataIndex: 'action',
       key: 'action',
       width: 80,
-      render: (v: string) => actionLabels[v] || v || '-',
+      render: (v: string) => actionLabels[v] || '未知' || '-',
     },
     {
       title: '对象',
@@ -114,7 +114,7 @@ export default function SchoolAuditLogs() {
       width: 70,
       render: (v: string) => {
         const color = v === 'success' ? 'green' : v === 'failure' ? 'red' : 'default';
-        return <Tag color={color}>{RESULT_LABELS[v] || v || '-'}</Tag>;
+        return <Tag color={color}>{RESULT_LABELS[v] || '未知' || '-'}</Tag>;
       },
     },
   ];

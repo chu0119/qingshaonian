@@ -181,7 +181,7 @@ export default function SchoolManagement() {
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增学校</Button>
         </Space>
       </div>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 所学校` }} />
 
       {/* 编辑弹窗 */}
@@ -311,7 +311,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无最近任务" /> }}
                         columns={[
                           { title: '任务名称', dataIndex: 'name' },
-                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{TASK_STATUS_LABELS[v] || v}</Tag> },
+                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{TASK_STATUS_LABELS[v] || '未知'}</Tag> },
                           { title: '更新时间', dataIndex: 'updated_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />
@@ -329,7 +329,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无登录记录" /> }}
                         columns={[
                           { title: '账号', dataIndex: 'username' },
-                          { title: '角色', dataIndex: 'role', render: (v: string) => ROLE_LABELS[v] || v },
+                          { title: '角色', dataIndex: 'role', render: (v: string) => ROLE_LABELS[v] || '未知' },
                           { title: '登录时间', dataIndex: 'login_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />
@@ -347,7 +347,7 @@ export default function SchoolManagement() {
                         locale={{ emptyText: <Empty description="暂无风险处理记录" /> }}
                         columns={[
                           { title: '风险提示ID', dataIndex: 'id' },
-                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{RISK_STATUS_LABELS[v] || v}</Tag> },
+                          { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{RISK_STATUS_LABELS[v] || '未知'}</Tag> },
                           { title: '最近处理时间', dataIndex: 'latest_handled_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                         ]}
                       />

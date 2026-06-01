@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
@@ -215,8 +216,7 @@ def school_audit_logs(
     if start_date:
         q = q.filter(OperationLog.operation_time >= start_date)
     if end_date:
-        from datetime import datetime
-        end_dt = datetime.fromisoformat(end_date) + __import__('datetime').timedelta(days=1)
+        end_dt = datetime.fromisoformat(end_date) + timedelta(days=1)
         q = q.filter(OperationLog.operation_time < end_dt.isoformat())
     total = q.count()
     logs = q.order_by(OperationLog.operation_time.desc()).offset((page - 1) * page_size).limit(page_size).all()

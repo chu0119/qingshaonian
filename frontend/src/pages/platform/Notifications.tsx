@@ -42,8 +42,8 @@ export default function PlatformSmsCenter() {
   const columns = [
     { title: '接收人', dataIndex: 'recipient_name', key: 'recipient_name', width: 100, render: (v: string) => v || '-' },
     { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120, render: (v: string) => v ? v.substring(0, 3) + '****' + v.substring(7) : '-' },
-    { title: '类型', dataIndex: 'sms_type', key: 'sms_type', width: 80, render: (v: string) => SMS_TYPE_LABELS[v] || v || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (v: string) => <Tag color={v === 'sent' ? 'green' : v === 'failed' ? 'red' : 'default'}>{SMS_STATUS_LABELS[v] || v}</Tag> },
+    { title: '类型', dataIndex: 'sms_type', key: 'sms_type', width: 80, render: (v: string) => SMS_TYPE_LABELS[v] || '未知' || '-' },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (v: string) => <Tag color={v === 'sent' ? 'green' : v === 'failed' ? 'red' : 'default'}>{SMS_STATUS_LABELS[v] || '未知'}</Tag> },
     { title: '发送时间', dataIndex: 'sent_at', key: 'sent_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '失败原因', dataIndex: 'failure_reason', key: 'failure_reason', ellipsis: true, width: 150 },
   ];

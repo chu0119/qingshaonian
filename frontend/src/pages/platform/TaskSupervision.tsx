@@ -68,7 +68,7 @@ export default function PlatformTaskSupervision() {
   const exportCSV = () => {
     const header = '任务名称,学校,问卷,状态,开始时间,截止时间\n';
     const rows = data.map((r: any) =>
-      `${r.name},${r.school_name},${r.questionnaire_title || '-'},${statusLabels[r.status] || r.status},${r.start_time || '-'},${r.end_time || '-'}`
+      `${r.name},${r.school_name},${r.questionnaire_title || '-'},${statusLabels[r.status] || '未知'},${r.start_time || '-'},${r.end_time || '-'}`
     ).join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -231,7 +231,7 @@ export default function PlatformTaskSupervision() {
     { title: '任务名称', dataIndex: 'name', key: 'name', width: 200, sorter: (a: any, b: any) => (a.name || '').localeCompare(b.name || ''), render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
     { title: '问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', width: 160, render: (v: string) => v || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || v}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
     { title: '完成进度', key: 'progress', width: 140, render: (_: any, r: any) => {
       const exp = r.expected_count || 0, comp = r.completed_count || 0;
       return exp > 0 ? <span>{comp}/{exp} <Progress percent={Math.round(comp / exp * 100)} size="small" style={{ width: 60, display: 'inline-block', marginLeft: 4 }} /></span> : <span>-</span>;
@@ -291,7 +291,7 @@ export default function PlatformTaskSupervision() {
               <Descriptions.Item label="任务名称" span={2}>{detail.name}</Descriptions.Item>
               <Descriptions.Item label="学校">{detail.school_name}</Descriptions.Item>
               <Descriptions.Item label="问卷">{detail.questionnaire_title || '-'}</Descriptions.Item>
-              <Descriptions.Item label="状态"><Tag color={statusColors[detail.status]}>{statusLabels[detail.status] || detail.status}</Tag></Descriptions.Item>
+              <Descriptions.Item label="状态"><Tag color={statusColors[detail.status]}>{statusLabels[detail.status] || '未知'}</Tag></Descriptions.Item>
               <Descriptions.Item label="目标类型">{detail.target_type === 'all' ? '全校' : detail.target_type === 'grade' ? '年级' : detail.target_type === 'class' ? '班级' : '个人'}</Descriptions.Item>
               <Descriptions.Item label="开始时间">{detail.start_time ? new Date(detail.start_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
               <Descriptions.Item label="截止时间">{detail.end_time ? new Date(detail.end_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>

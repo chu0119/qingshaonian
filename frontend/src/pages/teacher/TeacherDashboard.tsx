@@ -64,7 +64,7 @@ export default function TeacherDashboard() {
   const stats = data?.stats || {};
 
   const getRiskLevelTag = (level: string) => {
-    return <Tag color={RISK_COLORS[level] || 'default'}>{RISK_LABELS[level] || level || '-'}</Tag>;
+    return <Tag color={RISK_COLORS[level] || 'default'}>{RISK_LABELS[level] || '未知' || '-'}</Tag>;
   };
 
   return (
@@ -164,7 +164,7 @@ export default function TeacherDashboard() {
                           <Tag color="orange" style={{ marginLeft: 8 }}>待跟进</Tag>
                         </span>
                       }
-                      description={METHOD_LABELS[item.intervention_type || item.method] || item.intervention_type || item.description || '-'}
+                      description={METHOD_LABELS[item.intervention_type || item.method] || '未知'}
                     />
                   </List.Item>
                 )}

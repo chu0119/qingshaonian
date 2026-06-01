@@ -121,7 +121,7 @@ export default function PlatformInterventionSupervision() {
     const items = tab === 'overdue' ? overdueData : data;
     const header = '学生,身份证号,学校,年级,班级,负责教师,干预方式,状态,内容摘要,干预时间,需跟进\n';
     const rows = items.map((r: any) =>
-      `${r.student_name},${maskIdCard(r.id_card)},${r.school_name},${r.student_grade || '-'},${r.student_class || '-'},${r.teacher_name || '-'},${methodLabels[r.method] || r.method},${statusLabels[r.status] || r.status},${(r.content || '-').replace(/,/g, '，')},${r.intervention_time || '-'},${r.need_follow_up ? '是' : '否'}`
+      `${r.student_name},${maskIdCard(r.id_card)},${r.school_name},${r.student_grade || '-'},${r.student_class || '-'},${r.teacher_name || '-'},${methodLabels[r.method] || '未知'},${statusLabels[r.status] || '未知'},${(r.content || '-').replace(/,/g, '，')},${r.intervention_time || '-'},${r.need_follow_up ? '是' : '否'}`
     ).join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -146,8 +146,8 @@ export default function PlatformInterventionSupervision() {
     { title: '身份证号', dataIndex: 'id_card', key: 'id_card', width: 150, render: (v: string, r: any) => renderIdCard(v, r.student_id) },
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 110, ellipsis: true, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
     { title: '负责教师', dataIndex: 'teacher_name', key: 'teacher_name', width: 90, ellipsis: true, render: (v: string) => v || '-' },
-    { title: '方式', dataIndex: 'method', key: 'method', width: 100, render: (v: string) => <Tag style={{ maxWidth: 100 }}>{methodLabels[v] || v}</Tag> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || v}</Tag> },
+    { title: '方式', dataIndex: 'method', key: 'method', width: 100, render: (v: string) => <Tag style={{ maxWidth: 100 }}>{methodLabels[v] || '未知'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
     { title: '内容摘要', dataIndex: 'content', key: 'content', ellipsis: true, width: 180, render: (v: string) => v || '-' },
     { title: '干预时间', dataIndex: 'intervention_time', key: 'intervention_time', width: 110, sorter: (a: any, b: any) => new Date(a.intervention_time || 0).getTime() - new Date(b.intervention_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '需跟进', dataIndex: 'need_follow_up', key: 'need_follow_up', width: 70, render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
@@ -184,8 +184,8 @@ export default function PlatformInterventionSupervision() {
               <Descriptions.Item label="身份证号">{renderIdCard(detail.id_card, detail.student_id)}</Descriptions.Item>
               <Descriptions.Item label="学校">{detail.school_name}</Descriptions.Item>
               <Descriptions.Item label="负责教师">{detail.teacher_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="干预方式"><Tag>{methodLabels[detail.method] || detail.method}</Tag></Descriptions.Item>
-              <Descriptions.Item label="状态"><Tag color={statusColors[detail.status]}>{statusLabels[detail.status] || detail.status}</Tag></Descriptions.Item>
+              <Descriptions.Item label="干预方式"><Tag>{methodLabels[detail.method] || '未知'}</Tag></Descriptions.Item>
+              <Descriptions.Item label="状态"><Tag color={statusColors[detail.status]}>{statusLabels[detail.status] || '未知'}</Tag></Descriptions.Item>
               <Descriptions.Item label="需跟进">{detail.need_follow_up ? <Tag color="orange">是</Tag> : <Tag>否</Tag>}</Descriptions.Item>
               <Descriptions.Item label="干预时间" span={2}>{detail.intervention_time ? new Date(detail.intervention_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
             </Descriptions>

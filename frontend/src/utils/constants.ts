@@ -6,13 +6,6 @@ export const ROLES = {
   PLATFORM_ADMIN: 'platform_admin',
 } as const;
 
-export const RISK_LEVELS = {
-  low: { label: '关注', color: '#1890FF' },
-  medium: { label: '预警', color: '#FA8C16' },
-  high: { label: '警告', color: '#FF4D4F' },
-  urgent: { label: '危急', color: '#CF1322' },
-} as const;
-
 export const RISK_LABELS: Record<string, string> = {
   low: '关注', medium: '预警',
   high: '警告', urgent: '危急',
@@ -183,12 +176,6 @@ export const QUALITY_LABELS: Record<string, string> = {
 export const VALIDITY_LABELS: Record<string, string> = {
   valid: '有效', basically_valid: '基本有效', questionable: '存疑',
   not_recommended: '不建议纳入统计',
-};
-
-export const QUESTION_TYPE_LABELS: Record<string, string> = {
-  single_choice: '单选', multiple_choice: '多选', multi_choice: '多选',
-  scale: '量表', true_false: '判断', fill_blank: '填空', short_answer: '简答',
-  open_ended: '开放题',
 };
 
 export const RISK_STATUS_LABELS: Record<string, string> = {

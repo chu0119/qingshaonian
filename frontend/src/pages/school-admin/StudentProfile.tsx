@@ -156,14 +156,14 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
   /* ---------- trend chart ---------- */
   const trendOption = records.length > 1 ? {
     tooltip: { trigger: 'axis' as const },
-    legend: { data: ['总分', ...dimensionKeys.map(k => DIMENSION_LABELS[k] || k)], bottom: 0, textStyle: { fontSize: 11 } },
+    legend: { data: ['总分', ...dimensionKeys.map(k => DIMENSION_LABELS[k] || '未知')], bottom: 0, textStyle: { fontSize: 11 } },
     grid: { top: 20, bottom: 60, left: 50, right: 20 },
     xAxis: { type: 'category' as const, data: records.map(r => r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('zh-CN') : ''), axisLabel: { rotate: 30 } },
     yAxis: { type: 'value' as const },
     series: [
       { name: '总分', type: 'line', data: records.map(r => r.total_score), smooth: true, lineStyle: { width: 3 }, itemStyle: { color: '#1677ff' } },
       ...dimensionKeys.map((k, i) => ({
-        name: DIMENSION_LABELS[k] || k,
+        name: DIMENSION_LABELS[k] || '未知',
         type: 'line' as const,
         data: records.map(r => r.dimension_scores?.[k] ?? null),
         smooth: true,
@@ -176,7 +176,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
   const radarOption = latestRecord && dimensionKeys.length > 0 ? {
     tooltip: {},
     radar: {
-      indicator: dimensionKeys.map((k) => ({ name: DIMENSION_LABELS[k] || k, max: 100 })),
+      indicator: dimensionKeys.map((k) => ({ name: DIMENSION_LABELS[k] || '未知', max: 100 })),
       shape: 'polygon' as const,
       radius: '65%',
     },
@@ -194,17 +194,17 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
 
   /* ---------- columns ---------- */
   const riskColumns = [
-    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 120, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 120, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || '未知'}</Tag> },
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 160, render: (v: string) => translateRiskType(v) || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
     { title: '触发时间', dataIndex: 'created_at', key: 'created_at', width: 170, render: formatDate },
   ];
 
   const interventionColumns = [
-    { title: '干预方式', dataIndex: 'method', key: 'method', width: 130, render: (v: string) => methodLabels[v] || v },
+    { title: '干预方式', dataIndex: 'method', key: 'method', width: 130, render: (v: string) => methodLabels[v] || '未知' },
     { title: '干预内容', dataIndex: 'content', key: 'content', render: (v: string) => v ? (v.length > 40 ? v.substring(0, 40) + '...' : v) : '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '干预时间', dataIndex: 'intervention_time', key: 'intervention_time', width: 170, render: formatDate },
   ];
 
@@ -316,7 +316,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <Text strong>{r.questionnaire_title}</Text>
                               <Tag color={RISK_COLORS[r.risk_level] || 'default'}>
-                                {RISK_LABELS[r.risk_level] || r.risk_level}
+                                {RISK_LABELS[r.risk_level] || '未知'}
                               </Tag>
                             </div>
                             <div style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4 }}>
@@ -368,7 +368,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
                           <div style={{ padding: '8px 16px' }}>
                             <Space wrap>
                               {Object.entries(r.dimension_scores).map(([k, v]) => (
-                                <Tag key={k}>{DIMENSION_LABELS[k] || k}: {v}</Tag>
+                                <Tag key={k}>{DIMENSION_LABELS[k] || '未知'}: {v}</Tag>
                               ))}
                             </Space>
                           </div>
@@ -379,7 +379,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
                         { title: '问卷', dataIndex: 'questionnaire_title', ellipsis: true },
                         { title: '提交时间', dataIndex: 'submitted_at', width: 170, render: formatDate },
                         { title: '总分', dataIndex: 'total_score', width: 80, align: 'center' as const },
-                        { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
+                        { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || '未知'}</Tag> },
                       ]}
                     />
                   </Card>

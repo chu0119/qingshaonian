@@ -104,7 +104,7 @@ export default function PlatformKeyStudents() {
   const doExportCSV = () => {
     const header = '学生,身份证号,学校,年级,班级,风险等级,风险类型,测评总分,干预次数,创建时间\n';
     const rows = data.map((r: any) =>
-      `${r.student_name},${maskIdCard(r.id_card)},${r.school_name},${r.student_grade},${r.student_class},${RISK_LABELS[r.risk_level] || r.risk_level},${translateRiskType(r.risk_type)},${r.latest_score?.total_score?.toFixed(1) || '-'},${r.latest_score?.intervention_count || 0},${r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '-'}`
+      `${r.student_name},${maskIdCard(r.id_card)},${r.school_name},${r.student_grade},${r.student_class},${RISK_LABELS[r.risk_level] || '未知'},${translateRiskType(r.risk_type)},${r.latest_score?.total_score?.toFixed(1) || '-'},${r.latest_score?.intervention_count || 0},${r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '-'}`
     ).join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -119,7 +119,7 @@ export default function PlatformKeyStudents() {
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
     { title: '年级', dataIndex: 'student_grade', key: 'student_grade', width: 80 },
     { title: '班级', dataIndex: 'student_class', key: 'student_class', width: 80 },
-    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 90, sorter: (a: any, b: any) => (riskLevelOrder[a.risk_level] ?? 9) - (riskLevelOrder[b.risk_level] ?? 9), render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 90, sorter: (a: any, b: any) => (riskLevelOrder[a.risk_level] ?? 9) - (riskLevelOrder[b.risk_level] ?? 9), render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '未知'}</Tag> },
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 160, render: (v: string) => <span>{translateRiskType(v)}</span> },
     { title: '测评总分', key: 'score', width: 80, sorter: (a: any, b: any) => (a.latest_score?.total_score || 0) - (b.latest_score?.total_score || 0), render: (_: any, r: any) => r.latest_score?.total_score?.toFixed(1) || '-' },
     { title: '干预次数', key: 'interventions', width: 80, sorter: (a: any, b: any) => (a.latest_score?.intervention_count || 0) - (b.latest_score?.intervention_count || 0), render: (_: any, r: any) => <Tag>{r.latest_score?.intervention_count || 0}</Tag> },
@@ -169,7 +169,7 @@ export default function PlatformKeyStudents() {
                       <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
                         <Tag color={RISK_COLORS[a.risk_level]}>{RISK_LABELS[a.risk_level]}</Tag>
                         <Tag>{translateRiskType(a.risk_type)}</Tag>
-                        <Tag color={a.status === 'completed' || a.status === 'closed' ? 'green' : a.status === 'pending' ? 'red' : 'blue'}>{statusLabels[a.status] || a.status}</Tag>
+                        <Tag color={a.status === 'completed' || a.status === 'closed' ? 'green' : a.status === 'pending' ? 'red' : 'blue'}>{statusLabels[a.status] || '未知'}</Tag>
                       </div>
                       <div style={{ fontSize: 12, color: '#999' }}>{a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : '-'}</div>
                     </div>
@@ -183,7 +183,7 @@ export default function PlatformKeyStudents() {
                 <Table rowKey={(_: any, i: number | undefined) => String(i)} dataSource={detail.scores} pagination={false} size="small"
                   columns={[
                     { title: '总分', dataIndex: 'total_score', width: 80, render: (v: number) => v?.toFixed(1) || '-' },
-                    { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> },
+                    { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '未知'}</Tag> },
                     { title: '时间', dataIndex: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
                     { title: '操作', width: 80, render: (_: any, r: any) => {
                       const alert = detail.alerts?.find((a: any) => {
@@ -202,8 +202,8 @@ export default function PlatformKeyStudents() {
                 detail.interventions.map((iv: any, idx: number) => (
                   <div key={iv.id} style={{ padding: '8px 0', borderBottom: idx < detail.interventions.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Tag>{methodLabels[iv.method] || iv.method}</Tag>
-                      <Tag color={iv.status === 'completed' ? 'green' : iv.status === 'pending' ? 'red' : 'blue'}>{statusLabels[iv.status] || iv.status}</Tag>
+                      <Tag>{methodLabels[iv.method] || '未知'}</Tag>
+                      <Tag color={iv.status === 'completed' ? 'green' : iv.status === 'pending' ? 'red' : 'blue'}>{statusLabels[iv.status] || '未知'}</Tag>
                     </div>
                     {iv.content && <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>{iv.content}</div>}
                     <div style={{ fontSize: 12, color: '#999' }}>{iv.created_at ? new Date(iv.created_at).toLocaleString('zh-CN') : '-'}</div>

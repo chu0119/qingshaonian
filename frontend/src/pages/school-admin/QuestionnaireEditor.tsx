@@ -269,8 +269,8 @@ export default function QuestionnaireEditor() {
     const f = parseScoringRule(rule);
     return (
       <div>
-        <div style={{ marginBottom: 6 }}><strong>评分方式：</strong>{methodLabels[f.method] || f.method}</div>
-        <div style={{ marginBottom: 6 }}><strong>计分题型：</strong>{f.score_types.map(t => scoreTypeLabels[t] || t).join('、')}</div>
+        <div style={{ marginBottom: 6 }}><strong>评分方式：</strong>{methodLabels[f.method] || '未知'}</div>
+        <div style={{ marginBottom: 6 }}><strong>计分题型：</strong>{f.score_types.map(t => scoreTypeLabels[t] || '未知').join('、')}</div>
         <div><strong>排除注意力检测题：</strong>{f.exclude_attention_check ? '是' : '否'}</div>
       </div>
     );
@@ -283,7 +283,7 @@ export default function QuestionnaireEditor() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {ranges.map((r, i) => (
           <Tag key={i} color={RISK_COLORS[r.level] || '#666'} style={{ margin: 0 }}>
-            {RISK_LABELS[r.level] || r.level}：得分占比 {r.min}% ~ {r.max}%
+            {RISK_LABELS[r.level] || '未知'}：得分占比 {r.min}% ~ {r.max}%
           </Tag>
         ))}
       </div>
@@ -331,7 +331,7 @@ export default function QuestionnaireEditor() {
               <Descriptions.Item label="来源">{sourceTypeLabel}</Descriptions.Item>
               <Descriptions.Item label="适用年级" span={2}>{detail.applicable_grades || '-'}</Descriptions.Item>
               <Descriptions.Item label="题目数量">{detail.question_count}</Descriptions.Item>
-              <Descriptions.Item label="状态">{QUESTIONNAIRE_STATUS_LABELS[status] || status}</Descriptions.Item>
+              <Descriptions.Item label="状态">{QUESTIONNAIRE_STATUS_LABELS[status] || '未知'}</Descriptions.Item>
               <Descriptions.Item label="问卷说明" span={2}>{detail.description || '暂无说明'}</Descriptions.Item>
               <Descriptions.Item label="评估维度" span={2}>
                 <Space wrap>
@@ -380,7 +380,7 @@ export default function QuestionnaireEditor() {
                 <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>设置不同风险等级对应的得分占比区间</div>
                 {riskRanges.map((r, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Tag color={RISK_COLORS[r.level] || '#666'} style={{ width: 48, textAlign: 'center', margin: 0 }}>{RISK_LABELS[r.level] || r.level}</Tag>
+                    <Tag color={RISK_COLORS[r.level] || '#666'} style={{ width: 48, textAlign: 'center', margin: 0 }}>{RISK_LABELS[r.level] || '未知'}</Tag>
                     <span style={{ color: '#666' }}>得分占比</span>
                     <InputNumber value={r.min} onChange={v => { const rr = [...riskRanges]; rr[i] = { ...rr[i], min: v ?? 0 }; setRiskRanges(rr); }} min={0} max={100} size="small" style={{ width: 70 }} />
                     <span style={{ color: '#666' }}>% ~</span>
@@ -440,7 +440,7 @@ export default function QuestionnaireEditor() {
                 >
                   <Space size={12} wrap>
                     <Tag>{questionTypes.find(t => t.value === q.type)?.label || q.type}</Tag>
-                    {q.dimension && <Tag color="blue">{dimensionLabels[q.dimension] || q.dimension}</Tag>}
+                    {q.dimension && <Tag color="blue">{dimensionLabels[q.dimension] || '未知'}</Tag>}
                     {q.risk_tag && <Tag color="orange">{translateRiskTag(q.risk_tag)}</Tag>}
                     {q.is_reverse && <Tag color="purple">反向计分</Tag>}
                   </Space>
@@ -472,7 +472,7 @@ export default function QuestionnaireEditor() {
               const qb = questions.find(q => q.id === cg.question_b_id);
               return (
                 <div key={cg.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span>题目「{qa?.title?.substring(0, 30) || cg.question_a_id}」与「{qb?.title?.substring(0, 30) || cg.question_b_id}」应为{relationTypeLabels[cg.relation_type] || cg.relation_type}</span>
+                  <span>题目「{qa?.title?.substring(0, 30) || cg.question_a_id}」与「{qb?.title?.substring(0, 30) || cg.question_b_id}」应为{relationTypeLabels[cg.relation_type] || '未知'}</span>
                   {!isBuiltin ? (
                     <Popconfirm title="确定删除？" onConfirm={() => handleDeleteCg(cg.id!, idx)} okText="确定" cancelText="取消">
                       <Button size="small" danger icon={<DeleteOutlined />} />
@@ -548,7 +548,7 @@ export default function QuestionnaireEditor() {
             <div>
               <div style={{ marginBottom: 16, color: '#888', fontSize: 13 }}>
                 第 {previewIdx + 1} / {questions.length} 题
-                {q.dimension && <Tag style={{ marginLeft: 8 }}>{dimensionLabels[q.dimension] || q.dimension}</Tag>}
+                {q.dimension && <Tag style={{ marginLeft: 8 }}>{dimensionLabels[q.dimension] || '未知'}</Tag>}
               </div>
               <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 16 }}>{previewIdx + 1}. {q.title}</div>
               {q.description && <div style={{ color: '#666', marginBottom: 12, fontSize: 13 }}>{q.description}</div>}

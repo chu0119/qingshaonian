@@ -63,7 +63,7 @@ def get_risk_detail(alert_id: int, request: Request, user: User = Depends(requir
     if scoring and scoring.triggered_rules:
         try:
             dim_analysis = json.loads(scoring.triggered_rules) if isinstance(scoring.triggered_rules, str) else scoring.triggered_rules
-        except: pass
+        except Exception: pass
     return APIResponse.success({
         "id": alert.id, "student_name": student.real_name if student else "",
         "risk_level": alert.risk_level, "risk_type": alert.risk_type, "status": alert.status,

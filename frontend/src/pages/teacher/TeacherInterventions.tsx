@@ -103,10 +103,10 @@ export default function TeacherInterventions() {
 
   const columns = [
     { title: '学生', dataIndex: 'student_name' },
-    { title: '方式', dataIndex: 'method', render: (v: string) => methodLabels[v] || v },
+    { title: '方式', dataIndex: 'method', render: (v: string) => methodLabels[v] || '未知' },
     { title: '内容', dataIndex: 'content', render: (v: string) => (v || '').substring(0, 30) + (v?.length > 30 ? '...' : '') },
     { title: '时间', dataIndex: 'intervention_time', render: (v: string) => v?.split('T')[0] || '' },
-    { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '状态', dataIndex: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '跟进', dataIndex: 'need_follow_up', render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
     { title: '下次跟进', dataIndex: 'next_follow_up_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '操作', key: 'action', width: 200, render: (_: any, r: any) => (
@@ -164,9 +164,9 @@ export default function TeacherInterventions() {
         {detailRecord && (
           <Descriptions bordered size="small" column={1}>
             <Descriptions.Item label="学生">{detailRecord.student_name}</Descriptions.Item>
-            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || detailRecord.method}</Descriptions.Item>
+            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || '未知'}</Descriptions.Item>
             <Descriptions.Item label="干预时间">{detailRecord.intervention_time ? new Date(detailRecord.intervention_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
-            <Descriptions.Item label="状态"><Tag>{statusLabels[detailRecord.status] || detailRecord.status}</Tag></Descriptions.Item>
+            <Descriptions.Item label="状态"><Tag>{statusLabels[detailRecord.status] || '未知'}</Tag></Descriptions.Item>
             <Descriptions.Item label="干预内容">{detailRecord.content}</Descriptions.Item>
             <Descriptions.Item label="处理结果">{detailRecord.result || '-'}</Descriptions.Item>
             <Descriptions.Item label="后续建议">{detailRecord.follow_up_suggestion || '-'}</Descriptions.Item>

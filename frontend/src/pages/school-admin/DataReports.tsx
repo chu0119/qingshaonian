@@ -510,7 +510,7 @@ export default function DataReports() {
                 {
                   title: '分类', dataIndex: 'category', key: 'category', width: 110,
                   render: (cat: string) => (
-                    <Tag>{questionnaireCategoryLabels[cat] || cat}</Tag>
+                    <Tag>{questionnaireCategoryLabels[cat] || '未知'}</Tag>
                   ),
                 },
                 {
@@ -574,14 +574,14 @@ export default function DataReports() {
                   </Typography.Text>
                   <ReactECharts style={{ height: 350, marginBottom: 16 }} option={{
                     tooltip: { trigger: 'axis' },
-                    legend: { data: ['总分', ...(longitudinalData.records[0]?.dimension_scores ? Object.keys(longitudinalData.records[0].dimension_scores).map(dim => DIMENSION_LABELS[dim] || dim) : [])], bottom: 0 },
+                    legend: { data: ['总分', ...(longitudinalData.records[0]?.dimension_scores ? Object.keys(longitudinalData.records[0].dimension_scores).map(dim => DIMENSION_LABELS[dim] || '未知') : [])], bottom: 0 },
                     grid: { left: 50, right: 20, top: 20, bottom: 60 },
                     xAxis: { type: 'category', data: longitudinalData.records.map(r => r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('zh-CN') : '-') },
                     yAxis: { type: 'value' },
                     series: [
                       { name: '总分', type: 'line', data: longitudinalData.records.map(r => r.total_score), smooth: true, lineStyle: { width: 3 } },
                       ...Object.keys(longitudinalData.records[0]?.dimension_scores || {}).map(dim => ({
-                        name: DIMENSION_LABELS[dim] || dim, type: 'line' as const, smooth: true,
+                        name: DIMENSION_LABELS[dim] || '未知', type: 'line' as const, smooth: true,
                         data: longitudinalData.records.map(r => (r.dimension_scores as Record<string, number>)?.[dim] ?? null),
                       })),
                     ],
@@ -596,7 +596,7 @@ export default function DataReports() {
                       { title: '测评时间', dataIndex: 'submitted_at', width: 120, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
                       { title: '问卷', dataIndex: 'questionnaire_title', ellipsis: true },
                       { title: '总分', dataIndex: 'total_score', width: 80 },
-                      { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => v ? <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> : '-' },
+                      { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => v ? <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '未知'}</Tag> : '-' },
                     ]}
                   />
                 </>

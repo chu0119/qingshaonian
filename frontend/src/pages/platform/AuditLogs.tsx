@@ -48,10 +48,10 @@ export default function PlatformAuditLogs() {
     { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '模块', dataIndex: 'module_label', key: 'module', width: 100, render: (v: string, r: any) => <Tag>{v || r.module}</Tag> },
     { title: '操作', dataIndex: 'action_label', key: 'action', width: 120, render: (v: string, r: any) => v || r.action },
-    { title: '操作人', dataIndex: 'operator_name', key: 'operator_name', width: 120, render: (v: string, r: any) => `${v} (${roleLabels[r.operator_role] || r.operator_role})` },
+    { title: '操作人', dataIndex: 'operator_name', key: 'operator_name', width: 120, render: (v: string, r: any) => `${v} (${roleLabels[r.operator_role] || '未知'})` },
     { title: '对象类型', dataIndex: 'object_type_label', key: 'object_type', width: 90, render: (v: string, r: any) => v || r.object_type },
     { title: '对象', dataIndex: 'object_name', key: 'object_name', width: 120 },
-    { title: '结果', dataIndex: 'result', key: 'result', width: 70, render: (v: string) => <Tag color={resultColors[v]}>{RESULT_LABELS[v] || v}</Tag> },
+    { title: '结果', dataIndex: 'result', key: 'result', width: 70, render: (v: string) => <Tag color={resultColors[v]}>{RESULT_LABELS[v] || '未知'}</Tag> },
     { title: '详情', dataIndex: 'detail', key: 'detail', ellipsis: true, width: 150 },
     { title: 'IP', dataIndex: 'ip', key: 'ip', width: 120 },
   ];
@@ -59,7 +59,7 @@ export default function PlatformAuditLogs() {
   const loginColumns = [
     { title: '登录时间', dataIndex: 'login_time', key: 'login_time', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '用户名', dataIndex: 'username', key: 'username', width: 120 },
-    { title: '角色', dataIndex: 'user_role', key: 'user_role', width: 100, render: (v: string) => <Tag>{roleLabels[v] || v}</Tag> },
+    { title: '角色', dataIndex: 'user_role', key: 'user_role', width: 100, render: (v: string) => <Tag>{roleLabels[v] || '未知'}</Tag> },
     { title: 'IP', dataIndex: 'login_ip', key: 'login_ip', width: 120 },
     { title: '结果', dataIndex: 'result', key: 'result', width: 80, render: (v: string) => <Tag color={v === 'success' ? 'green' : 'red'}>{v === 'success' ? '成功' : '失败'}</Tag> },
     { title: '失败原因', dataIndex: 'failure_reason', key: 'failure_reason', ellipsis: true, width: 150, render: (v: string) => v || '-' },

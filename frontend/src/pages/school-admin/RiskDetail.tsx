@@ -72,9 +72,9 @@ export default function RiskDetail() {
             <Card title="答题质量评估" style={{ marginTop: 16 }}>
               <Row gutter={[16, 8]}>
                 <Col xs={12} sm={6}><Statistic title="质量评分" value={quality.quality_score} suffix="分" valueStyle={{ color: quality.quality_score >= 80 ? '#67C23A' : quality.quality_score >= 60 ? '#E6A23C' : '#FF4D4F', fontSize: 20 }} /></Col>
-                <Col xs={12} sm={6}><Statistic title="质量等级" value={qualityLabels[quality.quality_level] || quality.quality_level} valueStyle={{ color: qualityColors[quality.quality_level] || '#666', fontSize: 20 }} /></Col>
+                <Col xs={12} sm={6}><Statistic title="质量等级" value={qualityLabels[quality.quality_level] || '未知'} valueStyle={{ color: qualityColors[quality.quality_level] || '#666', fontSize: 20 }} /></Col>
                 <Col xs={12} sm={6}><Statistic title="答题时长" value={quality.total_duration_formatted || '-'} valueStyle={{ fontSize: 20 }} /></Col>
-                <Col xs={12} sm={6}><Statistic title="有效性" value={validityLabels[quality.validity] || quality.validity_label || quality.validity} valueStyle={{ fontSize: 20 }} /></Col>
+                <Col xs={12} sm={6}><Statistic title="有效性" value={validityLabels[quality.validity] || quality.validity_label || '未知'} valueStyle={{ fontSize: 20 }} /></Col>
               </Row>
               <Divider />
               <Descriptions column={{ xs: 1, sm: 2 }} size="small">
@@ -106,7 +106,7 @@ export default function RiskDetail() {
               Object.entries(dimScores).map(([dim, score]) => (
                 <div key={dim} style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 13 }}>{dimLabels[dim] || dim}</span>
+                    <span style={{ fontSize: 13 }}>{dimLabels[dim] || '未知'}</span>
                     <span style={{ fontWeight: 500 }}>{score as number} 分</span>
                   </div>
                   <Progress percent={Math.min((score as number) / 20 * 100, 100)} showInfo={false}
@@ -156,11 +156,11 @@ export default function RiskDetail() {
       <AiAnalysisModal open={aiOpen} type="student_risk" data={{
         student_id: detail.student_id,
         name: detail.student_name,
-        risk_level: riskLabels[detail.risk_level]?.label || detail.risk_level,
+        risk_level: riskLabels[detail.risk_level]?.label || '未知',
         risk_type: translateRiskType(detail.risk_type) || '暂无分类',
         total_score: detail.total_score?.toFixed(1) || '-',
-        dimension_scores: Object.entries(detail.dimension_scores || {}).map(([k, v]) => `${dimLabels[k] || k}: ${v}分`).join('、') || '暂无数据',
-        quality_level: quality ? (qualityLabels[quality.quality_level] || quality.quality_level) : '暂无数据',
+        dimension_scores: Object.entries(detail.dimension_scores || {}).map(([k, v]) => `${dimLabels[k] || '未知'}: ${v}分`).join('、') || '暂无数据',
+        quality_level: quality ? (qualityLabels[quality.quality_level] || '未知') : '暂无数据',
         quality_score: quality?.quality_score ?? '-',
         attention_passed: quality?.attention_passed ? '通过' : (quality ? '未通过' : '暂无数据'),
         duration: quality?.total_duration_formatted || '未知',

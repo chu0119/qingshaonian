@@ -39,10 +39,10 @@ export default function RiskStudents() {
     { title: '年级', dataIndex: 'grade_name', key: 'grade_name' },
     { title: '班级', dataIndex: 'class_name', key: 'class_name' },
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', render: (v: string) => translateRiskType(v) },
-    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={riskColors[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={riskColors[v] || 'default'}>{RISK_LABELS[v] || '未知'}</Tag> },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
-    { title: '答题质量状态', dataIndex: 'quality_level', key: 'quality_level', render: (v: string) => qualityLabels[v] || v || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '答题质量状态', dataIndex: 'quality_level', key: 'quality_level', render: (v: string) => qualityLabels[v] || '未知' || '-' },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     {
       title: '操作',

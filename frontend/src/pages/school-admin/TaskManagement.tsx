@@ -213,7 +213,7 @@ export default function TaskManagement() {
   const columns = [
     { title: '任务名称', dataIndex: 'name', key: 'name', render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '问卷名称', dataIndex: 'questionnaire_title', key: 'questionnaire_title' },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusLabels[v]?.color}>{statusLabels[v]?.label || v}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusLabels[v]?.color}>{statusLabels[v]?.label || '未知'}</Tag> },
     {
       title: '完成情况',
       key: 'completion',
@@ -347,6 +347,7 @@ export default function TaskManagement() {
         dataSource={data}
         columns={columns}
         loading={loading}
+        scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }}
       />
 

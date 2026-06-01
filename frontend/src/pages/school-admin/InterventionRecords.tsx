@@ -85,10 +85,10 @@ export default function InterventionRecords() {
 
   const columns = [
     { title: '学生姓名', dataIndex: 'student_name', key: 'student_name' },
-    { title: '干预方式', dataIndex: 'method', key: 'method', render: (v: string) => methodLabels[v] || v },
+    { title: '干预方式', dataIndex: 'method', key: 'method', render: (v: string) => methodLabels[v] || '未知' },
     { title: '干预内容', dataIndex: 'content', key: 'content', render: (v: string) => v ? v.substring(0, 30) + (v.length > 30 ? '...' : '') : '-' },
     { title: '干预时间', dataIndex: 'intervention_time', key: 'intervention_time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '持续跟进', dataIndex: 'need_follow_up', key: 'need_follow_up', render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
     { title: '操作', key: 'action', width: 150, render: (_: unknown, r: any) => (
       <Space>
@@ -165,11 +165,11 @@ export default function InterventionRecords() {
         {detailRecord && (
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="学生姓名">{detailRecord.student_name}</Descriptions.Item>
-            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || detailRecord.method}</Descriptions.Item>
+            <Descriptions.Item label="干预方式">{methodLabels[detailRecord.method] || '未知'}</Descriptions.Item>
             <Descriptions.Item label="干预内容">{detailRecord.content || '-'}</Descriptions.Item>
             <Descriptions.Item label="干预结果">{detailRecord.result || '-'}</Descriptions.Item>
             <Descriptions.Item label="后续建议">{detailRecord.follow_up_suggestion || '-'}</Descriptions.Item>
-            <Descriptions.Item label="处理状态"><Tag>{statusLabels[detailRecord.status] || detailRecord.status}</Tag></Descriptions.Item>
+            <Descriptions.Item label="处理状态"><Tag>{statusLabels[detailRecord.status] || '未知'}</Tag></Descriptions.Item>
             <Descriptions.Item label="持续跟进">{detailRecord.need_follow_up ? <Tag color="orange">是</Tag> : <Tag>否</Tag>}</Descriptions.Item>
             <Descriptions.Item label="干预时间">{detailRecord.intervention_time ? new Date(detailRecord.intervention_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
           </Descriptions>

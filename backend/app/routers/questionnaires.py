@@ -204,7 +204,9 @@ def delete_question(qid: int, question_id: int, user: User = Depends(require_rol
 
 
 @router.put("/{qid}/questions/sort")
-def sort_questions(qid: int, question_ids: list[int] = [], user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+def sort_questions(qid: int, question_ids: list[int] | None = None, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    if not question_ids:
+        question_ids = []
     _get_accessible_questionnaire(db, qid, user, writable=True)
     count = db.query(Question).filter(Question.questionnaire_id == qid, Question.id.in_(question_ids)).count() if question_ids else 0
     if count != len(set(question_ids)):

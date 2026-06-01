@@ -153,7 +153,7 @@ export default function Dashboard() {
           color={riskColors[v] || 'default'}
           style={{ borderRadius: 4, fontWeight: 500 }}
         >
-          {riskLabels[v] || v}
+          {riskLabels[v] || '未知'}
         </Tag>
       ),
     },

@@ -120,7 +120,7 @@ export default function MainLayout() {
   };
 
   const userMenuItems: MenuProps['items'] = [
-    { key: 'info', label: (<div style={{ padding: '4px 0' }}><div style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{user.real_name}</div><div style={{ fontSize: 12, color: '#8c8c8c' }}>{isImpersonating ? '平台管理员' : (roleLabels[user.role] || user.role)}</div></div>), disabled: true },
+    { key: 'info', label: (<div style={{ padding: '4px 0' }}><div style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{user.real_name}</div><div style={{ fontSize: 12, color: '#8c8c8c' }}>{isImpersonating ? '平台管理员' : (roleLabels[user.role] || '未知')}</div></div>), disabled: true },
     { type: 'divider' as const },
     { key: 'changePassword', icon: <KeyOutlined />, label: '修改密码' },
     { type: 'divider' as const },

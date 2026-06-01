@@ -34,7 +34,7 @@ export default function MyQuestionnaires() {
 
   const columns = [
     { title: '问卷标题', dataIndex: 'title', render: (v: string, r: QuestionnaireInfo) => <a onClick={() => navigate(`/teacher/questionnaires/${r.id}/edit`)}>{v}</a> },
-    { title: '分类', dataIndex: 'category', render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || v}</Tag> },
+    { title: '分类', dataIndex: 'category', render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || '未知'}</Tag> },
     { title: '题目数', dataIndex: 'question_count' },
     { title: '适用年级', dataIndex: 'applicable_grades', render: (v: string) => v || '-' },
     {
@@ -43,13 +43,13 @@ export default function MyQuestionnaires() {
       render: (_: unknown, r: QuestionnaireInfo) => (
         <Space size={4} wrap>
           {r.is_builtin ? <Tag color="blue">内置问卷</Tag> : <Tag>自建问卷</Tag>}
-          <Tag>{SOURCE_TYPE_LABELS[r.source_type] || r.source_type}</Tag>
+          <Tag>{SOURCE_TYPE_LABELS[r.source_type] || '未知'}</Tag>
         </Space>
       ),
     },
     { title: '状态', dataIndex: 'status', render: (v: string) => {
       const m: Record<string, any> = { draft: { color: 'default', label: QUESTIONNAIRE_STATUS_LABELS.draft }, active: { color: 'green', label: QUESTIONNAIRE_STATUS_LABELS.active }, inactive: { color: 'red', label: QUESTIONNAIRE_STATUS_LABELS.inactive } };
-      return <Tag color={m[v]?.color}>{m[v]?.label || v}</Tag>;
+      return <Tag color={m[v]?.color}>{m[v]?.label || '未知'}</Tag>;
     }},
     {
       title: '操作',

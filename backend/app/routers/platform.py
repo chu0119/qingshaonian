@@ -919,7 +919,7 @@ def platform_close_task(task_id: int, request: Request, user: User = Depends(req
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     task.status = "closed"
-    task.closed_at = func.now()
+    task.closed_at = datetime.now()
     db.commit()
     log_operation(db, user, request, module="task_supervision", action="close", object_type="task", object_id=task.id, object_name=task.name)
     return APIResponse.success(message="任务已关闭")
@@ -1295,7 +1295,7 @@ def platform_send_sms(
         school_id=None, sms_type="platform_urge",
         template_code="manual", content=content,
         status=status, failure_reason=failure_reason,
-        sender_id=user.id, sent_at=func.now(),
+        sender_id=user.id, sent_at=datetime.now(),
     ))
     db.commit()
 
@@ -1328,7 +1328,7 @@ def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(r
     if sr and sr.triggered_rules:
         try:
             dim_analysis = json.loads(sr.triggered_rules) if isinstance(sr.triggered_rules, str) else sr.triggered_rules
-        except: pass
+        except Exception: pass
     return APIResponse.success({
         "id": alert.id, "risk_level": alert.risk_level, "risk_type": alert.risk_type or "",
         "status": alert.status, "trigger_method": alert.trigger_method or "",
@@ -1570,8 +1570,7 @@ def platform_ai_regional(data: dict | None = None, request: Request = None, user
     if dimension_patterns and dimension_patterns[0]["avg_score"] < 40:
         assessment["recommendations"].append(f"警告学生群体在「{dimension_patterns[0]['dimension']}」维度平均得分仅{dimension_patterns[0]['avg_score']}，建议开展针对性辅导。")
 
-    if request:
-        log_operation(db, user, request, module="platform_ai", action="regional_analysis", object_type="report", object_id=0, object_name="区域综合分析")
+    log_operation(db, user, request, module="platform_ai", action="regional_analysis", object_type="report", object_id=0, object_name="区域综合分析")
 
     return APIResponse.success({
         "overview": {"school_total": school_total, "student_total": student_total, "risk_total": risk_total, "pending_total": pending_total},
@@ -1763,6 +1762,8 @@ def platform_export_questionnaire(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
     )
+
+@router.post("/questionnaires/batch-export")
 async def platform_batch_export(
     request: Request,
     user: User = Depends(require_role("platform_admin")),

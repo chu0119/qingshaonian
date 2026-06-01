@@ -123,7 +123,7 @@ export default function CompletedQuestionnaires() {
                       {item.quality_level && (
                         <Descriptions.Item label="答题质量">
                           <Tag color={item.quality_level === 'normal' || item.quality_level === 'good' ? 'green' : item.quality_level === 'medium' || item.quality_level === 'mild_anomaly' ? 'orange' : 'red'}>
-                            {QUALITY_LABELS[item.quality_level] || item.quality_level}
+                            {QUALITY_LABELS[item.quality_level] || '未知'}
                           </Tag>
                         </Descriptions.Item>
                       )}

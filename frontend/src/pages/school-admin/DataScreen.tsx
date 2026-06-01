@@ -68,7 +68,7 @@ export default function DataScreen() {
   const dimensionItems = useMemo(() => {
     const dims = quality?.dimensions || quality?.dimension_scores;
     if (!dims) return [];
-    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: DIMENSION_LABELS[k] || k, score: v as number })))
+    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: DIMENSION_LABELS[k] || '未知', score: v as number })))
       .filter((d: any) => d.score !== undefined)
       .slice(0, 8);
   }, [quality]);
@@ -94,7 +94,7 @@ export default function DataScreen() {
 
   const riskLevelBar = useMemo(() => {
     const items = Object.entries(riskDist).map(([key, value]) => ({
-      name: riskLabels[key] || key,
+      name: riskLabels[key] || '未知',
       value: value as number,
       color: COLORS[key as keyof typeof COLORS] || theme.textDim,
     })).filter(i => i.value > 0);
@@ -362,7 +362,7 @@ function gaugeSeries(name: string, value: number, color: string, center: [string
 /* ─── Pie option ─── */
 function pieOption(dist: Record<string, number>, labels: Record<string, string>, colorMap: Record<string, string>) {
   const pieData = Object.entries(dist).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({
-    name: labels[k] || k,
+    name: labels[k] || '未知',
     value: v,
     itemStyle: { color: colorMap[k] || theme.textDim },
   }));
@@ -427,7 +427,7 @@ function statusBarOption(items: any[]) {
   return {
     tooltip: darkTooltip,
     grid: { left: 36, right: 20, bottom: 26, top: 16, containLabel: true },
-    xAxis: { type: 'category' as const, data: items.map((s: any) => labels[s.status] || s.status), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
+    xAxis: { type: 'category' as const, data: items.map((s: any) => labels[s.status] || '未知'), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
     yAxis: { type: 'value' as const, splitLine, axisLabel: textStyle },
     series: [{
       type: 'bar' as const,

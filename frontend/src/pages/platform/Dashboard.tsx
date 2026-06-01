@@ -66,7 +66,7 @@ export default function Dashboard() {
   const riskColors = RISK_COLORS;
 
   const riskPieOption = useMemo(() => {
-    const pieData = Object.entries(riskDist).filter(([, v]) => (v as number || 0) > 0).map(([k, v]) => ({ name: riskLabels[k] || k, value: v as number, itemStyle: { color: riskColors[k] } }));
+    const pieData = Object.entries(riskDist).filter(([, v]) => (v as number || 0) > 0).map(([k, v]) => ({ name: riskLabels[k] || '未知', value: v as number, itemStyle: { color: riskColors[k] } }));
     if (!pieData.length) return null;
     return {
       tooltip: { trigger: 'item' as const },
@@ -168,19 +168,19 @@ export default function Dashboard() {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
           <Card title={<Space><BarChartOutlined />学校完成率详情</Space>} loading={loading}>
-            <Table rowKey="id" dataSource={data.completion_rankings || []} columns={completionColumns} pagination={false}
+            <Table rowKey="id" dataSource={data.completion_rankings || []} columns={completionColumns} pagination={false} scroll={{ x: 'max-content' }}
               locale={{ emptyText: <Empty description="暂无完成率数据" /> }} />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
           <Card title={<Space><AlertOutlined />学校风险提示排名</Space>} loading={loading}>
-            <Table rowKey="id" dataSource={data.risk_rankings || []} columns={riskColumns} pagination={false}
+            <Table rowKey="id" dataSource={data.risk_rankings || []} columns={riskColumns} pagination={false} scroll={{ x: 'max-content' }}
               locale={{ emptyText: <Empty description="暂无风险提示数据" /> }} />
           </Card>
         </Col>
         <Col xs={24}>
           <Card title={<Space><BankOutlined />最近活跃学校</Space>} loading={loading}>
-            <Table rowKey="id" dataSource={data.recent_active_schools || []} columns={activeColumns} pagination={false}
+            <Table rowKey="id" dataSource={data.recent_active_schools || []} columns={activeColumns} pagination={false} scroll={{ x: 'max-content' }}
               locale={{ emptyText: <Empty description="暂无活跃记录" /> }} />
           </Card>
         </Col>

@@ -68,7 +68,7 @@ export default function StudentProfilePage() {
         </Space>
       </Card>
       {searched && (
-        <Table rowKey="id" dataSource={data} columns={columns} loading={loading}
+        <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
           pagination={{ current: page, total, pageSize: 20, onChange: (p) => fetchData(p), showTotal: t => `共 ${t} 条` }} />
       )}
     </div>

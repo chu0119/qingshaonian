@@ -71,7 +71,7 @@ export default function PlatformScreen() {
 
   const riskPie = useMemo(() => pieOption(data.risk_level_distribution || {}, riskLabels, COLORS), [data.risk_level_distribution]);
   const riskLevelBar = useMemo(() => {
-    const items = Object.entries(data.risk_level_distribution || {}).map(([key, value]) => ({ name: riskLabels[key] || key, value: value as number, color: COLORS[key as keyof typeof COLORS] || theme.textDim })).filter(i => i.value > 0);
+    const items = Object.entries(data.risk_level_distribution || {}).map(([key, value]) => ({ name: riskLabels[key] || '未知', value: value as number, color: COLORS[key as keyof typeof COLORS] || theme.textDim })).filter(i => i.value > 0);
     if (!items.length) return null;
     return {
       tooltip: darkTooltip,
@@ -406,7 +406,7 @@ function gaugeSeries(name: string, value: number, color: string, center: [string
 /* ─── Pie chart option ─── */
 function pieOption(dist: Record<string, number>, labels: Record<string, string>, colorMap: Record<string, string>) {
   const pieData = Object.entries(dist).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({
-    name: labels[k] || k,
+    name: labels[k] || '未知',
     value: v,
     itemStyle: { color: colorMap[k] || theme.textDim },
   }));

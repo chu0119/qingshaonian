@@ -98,7 +98,7 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
     },
     {
       title: '风险', dataIndex: 'risk_tag', width: 120,
-      render: (v: string) => v ? <Tag color="orange">{RISK_TAG_LABELS[v] || v}</Tag> : '-',
+      render: (v: string) => v ? <Tag color="orange">{RISK_TAG_LABELS[v] || '未知'}</Tag> : '-',
     },
   ];
 
@@ -121,7 +121,7 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
                 <Col span={6}><Statistic title="总分" value={detail.scoring.total_score} /></Col>
                 <Col span={6}>
                   <Statistic title="风险等级"
-                    value={RISK_LABELS[detail.scoring.risk_level] || detail.scoring.risk_level}
+                    value={RISK_LABELS[detail.scoring.risk_level] || '未知'}
                     valueStyle={{ color: RISK_COLORS[detail.scoring.risk_level] }} />
                 </Col>
                 <Col span={6}>
@@ -146,7 +146,7 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
                       return (
                         <Col span={12} key={key}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ width: 80, fontSize: 12, textAlign: 'right' }}>{detail.answers?.find((a: any) => a.dimension === key)?.dimension_label || DIMENSION_LABELS[key] || key}</span>
+                            <span style={{ width: 80, fontSize: 12, textAlign: 'right' }}>{detail.answers?.find((a: any) => a.dimension === key)?.dimension_label || DIMENSION_LABELS[key] || '未知'}</span>
                             <Progress percent={Math.round(score / maxScore * 100)} size="small" style={{ flex: 1 }}
                               strokeColor={score > 70 ? '#FF4D4F' : score > 40 ? '#FA8C16' : '#1890FF'} />
                             <span style={{ fontSize: 12, width: 40 }}>{score}</span>
@@ -165,10 +165,10 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
               <Row gutter={16}>
                 <Col span={8}><Statistic title="质量评分" value={detail.quality.quality_score} /></Col>
                 <Col span={8}>
-                  <Statistic title="质量等级" value={QUALITY_LABELS[detail.quality.quality_level] || detail.quality.quality_level} />
+                  <Statistic title="质量等级" value={QUALITY_LABELS[detail.quality.quality_level] || '未知'} />
                 </Col>
                 <Col span={8}>
-                  <Statistic title="有效性" value={VALIDITY_LABELS[detail.quality.validity] || detail.quality.validity} />
+                  <Statistic title="有效性" value={VALIDITY_LABELS[detail.quality.validity] || '未知'} />
                 </Col>
               </Row>
               {detail.quality.suggest_retest && (

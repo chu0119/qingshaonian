@@ -185,7 +185,7 @@ export default function PlatformStudentManagement() {
             columns={[
               { title: '问卷', dataIndex: 'questionnaire_title', ellipsis: true },
               { title: '总分', dataIndex: 'total_score', width: 70, render: (v: number) => v?.toFixed(1) || '-' },
-              { title: '风险等级', dataIndex: 'risk_level', width: 90, render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> },
+              { title: '风险等级', dataIndex: 'risk_level', width: 90, render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '未知'}</Tag> },
               { title: '提交时间', dataIndex: 'submitted_at', width: 140, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
               { title: '操作', width: 70, render: (_: any, r: any) => <Button size="small" type="link" onClick={() => { setAnswerSheetId(r.answer_sheet_id); setAnswerOpen(true); setSheetsModalOpen(false); }}>详情</Button> },
             ]}

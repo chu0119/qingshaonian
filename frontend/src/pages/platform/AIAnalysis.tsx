@@ -79,7 +79,7 @@ export default function PlatformAIAnalysis() {
     return {
       tooltip: darkTooltip,
       radar: {
-        indicator: items.map((d: any) => ({ name: DIMENSION_LABELS[d.dimension] || d.dimension, max: 100 })),
+        indicator: items.map((d: any) => ({ name: DIMENSION_LABELS[d.dimension] || '未知', max: 100 })),
         axisName: { color: '#d0dcf0', fontSize: 11 },
         splitArea: { areaStyle: { color: ['rgba(0,184,240,0.02)', 'rgba(0,184,240,0.04)'] } },
         axisLine: { lineStyle: { color: 'rgba(0,184,240,0.15)' } },
@@ -106,7 +106,7 @@ export default function PlatformAIAnalysis() {
 
   const riskLevelChart = () => {
     if (!data?.risk_level_dist || !Object.keys(data.risk_level_dist).length) return null;
-    const pieData = Object.entries(data.risk_level_dist).filter(([, v]) => ((v as number) || 0) > 0).map(([k, v]) => ({ name: RISK_LABELS[k] || k, value: v as number, itemStyle: { color: RISK_COLORS[k] || '#999' } }));
+    const pieData = Object.entries(data.risk_level_dist).filter(([, v]) => ((v as number) || 0) > 0).map(([k, v]) => ({ name: RISK_LABELS[k] || '未知', value: v as number, itemStyle: { color: RISK_COLORS[k] || '#999' } }));
     return {
       tooltip: darkTooltip,
       legend: { bottom: 0, textStyle: { color: '#7084a0', fontSize: 11 }, itemWidth: 12, itemHeight: 8 },
@@ -248,11 +248,11 @@ export default function PlatformAIAnalysis() {
         <Table rowKey="id" dataSource={logs} loading={logLoading} scroll={{ x: 'max-content' }}
           columns={[
             { title: '时间', dataIndex: 'created_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
-            { title: '分析类型', dataIndex: 'analysis_type', width: 120, render: (v: string) => ANALYSIS_TYPE_LABELS[v] || v },
+            { title: '分析类型', dataIndex: 'analysis_type', width: 120, render: (v: string) => ANALYSIS_TYPE_LABELS[v] || '未知' },
             { title: '模型', dataIndex: 'model_name', width: 120, render: (v: string) => v || '-' },
-            { title: '状态', dataIndex: 'status', width: 90, render: (v: string) => <Tag color={statusColors[v]}>{RESULT_LABELS[v] || v}</Tag> },
+            { title: '状态', dataIndex: 'status', width: 90, render: (v: string) => <Tag color={statusColors[v]}>{RESULT_LABELS[v] || '未知'}</Tag> },
             { title: '耗时(ms)', dataIndex: 'duration_ms', width: 90 },
-            { title: '操作人', dataIndex: 'user_role', width: 100, render: (v: string) => ROLE_LABELS[v] || v },
+            { title: '操作人', dataIndex: 'user_role', width: 100, render: (v: string) => ROLE_LABELS[v] || '未知' },
             { title: '错误信息', dataIndex: 'error_message', ellipsis: true, width: 200 },
           ]}
           pagination={{ current: logPage, total: logTotal, pageSize: 20, onChange: setLogPage }}

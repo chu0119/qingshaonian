@@ -42,8 +42,8 @@ export default function RiskWarning() {
     { title: '年级', dataIndex: 'grade_name', key: 'grade_name' },
     { title: '班级', dataIndex: 'class_name', key: 'class_name' },
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', render: (v: string) => translateRiskType(v) },
-    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || '未知'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '触发时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
     { title: '操作', key: 'action', width: 150, render: (_: unknown, r: any) => (

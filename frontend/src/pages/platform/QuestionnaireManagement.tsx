@@ -183,7 +183,7 @@ export default function PlatformQuestionnaireManagement() {
     { title: '标题', dataIndex: 'title', key: 'title', width: 200, ellipsis: true,
       render: (v: string, r: any) => <a onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>{v}</a> },
     { title: '类别', dataIndex: 'category', key: 'category', width: 90,
-      render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || v || '-'}</Tag> },
+      render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || '未知' || '-'}</Tag> },
     { title: '来源', key: 'source', width: 100,
       render: (_: any, r: any) => {
         if (r.is_builtin) return <Tag color="blue">内置</Tag>;
@@ -195,7 +195,7 @@ export default function PlatformQuestionnaireManagement() {
     { title: '使用次数', dataIndex: 'task_count', key: 'task_count', width: 80, align: 'center' as const },
     { title: '答卷数', dataIndex: 'answer_count', key: 'answer_count', width: 70, align: 'center' as const },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => <Tag color={v === 'published' ? 'green' : v === 'draft' ? 'default' : 'blue'}>{QUESTIONNAIRE_STATUS_LABELS[v] || v}</Tag> },
+      render: (v: string) => <Tag color={v === 'published' ? 'green' : v === 'draft' ? 'default' : 'blue'}>{QUESTIONNAIRE_STATUS_LABELS[v] || '未知'}</Tag> },
     { title: '操作', key: 'action', width: 340, render: (_: any, r: any) => (
       <Space>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>详情</Button>
@@ -206,7 +206,7 @@ export default function PlatformQuestionnaireManagement() {
         <Button size="small" type="link" icon={<DownloadOutlined />} onClick={() => handleExport(r)}>导出</Button>
         {!r.is_builtin && (
           <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => Modal.confirm({
-            title: '确定删除？', content: r.status !== 'draft' ? `该问卷状态为「${QUESTIONNAIRE_STATUS_LABELS[r.status] || r.status}」，删除后关联的任务和答卷数据将一并清除，不可恢复！` : '删除后不可恢复',
+            title: '确定删除？', content: r.status !== 'draft' ? `该问卷状态为「${QUESTIONNAIRE_STATUS_LABELS[r.status] || '未知'}」，删除后关联的任务和答卷数据将一并清除，不可恢复！` : '删除后不可恢复',
             okType: 'danger', onOk: () => handleDelete(r.id),
           })}>删除</Button>
         )}
