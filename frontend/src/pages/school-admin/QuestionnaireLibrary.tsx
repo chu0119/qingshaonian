@@ -166,7 +166,7 @@ export default function QuestionnaireLibrary() {
             <Typography.Title level={4} style={{ color: '#52c41a' }}>导入成功</Typography.Title>
             <p>问卷：<strong>{importSuccess.title}</strong></p>
             <p>题目数：<strong>{importSuccess.question_count}</strong></p>
-            <p>状态：<Tag>{importSuccess.status || 'draft'}</Tag></p>
+            <p>状态：<Tag>{QUESTIONNAIRE_STATUS_LABELS[importSuccess.status] || '草稿'}</Tag></p>
             <Button type="primary" onClick={() => setImportModalOpen(false)} style={{ marginTop: 16 }}>完成</Button>
           </div>
         )}

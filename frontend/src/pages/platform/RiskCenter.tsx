@@ -5,11 +5,12 @@ import client from '../../api/client';
 import { maskIdCard, translateRiskType } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
 import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
-import { RISK_LABELS, RISK_COLORS, TRIGGER_METHOD_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS, QUALITY_LABELS, DIMENSION_LABELS } from '../../utils/constants';
+import { RISK_LABELS, RISK_COLORS, TRIGGER_METHOD_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS, QUALITY_LABELS, VALIDITY_LABELS, DIMENSION_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
 
 const statusLabels = INTERVENTION_STATUS_LABELS;
 const methodLabels = METHOD_LABELS;
 const qualityLabels = QUALITY_LABELS;
+const validityLabels = VALIDITY_LABELS;
 const dimensionLabels = DIMENSION_LABELS;
 
 export default function PlatformRiskCenter() {
@@ -233,7 +234,7 @@ export default function PlatformRiskCenter() {
                   </Row>
                   <Descriptions bordered size="small" column={2}>
                     <Descriptions.Item label="答题时长">{detail.quality_duration || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="有效性">{qualityLabels[detail.validity] || detail.validity || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="有效性">{validityLabels[detail.validity] || detail.validity || '-'}</Descriptions.Item>
                     {detail.attention_passed !== undefined && <Descriptions.Item label="注意力检测">{detail.attention_passed ? '通过' : '未通过'}</Descriptions.Item>}
                     {detail.max_consecutive_same !== undefined && <Descriptions.Item label="连续同选">{detail.max_consecutive_same} 题</Descriptions.Item>}
                     {detail.contradiction_count !== undefined && <Descriptions.Item label="矛盾检测">{detail.contradiction_count} 组</Descriptions.Item>}
@@ -263,7 +264,7 @@ export default function PlatformRiskCenter() {
                   <div key={i} style={{ marginBottom: 8, padding: '6px 10px', background: '#fafafa', borderRadius: 4 }}>
                     <Space>
                       <Tag color={item.level === 'high' ? 'red' : item.level === 'medium' ? 'orange' : 'blue'}>
-                        {dimensionLabels[item.dimension] || item.dimension || item.risk_tag || ''}
+                        {item.label || dimensionLabels[item.dimension] || item.dimension || RISK_TAG_LABELS[item.risk_tag] || item.risk_tag || ''}
                       </Tag>
                       <span style={{ fontSize: 13 }}>{item.label || item.suggestion || ''}</span>
                     </Space>

@@ -5,7 +5,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { RobotOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
-import { RISK_LABELS, RISK_COLORS, QUALITY_LABELS, VALIDITY_LABELS, INTERVENTION_STATUS_LABELS, DIMENSION_LABELS } from '../../utils/constants';
+import { RISK_LABELS, RISK_COLORS, QUALITY_LABELS, VALIDITY_LABELS, INTERVENTION_STATUS_LABELS, DIMENSION_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
+import { translateRiskType } from '../../utils/maskIdCard';
 
 const riskLabels: Record<string, { label: string; color: string }> = {
   low: { label: RISK_LABELS.low, color: RISK_COLORS.low },
@@ -58,7 +59,7 @@ export default function RiskDetail() {
             <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
               <Descriptions.Item label="学生姓名">{detail.student_name}</Descriptions.Item>
               <Descriptions.Item label="风险等级"><Tag color={riskInfo.color}>{riskInfo.label}</Tag></Descriptions.Item>
-              <Descriptions.Item label="风险类型">{detail.risk_type || '暂无分类'}</Descriptions.Item>
+              <Descriptions.Item label="风险类型">{translateRiskType(detail.risk_type) || '暂无分类'}</Descriptions.Item>
               <Descriptions.Item label="处理状态"><Tag>{statusLabels[detail.status] || '待处理'}</Tag></Descriptions.Item>
               <Descriptions.Item label="测评总分">{detail.total_score?.toFixed(1) || '-'} 分</Descriptions.Item>
               <Descriptions.Item label="建议复测">
@@ -156,7 +157,7 @@ export default function RiskDetail() {
         student_id: detail.student_id,
         name: detail.student_name,
         risk_level: riskLabels[detail.risk_level]?.label || detail.risk_level,
-        risk_type: detail.risk_type || '暂无分类',
+        risk_type: translateRiskType(detail.risk_type) || '暂无分类',
         total_score: detail.total_score?.toFixed(1) || '-',
         dimension_scores: Object.entries(detail.dimension_scores || {}).map(([k, v]) => `${dimLabels[k] || k}: ${v}分`).join('、') || '暂无数据',
         quality_level: quality ? (qualityLabels[quality.quality_level] || quality.quality_level) : '暂无数据',

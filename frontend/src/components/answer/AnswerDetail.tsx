@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Drawer, Descriptions, Tag, Table, Card, Empty, Spin, Space, Progress, Row, Col, Statistic, Typography, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import client from '../../api/client';
-import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, VALIDITY_LABELS, QUALITY_LABELS } from '../../utils/constants';
+import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, VALIDITY_LABELS, QUALITY_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
 
 interface Props {
   answerSheetId?: number;
@@ -96,8 +96,8 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
       render: (v: number) => formatDuration(v),
     },
     {
-      title: '风险', dataIndex: 'risk_tag', width: 80,
-      render: (v: string) => v ? <Tag color="orange">{v}</Tag> : '-',
+      title: '风险', dataIndex: 'risk_tag', width: 120,
+      render: (v: string) => v ? <Tag color="orange">{RISK_TAG_LABELS[v] || v}</Tag> : '-',
     },
   ];
 
