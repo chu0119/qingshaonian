@@ -94,8 +94,8 @@ export default function TaskManagement() {
         start_time: timeRange?.[0]?.toISOString(),
         end_time: timeRange?.[1]?.toISOString(),
         allow_edit: values.allow_edit || false,
-        shuffle_questions: values.shuffle_questions || false,
-        shuffle_options: values.shuffle_options || false,
+        shuffle_questions: values.shuffle_questions !== false,
+        shuffle_options: values.shuffle_options !== false,
         enable_quality_check: values.enable_quality_check !== false,
         reminder_strategy: values.reminder_strategy ? { type: values.reminder_strategy } : {},
       });
@@ -399,10 +399,10 @@ export default function TaskManagement() {
             <Switch />
           </Form.Item>
           <Space wrap>
-            <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked">
+            <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked" initialValue={true}>
               <Switch />
             </Form.Item>
-            <Form.Item name="shuffle_options" label="选项随机" valuePropName="checked">
+            <Form.Item name="shuffle_options" label="选项随机" valuePropName="checked" initialValue={true}>
               <Switch />
             </Form.Item>
             <Form.Item name="enable_quality_check" label="质量检测" valuePropName="checked" initialValue={true}>

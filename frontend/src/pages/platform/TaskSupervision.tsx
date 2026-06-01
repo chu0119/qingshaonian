@@ -187,8 +187,8 @@ export default function PlatformTaskSupervision() {
         start_time: timeRange?.[0]?.toISOString(),
         end_time: timeRange?.[1]?.toISOString(),
         allow_edit: values.allow_edit || false,
-        shuffle_questions: values.shuffle_questions || false,
-        shuffle_options: values.shuffle_options || false,
+        shuffle_questions: values.shuffle_questions !== false,
+        shuffle_options: values.shuffle_options !== false,
         enable_quality_check: values.enable_quality_check !== false,
         reminder_strategy: values.reminder_strategy ? { type: values.reminder_strategy } : {},
       });
@@ -441,11 +441,11 @@ export default function PlatformTaskSupervision() {
             <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
           </Form.Item>
           <Space wrap>
-            <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked">
-              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
+            <Form.Item name="shuffle_questions" label="题目随机" valuePropName="checked" initialValue={true}>
+              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={true} />
             </Form.Item>
-            <Form.Item name="shuffle_options" label="选项随机" valuePropName="checked">
-              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={false} />
+            <Form.Item name="shuffle_options" label="选项随机" valuePropName="checked" initialValue={true}>
+              <Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} defaultValue={true} />
             </Form.Item>
             <Form.Item name="enable_quality_check" label="质量检测" valuePropName="checked" initialValue={true}>
               <Select options={[{ value: true, label: '开' }, { value: false, label: '关' }]} defaultValue={true} />
