@@ -1258,6 +1258,32 @@ def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(r
     })
 
 
+# ============ 学生纵向追踪 ============
+
+@router.get("/reports/student-longitudinal/{student_id}")
+def platform_student_longitudinal(student_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """平台管理员查看任意学生的纵向追踪数据"""
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    sheets = db.query(AnswerSheet).filter(
+        AnswerSheet.student_id == student_id, AnswerSheet.status == "submitted"
+    ).order_by(AnswerSheet.submitted_at).all()
+    results = []
+    for sheet in sheets:
+        sr = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).first()
+        q = db.query(Questionnaire).filter(Questionnaire.id == sheet.questionnaire_id).first()
+        results.append({
+            "answer_sheet_id": sheet.id, "task_id": sheet.task_id,
+            "questionnaire_title": q.title if q else "",
+            "submitted_at": sheet.submitted_at.isoformat() if sheet.submitted_at else None,
+            "total_score": sr.total_score if sr else None,
+            "dimension_scores": sr.dimension_scores if sr else {},
+            "risk_level": sr.risk_level if sr else None,
+        })
+    return APIResponse.success({"student_name": student.real_name, "records": results})
+
+
 # ============ 重点关注学生档案 ============
 
 @router.get("/key-students/{student_id}")

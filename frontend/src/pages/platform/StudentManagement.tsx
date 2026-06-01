@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Tag, Select, Input, Typography, Space, Drawer, Descriptions, Button, Modal, message, Empty } from 'antd';
-import { ExportOutlined, EyeOutlined } from '@ant-design/icons';
+import { ExportOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { maskIdCard } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
@@ -9,6 +10,7 @@ import { RISK_LABELS, RISK_COLORS } from '../../utils/constants';
 const statusLabels: Record<string, string> = { true: '正常', false: '已禁用' };
 
 export default function PlatformStudentManagement() {
+  const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -118,9 +120,10 @@ export default function PlatformStudentManagement() {
     { title: '班级', dataIndex: 'class_name', key: 'class_name', width: 100 },
     { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120, render: (v: string) => v ? v.slice(0, 3) + '****' + v.slice(-4) : '-' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 70, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '正常' : '已禁用'}</Tag> },
-    { title: '操作', key: 'action', width: 120, render: (_: any, r: any) => (
+    { title: '操作', key: 'action', width: 170, render: (_: any, r: any) => (
       <Space>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
+        <Button size="small" type="link" icon={<FileTextOutlined />} onClick={() => navigate(`/platform/students/${r.id}`)}>档案</Button>
         <Button size="small" type="link" onClick={async () => {
           try {
             const res = await client.get(`/platform/students/${r.id}/answer-sheets`);

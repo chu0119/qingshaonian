@@ -25,6 +25,11 @@ import SystemSettings from '../pages/school-admin/SystemSettings';
 import SchoolAuditLogs from '../pages/school-admin/AuditLogs';
 import StudentProfile360 from '../pages/school-admin/StudentProfile';
 
+// 平台端学生档案包装组件
+function PlatformStudentProfile() {
+  return <StudentProfile360 platformMode />;
+}
+
 // 教师页面
 import TeacherDashboard from '../pages/teacher/TeacherDashboard';
 import MyClasses from '../pages/teacher/MyClasses';
@@ -162,6 +167,7 @@ export default function AppRoutes() {
         <Route path="schools" element={<SchoolManagement />} />
         <Route path="risks" element={<PlatformRiskCenter />} />
         <Route path="students" element={<PlatformStudentManagement />} />
+        <Route path="students/:id" element={<PlatformStudentProfile />} />
         <Route path="questionnaires" element={<PlatformQuestionnaireManagement />} />
         <Route path="questionnaires/new" element={<QuestionnaireEditor />} />
         <Route path="questionnaires/:id/edit" element={<QuestionnaireEditor />} />

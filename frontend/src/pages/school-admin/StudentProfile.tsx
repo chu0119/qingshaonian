@@ -67,10 +67,11 @@ function formatDate(v?: string) {
 }
 
 /* ---------- component ---------- */
-export default function StudentProfile() {
+export default function StudentProfile({ platformMode }: { platformMode?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const studentId = Number(id);
+  const apiPrefix = platformMode ? '/platform' : '';
 
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentInfo | null>(null);
@@ -86,12 +87,12 @@ export default function StudentProfile() {
       // 1. Basic student info
       let studentData: StudentInfo | null = null;
       try {
-        const sr = await client.get(`/users/students/${studentId}`);
+        const sr = await client.get(`${apiPrefix}/users/students/${studentId}`);
         studentData = sr.data.data as StudentInfo;
       } catch {
         // fallback: search in list
         try {
-          const sr = await client.get('/users/students', { params: { page_size: 1, student_id: studentId } });
+          const sr = await client.get(`${apiPrefix}/users/students`, { params: { page_size: 1, student_id: studentId } });
           const items = sr.data.data?.items || sr.data.data || [];
           if (Array.isArray(items) && items.length > 0) studentData = items[0];
         } catch { /* ignore */ }
@@ -100,13 +101,13 @@ export default function StudentProfile() {
       // 2. Longitudinal data (also gives us student name as fallback)
       let longitudinalRecords: LongitudinalRecord[] = [];
       try {
-        const lr = await client.get(`/reports/student-longitudinal/${studentId}`);
+        const lr = await client.get(`${apiPrefix}/reports/student-longitudinal/${studentId}`);
         longitudinalRecords = lr.data.data?.records || [];
       } catch { /* ignore */ }
 
       // Fallback student name from longitudinal data
       if (!studentData && longitudinalRecords.length > 0) {
-        const lr2 = await client.get(`/reports/student-longitudinal/${studentId}`);
+        const lr2 = await client.get(`${apiPrefix}/reports/student-longitudinal/${studentId}`);
         const name = lr2.data.data?.student_name;
         studentData = { id: studentId, real_name: name || `学生${studentId}`, student_no: '-', gender: '-', phone: '', grade_name: '-', class_name: '-', username: '' };
       }
@@ -117,7 +118,7 @@ export default function StudentProfile() {
       // 3. Risks
       let riskItems: RiskItem[] = [];
       try {
-        const rr = await client.get('/risks', { params: { student_id: studentId, page_size: 50 } });
+        const rr = await client.get(`${apiPrefix}/risks`, { params: { student_id: studentId, page_size: 50 } });
         riskItems = rr.data.data?.items || [];
       } catch { /* ignore */ }
       setRisks(riskItems);
@@ -125,7 +126,7 @@ export default function StudentProfile() {
       // 4. Interventions
       let intvItems: InterventionItem[] = [];
       try {
-        const ir = await client.get('/interventions', { params: { student_id: studentId, page_size: 50 } });
+        const ir = await client.get(`${apiPrefix}/interventions`, { params: { student_id: studentId, page_size: 50 } });
         intvItems = ir.data.data?.items || [];
       } catch { /* ignore */ }
       setInterventions(intvItems);
