@@ -906,6 +906,9 @@ def platform_recall_answer_sheet(task_id: int, data: dict, request: Request, use
     log_operation(db, user, request, module="task_supervision", action="recall", object_type="answer_sheet",
                   object_id=sheet.id, object_name=f"{student.real_name if student else student_id}的答卷")
     return APIResponse.success(message="答卷已打回，学生可重新作答")
+
+
+@router.get("/schools/{school_id}/classes")
 def platform_school_classes(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     """获取指定学校的班级列表（用于发布任务）"""
     school = db.query(School).filter(School.id == school_id).first()
