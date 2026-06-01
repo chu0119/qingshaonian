@@ -903,7 +903,7 @@ def platform_task_detail(task_id: int, user: User = Depends(require_role("platfo
 
     return APIResponse.success({
         "id": task.id, "name": task.name, "school_name": school.name if school else "",
-        "questionnaire_title": qnr.title if qnr else "", "status": task.status,
+        "questionnaire_id": task.questionnaire_id, "questionnaire_title": qnr.title if qnr else "", "status": task.status,
         "target_type": task.target_type, "description": task.description or "",
         "start_time": task.start_time.isoformat() if task.start_time else None,
         "end_time": task.end_time.isoformat() if task.end_time else None,
@@ -1158,6 +1158,64 @@ def platform_urge_intervention(
     return APIResponse.success(message="已督促学校处理")
 
 
+@router.post("/interventions")
+def platform_create_intervention(
+    data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """公安端创建干预记录"""
+    student_id = data.get("student_id")
+    if not student_id:
+        raise HTTPException(status_code=400, detail="学生ID不能为空")
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    school_id = student.school_id
+    risk_alert_id = data.get("risk_alert_id")
+    if risk_alert_id:
+        alert = db.query(RiskAlert).filter(RiskAlert.id == risk_alert_id, RiskAlert.student_id == student_id).first()
+        if not alert:
+            raise HTTPException(status_code=404, detail="风险预警不存在或不属于该学生")
+    iv = Intervention(
+        school_id=school_id, student_id=student_id, teacher_id=user.id,
+        risk_alert_id=risk_alert_id,
+        method=data.get("method", "other"), content=data.get("content", ""),
+        result=data.get("result", ""), follow_up_suggestion=data.get("follow_up_suggestion", ""),
+        need_follow_up=data.get("need_follow_up", False),
+        status=data.get("status", "processing"),
+    )
+    db.add(iv)
+    db.commit()
+    log_operation(db, user, request, module="platform_supervision", action="create_intervention",
+                  object_type="intervention", object_id=iv.id, object_name=str(student_id))
+    return APIResponse.success({"id": iv.id}, message="干预记录创建成功")
+
+
+@router.put("/interventions/{intervention_id}")
+def platform_update_intervention(
+    intervention_id: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """公安端更新干预记录"""
+    iv = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not iv:
+        raise HTTPException(status_code=404, detail="干预记录不存在")
+    allowed_fields = {"method", "content", "status", "intervention_time", "next_follow_up_time", "need_follow_up", "result", "follow_up_suggestion"}
+    for k, v in data.items():
+        if k in allowed_fields and hasattr(iv, k):
+            setattr(iv, k, v)
+    # 干预完成/关闭时同步更新关联预警状态
+    new_status = data.get("status")
+    if new_status in ("completed", "closed") and iv.risk_alert_id:
+        risk_alert = db.query(RiskAlert).filter(RiskAlert.id == iv.risk_alert_id).first()
+        if risk_alert and risk_alert.status in ("pending", "viewed", "processing"):
+            risk_alert.status = new_status
+    db.commit()
+    log_operation(db, user, request, module="platform_supervision", action="update_intervention",
+                  object_type="intervention", object_id=intervention_id)
+    return APIResponse.success(message="更新成功")
+
+
 @router.get("/audit-logs")
 def platform_audit_logs(
     page: int = Query(1), page_size: int = Query(20),
@@ -1307,6 +1365,89 @@ def platform_send_sms(
     if not sms_sent:
         return APIResponse.success({"message": "短信发送失败", "reason": failure_reason, "sms_sent": False}, message="发送失败")
     return APIResponse.success({"message": "短信发送成功", "sms_sent": True}, message="发送成功")
+
+
+@router.post("/sms/send")
+def platform_batch_send_sms(
+    data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """批量发送短信（如：给未完成任务的学生发送提醒）"""
+    sms_type = data.get("type", "")
+    task_id = data.get("task_id")
+    if sms_type == "batch_uncompleted" and task_id:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        snapshot = task.target_snapshot or {}
+        student_ids = [int(s) for s in (snapshot.get("student_ids", []) or []) if str(s).isdigit()]
+        if not student_ids:
+            return APIResponse.success({"sent": 0, "failed": 0, "message": "无目标学生"}, message="无目标学生")
+        # 已提交的学生
+        submitted_ids = set(
+            r[0] for r in db.query(AnswerSheet.student_id).filter(
+                AnswerSheet.task_id == task_id, AnswerSheet.student_id.in_(student_ids),
+                AnswerSheet.status == "submitted").all()
+        )
+        uncompleted_ids = [sid for sid in student_ids if sid not in submitted_ids]
+        if not uncompleted_ids:
+            return APIResponse.success({"sent": 0, "failed": 0, "message": "所有学生已完成"}, message="所有学生已完成")
+        students = db.query(User).filter(User.id.in_(uncompleted_ids), User.role == "student").all()
+        # 获取短信配置
+        from ..models.system_config import SystemConfig
+        sms_url_config = db.query(SystemConfig).filter(
+            SystemConfig.config_key == "sms_api_url", SystemConfig.school_id.is_(None)).first()
+        sms_key_config = db.query(SystemConfig).filter(
+            SystemConfig.config_key == "sms_app_key", SystemConfig.school_id.is_(None)).first()
+        sms_url = settings.SMS_API_URL or (sms_url_config.config_value if sms_url_config else "")
+        sms_key = settings.SMS_APP_KEY or (sms_key_config.config_value if sms_key_config else "")
+        content_template = data.get("content") or f"您有一项测评任务「{task.name}」尚未完成，请尽快完成。"
+        sent_count = 0
+        failed_count = 0
+        for stu in students:
+            phone = (stu.phone or "").strip()
+            if not phone or len(phone) < 11:
+                failed_count += 1
+                continue
+            sms_sent = False
+            failure_reason = ""
+            if sms_url and sms_key:
+                try:
+                    with httpx.Client(timeout=10) as http_client:
+                        resp = http_client.post(
+                            sms_url,
+                            json={"phone": phone, "content": content_template},
+                            headers={"Authorization": f"Bearer {sms_key}"},
+                        )
+                        sms_sent = resp.status_code == 200
+                        if not sms_sent:
+                            failure_reason = f"HTTP {resp.status_code}"
+                except Exception as exc:
+                    failure_reason = str(exc)[:200]
+            else:
+                failure_reason = "短信服务暂未配置"
+            status_val = "sent" if sms_sent else ("not_configured" if not sms_url else "failed")
+            db.add(SMSLog(
+                recipient_name=stu.real_name or stu.username, phone=phone,
+                school_id=task.school_id, sms_type="task_reminder",
+                template_code="task_uncompleted", content=content_template,
+                status=status_val, failure_reason=failure_reason,
+                sender_id=user.id, sent_at=datetime.now(),
+            ))
+            if sms_sent:
+                sent_count += 1
+            else:
+                failed_count += 1
+        db.commit()
+        log_operation(db, user, request, module="platform_sms", action="send",
+                      object_type="task", object_id=task.id, object_name=task.name,
+                      result="success" if sent_count > 0 else "failure",
+                      detail=f"type=batch_uncompleted;sent={sent_count};failed={failed_count}")
+        return APIResponse.success(
+            {"sent": sent_count, "failed": failed_count, "message": f"发送完成：成功 {sent_count}，失败 {failed_count}"},
+            message=f"发送完成：成功 {sent_count}，失败 {failed_count}",
+        )
+    raise HTTPException(status_code=400, detail="不支持的短信类型")
 
 
 # ============ 风险预警详情 ============
@@ -1669,6 +1810,98 @@ def platform_export_logs(page: int = Query(1), page_size: int = Query(20),
         "module": l.module, "action": l.action, "object_name": l.object_name,
         "created_at": l.created_at.isoformat() if l.created_at else None,
     } for l in items], "total": total, "page": page, "page_size": page_size})
+
+
+# ============ 跨校数据报表 ============
+
+@router.get("/reports/overview")
+def platform_reports_overview(
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """区域总览报表——各学校完成率、学生数汇总"""
+    schools = db.query(School).filter(School.status == True).all()
+    school_data = []
+    total_students = 0
+    total_completed = 0
+    for s in schools:
+        student_count = db.query(func.count(User.id)).filter(User.school_id == s.id, User.role == "student").scalar()
+        student_ids = db.query(User.id).filter(User.school_id == s.id, User.role == "student")
+        completed = db.query(func.count(func.distinct(AnswerSheet.student_id))).filter(
+            AnswerSheet.student_id.in_(student_ids), AnswerSheet.status == "submitted"
+        ).scalar()
+        risk_count = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == s.id).scalar()
+        school_data.append({
+            "school_id": s.id, "school_name": s.name,
+            "student_count": student_count, "completed_count": completed,
+            "completion_rate": round(completed / max(student_count, 1) * 100, 1),
+            "risk_count": risk_count,
+        })
+        total_students += student_count
+        total_completed += completed
+    return APIResponse.success({
+        "schools": school_data,
+        "total_students": total_students,
+        "total_completed": total_completed,
+        "overall_completion_rate": round(total_completed / max(total_students, 1) * 100, 1),
+    })
+
+
+@router.get("/reports/risk-summary")
+def platform_reports_risk_summary(
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """区域风险报表——全区域风险等级/状态分布"""
+    total = db.query(func.count(RiskAlert.id)).scalar()
+    by_level = db.query(RiskAlert.risk_level, func.count(RiskAlert.id)).group_by(RiskAlert.risk_level).all()
+    by_status = db.query(RiskAlert.status, func.count(RiskAlert.id)).group_by(RiskAlert.status).all()
+    level_labels = {"low": "关注", "medium": "预警", "high": "警告", "urgent": "危急"}
+    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "completed": "已完成", "closed": "已关闭"}
+    return APIResponse.success({
+        "total": total,
+        "by_level": [{"level": l, "label": level_labels.get(l, l), "count": c, "percentage": round(c / max(total, 1) * 100, 1)} for l, c in by_level],
+        "by_status": [{"status": s, "label": status_labels.get(s, s), "count": c, "percentage": round(c / max(total, 1) * 100, 1)} for s, c in by_status],
+    })
+
+
+@router.get("/reports/quality-summary")
+def platform_reports_quality_summary(
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """区域质量报表——全区域答卷质量分布"""
+    from ..models.risk import QualityAssessment
+    total = db.query(func.count(QualityAssessment.id)).scalar()
+    by_level = db.query(QualityAssessment.quality_level, func.count(QualityAssessment.id)).group_by(QualityAssessment.quality_level).all()
+    effective_count = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.validity.in_(["valid", "basically_valid"])).scalar()
+    retest_count = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.suggest_retest == True).scalar()
+    quality_labels = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "严重异常", "questionable": "存疑"}
+    return APIResponse.success({
+        "total": total,
+        "effective_count": effective_count,
+        "effective_rate": round(effective_count / max(total, 1) * 100, 1),
+        "retest_count": retest_count,
+        "by_level": [{"level": l, "label": quality_labels.get(l, l), "count": c, "percentage": round(c / max(total, 1) * 100, 1)} for l, c in by_level],
+    })
+
+
+@router.get("/reports/questionnaire-stats")
+def platform_reports_questionnaire_stats(
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """问卷统计报表——各问卷使用情况"""
+    qnrs = db.query(Questionnaire).all()
+    stats = []
+    for q in qnrs:
+        task_count = db.query(func.count(Task.id)).filter(Task.questionnaire_id == q.id).scalar()
+        answer_count = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.questionnaire_id == q.id).scalar()
+        submitted_count = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.questionnaire_id == q.id, AnswerSheet.status == "submitted").scalar()
+        stats.append({
+            "id": q.id, "title": q.title, "category": q.category or "",
+            "question_count": len(q.questions) if q.questions else 0,
+            "status": q.status, "task_count": task_count,
+            "answer_count": answer_count, "submitted_count": submitted_count,
+            "applicable_grades": q.applicable_grades or "",
+        })
+    return APIResponse.success({"items": stats})
 
 
 # ============ 问卷管理 ============

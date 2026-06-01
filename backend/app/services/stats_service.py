@@ -131,6 +131,13 @@ def platform_summary(db: Session) -> dict:
     for level in ["low", "medium", "high", "urgent"]:
         risk_level_dist[level] = db.query(func.count(RiskAlert.id)).filter(RiskAlert.risk_level == level).scalar() or 0
 
+    # 答卷质量分布（全局）
+    quality_dist = {}
+    for level in ["normal", "mild_anomaly", "moderate_anomaly", "severe_anomaly"]:
+        quality_dist[level] = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.quality_level == level).scalar() or 0
+    total_quality = sum(quality_dist.values())
+    effective_count = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.validity.in_(["valid", "basically_valid"])).scalar() or 0
+
     # 全局完成率：按学生维度计算（已完成独立答卷的学生 / 有任务的学生总数）
     all_tasks = db.query(Task).filter(Task.status.notin_(["draft", "archived"])).all()
     total_expected = 0
@@ -157,6 +164,9 @@ def platform_summary(db: Session) -> dict:
         "ai_call_total": db.query(func.count(AIAnalysisLog.id)).scalar() or 0,
         "sms_send_total": db.query(func.count(SMSLog.id)).scalar() or 0,
         "risk_level_distribution": risk_level_dist,
+        "quality_distribution": quality_dist,
+        "quality_total": total_quality,
+        "quality_effective_rate": round(effective_count / max(total_quality, 1) * 100, 1),
         "completion_rankings": sorted(rows, key=lambda r: r["completion_rate"], reverse=True)[:10],
         "risk_rankings": sorted(rows, key=lambda r: r["risk_count"], reverse=True)[:10],
         "risk_handling_rankings": sorted(rows, key=lambda r: r["intervention_completion_rate"], reverse=True)[:10],

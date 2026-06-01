@@ -63,6 +63,7 @@ import PlatformAIAnalysis from '../pages/platform/AIAnalysis';
 import PlatformStudentManagement from '../pages/platform/StudentManagement';
 import PlatformQuestionnaireManagement from '../pages/platform/QuestionnaireManagement';
 import PlatformStudentProfilePage from '../pages/platform/StudentProfilePage';
+import PlatformDataReports from '../pages/platform/DataReports';
 
 function RootRedirect() {
   const { user } = useAuthStore();
@@ -176,6 +177,7 @@ export default function AppRoutes() {
         <Route path="key-students" element={<PlatformKeyStudents />} />
         <Route path="tasks" element={<PlatformTaskSupervision />} />
         <Route path="interventions" element={<PlatformInterventionSupervision />} />
+        <Route path="reports" element={<PlatformDataReports />} />
         <Route path="ai-analysis" element={<PlatformAIAnalysis />} />
         <Route path="notifications" element={<PlatformSmsCenter />} />
         <Route path="audit-logs" element={<PlatformAuditLogs />} />

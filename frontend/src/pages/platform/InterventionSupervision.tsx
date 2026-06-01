@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Button, Select, Typography, Space, message, Popconfirm, Tabs, Drawer, Descriptions, Card, Spin, Empty, Modal, Input } from 'antd';
-import { BellOutlined, ExportOutlined, EyeOutlined, SendOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Select, Typography, Space, message, Popconfirm, Tabs, Drawer, Descriptions, Card, Spin, Empty, Modal, Input, Form, Switch } from 'antd';
+import { BellOutlined, ExportOutlined, EyeOutlined, SendOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { maskIdCard } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
@@ -9,6 +9,20 @@ import { METHOD_LABELS, INTERVENTION_STATUS_LABELS, INTERVENTION_STATUS_COLORS }
 const methodLabels = METHOD_LABELS;
 const statusLabels = INTERVENTION_STATUS_LABELS;
 const statusColors = INTERVENTION_STATUS_COLORS;
+
+const METHOD_OPTIONS = [
+  { value: 'student_talk', label: '学生谈话' },
+  { value: 'counselor_guidance', label: '心理老师辅导' },
+  { value: 'family_school', label: '家校沟通' },
+  { value: 'observation', label: '持续观察' },
+  { value: 'other', label: '其他' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'processing', label: '处理中' },
+  { value: 'completed', label: '已完成' },
+  { value: 'closed', label: '已关闭' },
+];
 
 export default function PlatformInterventionSupervision() {
   const [data, setData] = useState<any[]>([]);
@@ -31,6 +45,12 @@ export default function PlatformInterventionSupervision() {
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [verifyPassword, setVerifyPassword] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
+
+  // Create/Edit modal state
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [formModalLoading, setFormModalLoading] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [form] = Form.useForm();
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -56,6 +76,57 @@ export default function PlatformInterventionSupervision() {
   }, [tab, page, filters]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Open create modal
+  const openCreateModal = () => {
+    setEditingRecord(null);
+    form.resetFields();
+    form.setFieldsValue({ need_follow_up: false, status: 'processing' });
+    setFormModalOpen(true);
+  };
+
+  // Open edit modal
+  const openEditModal = (record: any) => {
+    setEditingRecord(record);
+    form.resetFields();
+    form.setFieldsValue({
+      student_id: record.student_id,
+      method: record.method,
+      content: record.content,
+      result: record.result,
+      follow_up_suggestion: record.follow_up_suggestion,
+      need_follow_up: record.need_follow_up,
+      status: record.status,
+    });
+    setFormModalOpen(true);
+  };
+
+  // Submit create or edit
+  const handleFormSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      setFormModalLoading(true);
+      const payload = {
+        ...values,
+        student_id: Number(values.student_id),
+      };
+      if (editingRecord) {
+        await client.put(`/platform/interventions/${editingRecord.id}`, payload);
+        message.success('更新成功');
+      } else {
+        await client.post('/platform/interventions', payload);
+        message.success('创建成功');
+      }
+      setFormModalOpen(false);
+      form.resetFields();
+      fetchData();
+    } catch (err: any) {
+      if (err?.errorFields) return; // form validation error
+      message.error(err?.response?.data?.detail || '操作失败');
+    } finally {
+      setFormModalLoading(false);
+    }
+  };
 
   const handleVerifyIdCard = async () => {
     if (!verifyPassword) { message.warning('请输入密码'); return; }
@@ -130,9 +201,10 @@ export default function PlatformInterventionSupervision() {
   };
 
   const actionColumn = {
-    title: '操作', key: 'action', width: 160, render: (_: any, r: any) => (
+    title: '操作', key: 'action', width: 200, render: (_: any, r: any) => (
       <Space>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
+        <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEditModal(r)}>编辑</Button>
         <Popconfirm title="确定督促该学校处理此干预？" onConfirm={() => handleUrge(r.id)} okText="确定" cancelText="取消">
           <Button size="small" icon={<BellOutlined />} danger>督促</Button>
         </Popconfirm>
@@ -158,7 +230,10 @@ export default function PlatformInterventionSupervision() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>干预督办</Typography.Title>
-        <Button icon={<ExportOutlined />} onClick={() => setExportVerifyOpen(true)} disabled={!(tab === 'overdue' ? overdueData : data).length}>导出 CSV</Button>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>新增干预记录</Button>
+          <Button icon={<ExportOutlined />} onClick={() => setExportVerifyOpen(true)} disabled={!(tab === 'overdue' ? overdueData : data).length}>导出 CSV</Button>
+        </Space>
       </div>
       <Space wrap style={{ marginBottom: 16 }}>
         <Select placeholder="学校" allowClear style={{ width: 180 }} value={filters.school_id || undefined}
@@ -199,6 +274,7 @@ export default function PlatformInterventionSupervision() {
                 <Button icon={<BellOutlined />} danger>督促处理</Button>
               </Popconfirm>
               <Button type="primary" icon={<SendOutlined />} onClick={() => handleRemind(detail.id)}>发送提醒</Button>
+              <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEditModal(detail); }}>编辑</Button>
               {detail.risk_alert_id && (
                 <Button onClick={() => { setAnswerAlertId(detail.risk_alert_id); setAnswerOpen(true); }}>查看答题详情</Button>
               )}
@@ -206,6 +282,44 @@ export default function PlatformInterventionSupervision() {
           </div>
         ) : <Empty />}
       </Drawer>
+
+      {/* Create / Edit Modal */}
+      <Modal
+        title={editingRecord ? '编辑干预记录' : '新增干预记录'}
+        open={formModalOpen}
+        onOk={handleFormSubmit}
+        confirmLoading={formModalLoading}
+        onCancel={() => { setFormModalOpen(false); form.resetFields(); }}
+        okText="确定"
+        cancelText="取消"
+        destroyOnClose
+        width={560}
+        style={{ maxWidth: '95vw' }}
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="student_id" label="学生 ID" rules={[{ required: true, message: '请输入学生 ID' }]}>
+            <Input type="number" placeholder="请输入学生 ID" />
+          </Form.Item>
+          <Form.Item name="method" label="干预方式" rules={[{ required: true, message: '请选择干预方式' }]}>
+            <Select placeholder="请选择干预方式" options={METHOD_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="content" label="干预内容">
+            <Input.TextArea rows={3} placeholder="请输入干预内容" />
+          </Form.Item>
+          <Form.Item name="result" label="干预结果">
+            <Input.TextArea rows={3} placeholder="请输入干预结果" />
+          </Form.Item>
+          <Form.Item name="follow_up_suggestion" label="跟进建议">
+            <Input.TextArea rows={3} placeholder="请输入跟进建议" />
+          </Form.Item>
+          <Form.Item name="need_follow_up" label="需跟进" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select placeholder="请选择状态" options={STATUS_OPTIONS} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal title="导出验证" open={exportVerifyOpen} onOk={handleExportVerify} confirmLoading={exportVerifying}
         onCancel={() => { setExportVerifyOpen(false); setExportPassword(''); }} okText="确定" cancelText="取消" destroyOnClose>

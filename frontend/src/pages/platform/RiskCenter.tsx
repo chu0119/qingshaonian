@@ -35,6 +35,9 @@ export default function PlatformRiskCenter() {
   const [answerAlertId, setAnswerAlertId] = useState<number>();
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [drawerWidth, setDrawerWidth] = useState(640);
+  const [intvModalOpen, setIntvModalOpen] = useState(false);
+  const [intvForm, setIntvForm] = useState<any>({ method: 'other', content: '', result: '', follow_up_suggestion: '', need_follow_up: false, status: 'processing' });
+  const [intvSaving, setIntvSaving] = useState(false);
 
   useEffect(() => {
     const w = Math.min(window.innerWidth - 40, 1100);
@@ -273,7 +276,8 @@ export default function PlatformRiskCenter() {
               </Card>
             )}
 
-            <Card title={`干预记录 (${detail.interventions?.length || 0})`} size="small">
+            <Card title={`干预记录 (${detail.interventions?.length || 0})`} size="small"
+              extra={<Button type="link" size="small" onClick={() => { setIntvModalOpen(true); setIntvForm({ student_id: detail.student_id, risk_alert_id: detail.id, method: 'other', content: '', result: '', follow_up_suggestion: '', need_follow_up: false, status: 'processing' }); }}>新增干预</Button>}>
               {detail.interventions?.length ? (
                 detail.interventions.map((iv: any, idx: number) => (
                   <div key={iv.id} style={{ padding: '8px 0', borderBottom: idx < detail.interventions.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
@@ -306,6 +310,41 @@ export default function PlatformRiskCenter() {
         onCancel={() => { setExportVerifyOpen(false); setExportPassword(''); }} okText="确定" cancelText="取消" destroyOnClose>
         <p style={{ marginBottom: 12 }}>导出包含敏感信息，请输入登录密码验证身份</p>
         <Input.Password value={exportPassword} onChange={e => setExportPassword(e.target.value)} placeholder="请输入密码" onPressEnter={handleExportVerify} />
+      </Modal>
+
+      <Modal title="新增干预记录" open={intvModalOpen} confirmLoading={intvSaving}
+        onCancel={() => setIntvModalOpen(false)} okText="确定" cancelText="取消" destroyOnClose
+        onOk={async () => {
+          if (!intvForm.content) { message.warning('请输入干预内容'); return; }
+          setIntvSaving(true);
+          try {
+            await client.post('/platform/interventions', intvForm);
+            message.success('干预记录创建成功');
+            setIntvModalOpen(false);
+            if (detail) viewDetail({ id: detail.id });
+          } catch (err: any) {
+            message.error(err?.response?.data?.detail || '创建失败');
+          } finally { setIntvSaving(false); }
+        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label>干预方式</label>
+            <Select style={{ width: '100%' }} value={intvForm.method} onChange={v => setIntvForm((f: any) => ({ ...f, method: v }))}
+              options={Object.entries(methodLabels).map(([k, v]) => ({ value: k, label: v }))} />
+          </div>
+          <div><label>干预内容 *</label>
+            <Input.TextArea rows={3} value={intvForm.content} onChange={e => setIntvForm((f: any) => ({ ...f, content: e.target.value }))} placeholder="请输入干预内容" />
+          </div>
+          <div><label>处理结果</label>
+            <Input.TextArea rows={2} value={intvForm.result} onChange={e => setIntvForm((f: any) => ({ ...f, result: e.target.value }))} placeholder="请输入处理结果" />
+          </div>
+          <div><label>后续建议</label>
+            <Input.TextArea rows={2} value={intvForm.follow_up_suggestion} onChange={e => setIntvForm((f: any) => ({ ...f, follow_up_suggestion: e.target.value }))} placeholder="请输入后续建议" />
+          </div>
+          <div><label>状态</label>
+            <Select style={{ width: '100%' }} value={intvForm.status} onChange={v => setIntvForm((f: any) => ({ ...f, status: v }))}
+              options={[{ value: 'processing', label: '处理中' }, { value: 'completed', label: '已完成' }, { value: 'closed', label: '已关闭' }]} />
+          </div>
+        </div>
       </Modal>
 
       <AnswerDetail alertId={answerAlertId} platformMode open={answerOpen} onClose={() => setAnswerOpen(false)} />

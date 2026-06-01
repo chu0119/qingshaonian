@@ -165,6 +165,41 @@ export default function Dashboard() {
         </Col>
       </Row>
 
+      {data.quality_distribution && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} lg={12}>
+            <Card title="答卷质量分布" loading={loading}>
+              {Object.entries(data.quality_distribution).map(([level, count]) => {
+                const labels: Record<string, string> = { normal: '正常', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '严重异常' };
+                const colors: Record<string, string> = { normal: '#52c41a', mild_anomaly: '#faad14', moderate_anomaly: '#fa8c16', severe_anomaly: '#ff4d4f' };
+                const total = data.quality_total || 1;
+                return (
+                  <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ width: 80, fontSize: 13 }}>{labels[level] || level}</span>
+                    <Progress percent={Math.round((count as number) / total * 100)} size="small" strokeColor={colors[level] || '#1890ff'} style={{ flex: 1 }} />
+                    <span style={{ width: 50, textAlign: 'right', fontSize: 13 }}>{count as number}</span>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 8, fontSize: 13, color: '#666' }}>
+                有效率：<span style={{ fontWeight: 600, color: '#1890ff' }}>{data.quality_effective_rate || 0}%</span>
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title="风险等级分布" loading={loading}>
+              {Object.entries(data.risk_level_distribution || {}).map(([level, count]) => (
+                <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ width: 80, fontSize: 13 }}>{RISK_LABELS[level] || level}</span>
+                  <Progress percent={Math.round((count as number) / Math.max(data.risk_alert_total || 1, 1) * 100)} size="small" strokeColor={RISK_COLORS[level] || '#1890ff'} style={{ flex: 1 }} />
+                  <span style={{ width: 50, textAlign: 'right', fontSize: 13 }}>{count as number}</span>
+                </div>
+              ))}
+            </Card>
+          </Col>
+        </Row>
+      )}
+
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
           <Card title={<Space><BarChartOutlined />学校完成率详情</Space>} loading={loading}>

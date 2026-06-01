@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Select, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Empty, Progress, Row, Col, Statistic, Popconfirm, Modal, DatePicker, Form, Input, message, Tabs, Collapse } from 'antd';
-import { ExportOutlined, EyeOutlined, CloseCircleOutlined, FieldTimeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Empty, Progress, Row, Col, Statistic, Popconfirm, Modal, DatePicker, Form, Input, message, Tabs, Collapse, List } from 'antd';
+import { ExportOutlined, EyeOutlined, CloseCircleOutlined, FieldTimeOutlined, EditOutlined, DeleteOutlined, MessageOutlined, FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../../api/client';
 import { TASK_STATUS_LABELS } from '../../utils/constants';
@@ -36,6 +36,14 @@ export default function PlatformTaskSupervision() {
   const [createClasses, setCreateClasses] = useState<any[]>([]);
   const [createQuestionnaires, setCreateQuestionnaires] = useState<any[]>([]);
   const [createSchoolId, setCreateSchoolId] = useState<number | null>(null);
+
+  // 问卷预览相关状态
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // 短信发送中状态
+  const [smsSending, setSmsSending] = useState(false);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -227,6 +235,47 @@ export default function PlatformTaskSupervision() {
     }
   };
 
+  // 发送未完成提醒短信
+  const handleSendReminderSms = (task: any) => {
+    Modal.confirm({
+      title: '发送提醒短信',
+      content: `确定要向任务「${task.name}」的所有未完成学生发送提醒短信吗？`,
+      okText: '确定发送',
+      cancelText: '取消',
+      onOk: async () => {
+        setSmsSending(true);
+        try {
+          const r = await client.post('/platform/sms/send', {
+            type: 'batch_uncompleted',
+            task_id: task.id,
+          });
+          const data = r.data.data;
+          message.success(data?.message || '短信发送完成');
+        } catch (err: any) {
+          message.error(err?.response?.data?.detail || '短信发送失败');
+        } finally {
+          setSmsSending(false);
+        }
+      },
+    });
+  };
+
+  // 预览问卷
+  const handlePreviewQuestionnaire = async (questionnaireId: number) => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewData(null);
+    try {
+      const r = await client.get(`/platform/questionnaires/${questionnaireId}`);
+      setPreviewData(r.data.data);
+    } catch {
+      message.error('加载问卷失败');
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const columns = [
     { title: '任务名称', dataIndex: 'name', key: 'name', width: 200, sorter: (a: any, b: any) => (a.name || '').localeCompare(b.name || ''), render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
@@ -290,7 +339,13 @@ export default function PlatformTaskSupervision() {
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="任务名称" span={2}>{detail.name}</Descriptions.Item>
               <Descriptions.Item label="学校">{detail.school_name}</Descriptions.Item>
-              <Descriptions.Item label="问卷">{detail.questionnaire_title || '-'}</Descriptions.Item>
+              <Descriptions.Item label="问卷">
+                {detail.questionnaire_title || '-'}
+                {detail.questionnaire_id && (
+                  <Button size="small" type="link" icon={<FileTextOutlined />} style={{ marginLeft: 8 }}
+                    onClick={() => handlePreviewQuestionnaire(detail.questionnaire_id)}>预览问卷</Button>
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="状态"><Tag color={statusColors[detail.status]}>{statusLabels[detail.status] || '未知'}</Tag></Descriptions.Item>
               <Descriptions.Item label="目标类型">{detail.target_type === 'all' ? '全校' : detail.target_type === 'grade' ? '年级' : detail.target_type === 'class' ? '班级' : '个人'}</Descriptions.Item>
               <Descriptions.Item label="开始时间">{detail.start_time ? new Date(detail.start_time).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
@@ -344,7 +399,17 @@ export default function PlatformTaskSupervision() {
                     <Table rowKey="student_id" dataSource={completed} pagination={false} size="small" columns={studentColumns} />
                   )},
                   { key: 'uncompleted', label: `未完成 (${uncompleted.length})`, children: (
-                    <Table rowKey="student_id" dataSource={uncompleted} pagination={false} size="small" columns={studentColumns} />
+                    <div>
+                      {uncompleted.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <Button type="primary" icon={<MessageOutlined />} loading={smsSending}
+                            onClick={() => handleSendReminderSms(detail)}>
+                            发送提醒短信
+                          </Button>
+                        </div>
+                      )}
+                      <Table rowKey="student_id" dataSource={uncompleted} pagination={false} size="small" columns={studentColumns} />
+                    </div>
                   )},
                 ]} />
               );
@@ -476,6 +541,58 @@ export default function PlatformTaskSupervision() {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 问卷预览弹窗 */}
+      <Modal
+        title={`问卷预览 - ${previewData?.title || ''}`}
+        open={previewOpen}
+        onCancel={() => { setPreviewOpen(false); setPreviewData(null); }}
+        footer={null}
+        width={700}
+        style={{ maxWidth: '95vw' }}
+        destroyOnHidden
+      >
+        {previewLoading ? <Spin style={{ display: 'block', margin: '40px auto' }} /> : previewData ? (
+          <div>
+            {previewData.category && <Tag color="blue" style={{ marginBottom: 12 }}>{previewData.category}</Tag>}
+            {previewData.description && <Typography.Paragraph type="secondary">{previewData.description}</Typography.Paragraph>}
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              共 {previewData.questions?.length || 0} 题
+            </Typography.Text>
+            <List
+              dataSource={previewData.questions || []}
+              renderItem={(q: any, idx: number) => (
+                <List.Item style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ width: '100%' }}>
+                    <Space align="start" style={{ marginBottom: 4 }}>
+                      <Typography.Text strong>{idx + 1}. {q.title}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        [{q.type === 'single' ? '单选' : q.type === 'multiple' ? '多选' : q.type === 'text' ? '文本' : q.type === 'score' ? '评分' : q.type}]
+                      </Typography.Text>
+                    </Space>
+                    {q.description && <Typography.Paragraph type="secondary" style={{ margin: '2px 0 6px', fontSize: 12 }}>{q.description}</Typography.Paragraph>}
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
+                      {q.dimension && <Typography.Text type="secondary" style={{ fontSize: 12 }}>维度: {q.dimension}</Typography.Text>}
+                      {q.risk_tag && <Tag color="red" style={{ fontSize: 11 }}>{q.risk_tag}</Tag>}
+                      {q.is_reverse && <Tag style={{ fontSize: 11 }}>反向题</Tag>}
+                    </div>
+                    {q.options?.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        {q.options.map((opt: any) => (
+                          <div key={opt.id} style={{ padding: '2px 0', color: opt.is_risk_option ? '#ff4d4f' : undefined }}>
+                            {opt.content} {opt.score != null && <Typography.Text type="secondary" style={{ fontSize: 12 }}>({opt.score}分)</Typography.Text>}
+                            {opt.is_risk_option && <Tag color="red" style={{ fontSize: 10, marginLeft: 4 }}>风险选项</Tag>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </List.Item>
+              )}
+            />
+          </div>
+        ) : <Empty description="加载失败" />}
       </Modal>
     </div>
   );

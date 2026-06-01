@@ -61,6 +61,7 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'questionnaires', icon: <FileTextOutlined />, label: '问卷管理', path: '/platform/questionnaires' },
     { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },
+    { key: 'reports', icon: <BarChartOutlined />, label: '数据报表', path: '/platform/reports' },
     { key: 'screen', icon: <FundOutlined />, label: '区域数据大屏', path: '/platform/screen' },
     { key: 'ai-analysis', icon: <RobotOutlined />, label: 'AI 研判分析', path: '/platform/ai-analysis' },
     { key: 'notifications', icon: <MessageOutlined />, label: '通知与短信', path: '/platform/notifications' },
