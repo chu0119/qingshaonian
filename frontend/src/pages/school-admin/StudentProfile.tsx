@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tag, Timeline, Typography, Spin, Tabs, Space, Button, Empty, message,
+  Card, Descriptions, Table, Tag, Timeline, Typography, Spin, Tabs, Space, Button, Empty, message, Row, Col, Statistic, Progress,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, FileTextOutlined, AlertOutlined, MedicineBoxOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import client from '../../api/client';
 import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS } from '../../utils/constants';
@@ -143,6 +143,30 @@ export default function StudentProfile() {
   const dimensionKeys = latestRecord?.dimension_scores ? Object.keys(latestRecord.dimension_scores) : [];
   const dimensionValues = latestRecord?.dimension_scores ? Object.values(latestRecord.dimension_scores) : [];
 
+  const riskCounts = { low: 0, medium: 0, high: 0, urgent: 0 };
+  risks.forEach(r => { if (riskCounts[r.risk_level as keyof typeof riskCounts] !== undefined) riskCounts[r.risk_level as keyof typeof riskCounts]++; });
+  const pendingRisks = risks.filter(r => r.status === 'pending').length;
+  const pendingInterventions = interventions.filter(r => r.status === 'pending' || r.status === 'processing').length;
+
+  /* ---------- trend chart ---------- */
+  const trendOption = records.length > 1 ? {
+    tooltip: { trigger: 'axis' as const },
+    legend: { data: ['总分', ...dimensionKeys.map(k => DIMENSION_LABELS[k] || k)], bottom: 0, textStyle: { fontSize: 11 } },
+    grid: { top: 20, bottom: 60, left: 50, right: 20 },
+    xAxis: { type: 'category' as const, data: records.map(r => r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('zh-CN') : ''), axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value' as const },
+    series: [
+      { name: '总分', type: 'line', data: records.map(r => r.total_score), smooth: true, lineStyle: { width: 3 }, itemStyle: { color: '#1677ff' } },
+      ...dimensionKeys.map((k, i) => ({
+        name: DIMENSION_LABELS[k] || k,
+        type: 'line' as const,
+        data: records.map(r => r.dimension_scores?.[k] ?? null),
+        smooth: true,
+        lineStyle: { width: 1.5, type: 'dashed' as const },
+      })),
+    ],
+  } : null;
+
   /* ---------- radar chart ---------- */
   const radarOption = latestRecord && dimensionKeys.length > 0 ? {
     tooltip: {},
@@ -231,6 +255,35 @@ export default function StudentProfile() {
         </Descriptions>
       </Card>
 
+      {/* Summary Stats */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic title="累计测评" value={records.length} suffix="次" prefix={<FileTextOutlined style={{ color: '#1677ff' }} />} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic title="最新风险" value={latestRecord ? (RISK_LABELS[latestRecord.risk_level] || '-') : '-'}
+              valueStyle={{ color: latestRecord ? (RISK_COLORS[latestRecord.risk_level] || '#8c8c8c') : '#8c8c8c' }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic title="待处理预警" value={pendingRisks} suffix="条"
+              prefix={<AlertOutlined style={{ color: pendingRisks > 0 ? '#ff4d4f' : '#52c41a' }} />}
+              valueStyle={{ color: pendingRisks > 0 ? '#ff4d4f' : '#52c41a' }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic title="进行中干预" value={pendingInterventions} suffix="项"
+              prefix={<MedicineBoxOutlined style={{ color: pendingInterventions > 0 ? '#faad14' : '#52c41a' }} />}
+              valueStyle={{ color: pendingInterventions > 0 ? '#faad14' : '#52c41a' }} />
+          </Card>
+        </Col>
+      </Row>
+
       {/* Tabs for sections */}
       <Tabs
         defaultActiveKey="assessment"
@@ -281,6 +334,48 @@ export default function StudentProfile() {
                       option={radarOption}
                       style={{ height: 320 }}
                       opts={{ renderer: 'svg' }}
+                    />
+                  </Card>
+                )}
+
+                {/* 6. Longitudinal Trend Chart */}
+                {trendOption && (
+                  <Card title="历次测评趋势" style={{ borderRadius: 10 }}>
+                    <ReactECharts
+                      option={trendOption}
+                      style={{ height: 350 }}
+                      opts={{ renderer: 'svg' }}
+                    />
+                  </Card>
+                )}
+
+                {/* 7. Assessment Detail Table */}
+                {records.length > 0 && (
+                  <Card title="测评明细" style={{ borderRadius: 10 }} styles={{ body: { padding: 0 } }}>
+                    <Table
+                      rowKey="answer_sheet_id"
+                      dataSource={[...records].reverse()}
+                      size="small"
+                      scroll={{ x: 'max-content' }}
+                      pagination={false}
+                      expandable={{
+                        expandedRowRender: (r) => r.dimension_scores ? (
+                          <div style={{ padding: '8px 16px' }}>
+                            <Space wrap>
+                              {Object.entries(r.dimension_scores).map(([k, v]) => (
+                                <Tag key={k}>{DIMENSION_LABELS[k] || k}: {v}</Tag>
+                              ))}
+                            </Space>
+                          </div>
+                        ) : null,
+                        rowExpandable: (r) => !!r.dimension_scores && Object.keys(r.dimension_scores).length > 0,
+                      }}
+                      columns={[
+                        { title: '问卷', dataIndex: 'questionnaire_title', ellipsis: true },
+                        { title: '提交时间', dataIndex: 'submitted_at', width: 170, render: formatDate },
+                        { title: '总分', dataIndex: 'total_score', width: 80, align: 'center' as const },
+                        { title: '风险等级', dataIndex: 'risk_level', width: 100, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
+                      ]}
                     />
                   </Card>
                 )}
