@@ -54,12 +54,15 @@ export default function ClassManagement() {
   };
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
     try {
+      const values = await form.validateFields();
       if (editingClass) { await updateClass(editingClass.id, values); message.success('更新成功'); }
       else { await createClass(values); message.success('创建成功'); }
       setModalOpen(false); fetchData();
-    } catch { message.error('操作失败，请重试'); }
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.detail || '操作失败，请重试');
+    }
   };
 
   const columns = [

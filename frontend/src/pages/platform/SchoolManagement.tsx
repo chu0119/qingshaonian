@@ -92,12 +92,16 @@ export default function SchoolManagement() {
   };
 
   const toggleStatus = async (s: any) => {
-    if (s.status) {
-      await client.delete(`/platform/schools/${s.id}`); message.success('已停用');
-    } else {
-      await client.post(`/platform/schools/${s.id}/enable`); message.success('已启用');
+    try {
+      if (s.status) {
+        await client.delete(`/platform/schools/${s.id}`); message.success('已停用');
+      } else {
+        await client.post(`/platform/schools/${s.id}/enable`); message.success('已启用');
+      }
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '操作失败');
     }
-    fetchData();
   };
 
   const openReset = (admin: any) => {
@@ -107,16 +111,25 @@ export default function SchoolManagement() {
   };
 
   const handleResetPassword = async () => {
-    const values = await resetForm.validateFields();
-    await client.post(`/platform/schools/${detail.id}/admins/${resetTarget.id}/reset-password`, values);
-    message.success('密码已重置，该账号下次登录需修改密码');
-    setResetOpen(false);
+    try {
+      const values = await resetForm.validateFields();
+      await client.post(`/platform/schools/${detail.id}/admins/${resetTarget.id}/reset-password`, values);
+      message.success('密码已重置，该账号下次登录需修改密码');
+      setResetOpen(false);
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.detail || '操作失败');
+    }
   };
 
   const disableAdmin = async (admin: any) => {
-    await client.post(`/platform/schools/${detail.id}/admins/${admin.id}/disable`);
-    message.success('学校管理员账号已停用');
-    viewDetail(detail);
+    try {
+      await client.post(`/platform/schools/${detail.id}/admins/${admin.id}/disable`);
+      message.success('学校管理员账号已停用');
+      viewDetail(detail);
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '操作失败');
+    }
   };
 
   const deleteSchool = async (schoolId: number) => {

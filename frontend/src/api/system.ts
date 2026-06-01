@@ -64,7 +64,7 @@ export async function deleteGrade(id: number) {
 }
 
 export async function seedDemoData() {
-  const res = await client.post('/system/seed-demo-data');
+  const res = await client.post('/system/seed-data');
   return res.data;
 }
 

@@ -119,7 +119,7 @@ export default function StudentLayout() {
       <Modal title="修改密码" open={pwdModalOpen} onOk={handleChangePassword} onCancel={() => setPwdModalOpen(false)} okText="确定" cancelText="取消" destroyOnClose>
         <Form form={pwdForm} layout="vertical">
           <Form.Item name="old_password" label="原密码" rules={[{ required: true }]}><Input.Password /></Form.Item>
-          <Form.Item name="new_password" label="新密码" rules={[{ required: true, min: 8, message: '新密码至少8位' }]}><Input.Password /></Form.Item>
+          <Form.Item name="new_password" label="新密码" rules={[{ required: true, min: 6, message: '新密码至少6位' }]}><Input.Password /></Form.Item>
           <Form.Item name="confirm_password" label="确认新密码" dependencies={['new_password']}
             rules={[{ required: true }, ({ getFieldValue }) => ({
               validator(_, value) {

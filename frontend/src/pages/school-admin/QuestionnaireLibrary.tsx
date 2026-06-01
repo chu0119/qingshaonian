@@ -31,13 +31,23 @@ export default function QuestionnaireLibrary() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleDelete = async (id: number) => { await deleteQuestionnaire(id); message.success('删除成功'); fetchData(); };
-  const handleCopy = async (id: number) => { await copyQuestionnaire(id); message.success('复制成功'); fetchData(); };
+  const handleDelete = async (id: number) => {
+    try { await deleteQuestionnaire(id); message.success('删除成功'); fetchData(); }
+    catch (err: any) { message.error(err?.response?.data?.detail || '删除失败'); }
+  };
+  const handleCopy = async (id: number) => {
+    try { await copyQuestionnaire(id); message.success('复制成功'); fetchData(); }
+    catch (err: any) { message.error(err?.response?.data?.detail || '复制失败'); }
+  };
   const handleToggleStatus = async (record: QuestionnaireInfo) => {
-    const newStatus = record.status === 'active' ? 'inactive' : 'active';
-    await updateQuestionnaire(record.id, { status: newStatus });
-    message.success(newStatus === 'active' ? '已启用' : '已停用');
-    fetchData();
+    try {
+      const newStatus = record.status === 'active' ? 'inactive' : 'active';
+      await updateQuestionnaire(record.id, { status: newStatus });
+      message.success(newStatus === 'active' ? '已启用' : '已停用');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '操作失败');
+    }
   };
 
   const handleDownloadTemplate = async () => {

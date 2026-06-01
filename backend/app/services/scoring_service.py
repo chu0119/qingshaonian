@@ -752,11 +752,15 @@ def check_risk_alerts(db: Session, sheet_id: int) -> dict:
                 trigger_method="total_score", trigger_detail=scoring.triggered_rules,
                 status="pending", source_rule_version="v1",
             ))
-        elif RISK_ORDER.get(scoring.risk_level, 0) > RISK_ORDER.get(existing.risk_level, 0):
+        elif RISK_ORDER.get(scoring.risk_level, 0) != RISK_ORDER.get(existing.risk_level, 0):
+            # 风险等级变化（升高或降低）都更新预警
             existing.risk_level = scoring.risk_level
             existing.risk_type = scoring.risk_type
             existing.trigger_detail = scoring.triggered_rules
             existing.source_rule_version = "v1"
+            # 如果从高风险降为低风险，更新预警状态为已处理
+            if scoring.risk_level == "low":
+                existing.status = "completed"
         return {"alert_created": True, "risk_level": scoring.risk_level}
 
     return {"alert_created": False}

@@ -79,9 +79,13 @@ export default function TeacherManagement() {
   };
   const handleAssign = async () => {
     if (assignTeacherId) {
-      await assignTeacherClasses(assignTeacherId, assignedKeys.map(Number));
-      message.success('班级分配成功');
-      setAssignModalOpen(false);
+      try {
+        await assignTeacherClasses(assignTeacherId, assignedKeys.map(Number));
+        message.success('班级分配成功');
+        setAssignModalOpen(false);
+      } catch (err: any) {
+        message.error(err?.response?.data?.detail || '分配失败');
+      }
     }
   };
 

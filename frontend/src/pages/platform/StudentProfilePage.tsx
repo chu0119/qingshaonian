@@ -39,7 +39,7 @@ export default function StudentProfilePage() {
   };
 
   const columns = [
-    { title: '姓名', dataIndex: 'real_name', key: 'real_name', width: 100 },
+    { title: '姓名', dataIndex: 'student_name', key: 'student_name', width: 100 },
     { title: '学号', dataIndex: 'student_no', key: 'student_no', width: 120 },
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 150, ellipsis: true },
     { title: '年级', dataIndex: 'grade_name', key: 'grade_name', width: 80 },

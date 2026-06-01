@@ -38,6 +38,7 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预记录', path: '/school-admin/interventions' },
     { key: 'reports', icon: <BarChartOutlined />, label: '数据报表', path: '/school-admin/reports' },
     { key: 'screen', icon: <FundOutlined />, label: '数据大屏', path: '/school-admin/screen' },
+    { key: 'audit-logs', icon: <AuditOutlined />, label: '操作日志', path: '/school-admin/audit-logs' },
     { key: 'settings', icon: <SettingOutlined />, label: '系统设置', path: '/school-admin/settings' },
   ],
   teacher: [

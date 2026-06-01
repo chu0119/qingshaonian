@@ -276,17 +276,25 @@ export default function TaskManagement() {
     classGroups[cls].students.push(c);
   });
 
-  const handleSendReminder = async () => {
+  const handleSendReminder = () => {
     if (!selectedTask || uncompleted.length === 0) return;
-    try {
-      await client.post('/sms/send', {
-        type: 'batch_unfinished',
-        task_id: selectedTask.id,
-      });
-      message.success(`已向 ${uncompleted.length} 名未完成学生发送提醒短信`);
-    } catch (err: any) {
-      message.error(err?.response?.data?.detail || '发送提醒失败');
-    }
+    Modal.confirm({
+      title: '确认发送提醒短信',
+      content: `确定向 ${uncompleted.length} 名未完成学生发送提醒短信吗？`,
+      okText: '确定发送',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await client.post('/sms/send', {
+            type: 'batch_unfinished',
+            task_id: selectedTask.id,
+          });
+          message.success(`已向 ${uncompleted.length} 名未完成学生发送提醒短信`);
+        } catch (err: any) {
+          message.error(err?.response?.data?.detail || '发送提醒失败');
+        }
+      },
+    });
   };
 
   const detailTabItems = [

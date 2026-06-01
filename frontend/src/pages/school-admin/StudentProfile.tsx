@@ -104,16 +104,16 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
 
       // 2. Longitudinal data (also gives us student name as fallback)
       let longitudinalRecords: LongitudinalRecord[] = [];
+      let longitudinalStudentName = '';
       try {
         const lr = await client.get(`${apiPrefix}/reports/student-longitudinal/${studentId}`);
         longitudinalRecords = lr.data.data?.records || [];
+        longitudinalStudentName = lr.data.data?.student_name || '';
       } catch { /* ignore */ }
 
       // Fallback student name from longitudinal data
-      if (!studentData && longitudinalRecords.length > 0) {
-        const lr2 = await client.get(`${apiPrefix}/reports/student-longitudinal/${studentId}`);
-        const name = lr2.data.data?.student_name;
-        studentData = { id: studentId, real_name: name || `学生${studentId}`, student_no: '-', gender: '-', phone: '', grade_name: '-', class_name: '-', username: '' };
+      if (!studentData && longitudinalStudentName) {
+        studentData = { id: studentId, real_name: longitudinalStudentName, student_no: '-', gender: '-', phone: '', grade_name: '-', class_name: '-', username: '' };
       }
 
       setStudent(studentData);

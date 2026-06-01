@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, Upload,
   Row, Col, Card, Typography, Tooltip,
 } from 'antd';
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined,
   UploadOutlined, DownloadOutlined, SearchOutlined,
   ReloadOutlined, ExclamationCircleOutlined, KeyOutlined,
 } from '@ant-design/icons';
@@ -19,6 +20,7 @@ import { getClasses, type ClassInfo } from '../../api/classes';
 const { Title } = Typography;
 
 export default function StudentManagement() {
+  const navigate = useNavigate();
   const [data, setData] = useState<UserInfo[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -218,6 +220,11 @@ export default function StudentManagement() {
       title: '操作', key: 'action', width: 240, fixed: 'right' as const,
       render: (_: unknown, r: UserInfo) => (
         <Space size="small">
+          <Tooltip title="查看档案">
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/school-admin/students/${r.id}`)}>
+              档案
+            </Button>
+          </Tooltip>
           <Tooltip title="编辑">
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
               编辑
