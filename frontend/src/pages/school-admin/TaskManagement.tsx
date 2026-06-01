@@ -264,6 +264,30 @@ export default function TaskManagement() {
 
   const uncompleted = completions.filter(c => c.status !== 'submitted');
   const completed = completions.filter(c => c.status === 'submitted');
+  const completionRate = completions.length > 0 ? Math.round(completed.length / completions.length * 100) : 0;
+
+  // 按班级分组统计
+  const classGroups: Record<string, { total: number; completed: number; students: any[] }> = {};
+  completions.forEach((c: any) => {
+    const cls = c.class_name || '未分班';
+    if (!classGroups[cls]) classGroups[cls] = { total: 0, completed: 0, students: [] };
+    classGroups[cls].total++;
+    if (c.status === 'submitted') classGroups[cls].completed++;
+    classGroups[cls].students.push(c);
+  });
+
+  const handleSendReminder = async () => {
+    if (!selectedTask || uncompleted.length === 0) return;
+    try {
+      await client.post('/sms/send', {
+        type: 'batch_unfinished',
+        task_id: selectedTask.id,
+      });
+      message.success(`已向 ${uncompleted.length} 名未完成学生发送提醒短信`);
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '发送提醒失败');
+    }
+  };
 
   const detailTabItems = [
     {
@@ -406,13 +430,47 @@ export default function TaskManagement() {
         style={{ maxWidth: '95vw' }}
         footer={null}
       >
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 12 }}>
           <Col xs={12} sm={12} md={6}><Statistic title="已提交" value={completed.length} valueStyle={{ color: '#67C23A' }} loading={detailLoading} /></Col>
           <Col xs={12} sm={12} md={6}><Statistic title="未完成" value={uncompleted.length} valueStyle={{ color: '#FF4D4F' }} loading={detailLoading} /></Col>
-          <Col xs={12} sm={12} md={6}><Statistic title="完成率" value={completions.length > 0 ? Math.round(completed.length / completions.length * 100) : 0} suffix="%" loading={detailLoading} /></Col>
+          <Col xs={12} sm={12} md={6}><Statistic title="完成率" value={completionRate} suffix="%" loading={detailLoading} /></Col>
           <Col xs={12} sm={12} md={6}><Statistic title="总人数" value={completions.length} loading={detailLoading} /></Col>
         </Row>
-        <Tabs items={detailTabItems} />
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>整体进度</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>{completed.length}/{completions.length}</Typography.Text>
+          </div>
+          <Progress percent={completionRate} strokeColor={completionRate >= 80 ? '#52c41a' : completionRate >= 50 ? '#faad14' : '#ff4d4f'} />
+        </div>
+        {uncompleted.length > 0 && (
+          <div style={{ marginBottom: 12, textAlign: 'right' }}>
+            <Button size="small" type="primary" onClick={handleSendReminder}>
+              发送提醒短信 ({uncompleted.length}人)
+            </Button>
+          </div>
+        )}
+        <Tabs items={[
+          {
+            key: 'progress',
+            label: '班级进度',
+            children: (
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                {Object.entries(classGroups).map(([cls, data]) => (
+                  <div key={cls} style={{ padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Typography.Text strong>{cls}</Typography.Text>
+                      <Typography.Text type="secondary">{data.completed}/{data.total} ({data.total > 0 ? Math.round(data.completed / data.total * 100) : 0}%)</Typography.Text>
+                    </div>
+                    <Progress percent={data.total > 0 ? Math.round(data.completed / data.total * 100) : 0} size="small"
+                      strokeColor={data.completed === data.total ? '#52c41a' : '#1677ff'} />
+                  </div>
+                ))}
+              </Space>
+            ),
+          },
+          ...detailTabItems,
+        ]} />
       </Modal>
 
       {/* 编辑任务弹窗 */}
