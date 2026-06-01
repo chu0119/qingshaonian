@@ -123,9 +123,9 @@ export default function RiskDetail() {
             </Card>
           )}
 
-          {detail.dimension_analysis?.length > 0 && (
+          {detail.dimension_analysis?.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).length > 0 && (
             <Card title="维度分析" style={{ marginTop: 16 }}>
-              {detail.dimension_analysis.map((item: any, i: number) => (
+              {detail.dimension_analysis.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).map((item: any, i: number) => (
                 <div key={i} style={{ marginBottom: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontWeight: 500 }}>{item.label}</span>
