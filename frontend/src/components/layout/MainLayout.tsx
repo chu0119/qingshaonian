@@ -7,7 +7,7 @@ import {
   LogoutOutlined, KeyOutlined, MenuOutlined,
   BankOutlined, SafetyOutlined, ScheduleOutlined, CheckSquareOutlined, ContactsOutlined,
   FundOutlined, AuditOutlined, MessageOutlined, RobotOutlined, EyeOutlined,
-  IdcardOutlined,
+  IdcardOutlined, SolutionOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { changePassword } from '../../api/auth';
@@ -56,6 +56,7 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'risks', icon: <AlertOutlined />, label: '风险预警中心', path: '/platform/risks' },
     { key: 'key-students', icon: <IdcardOutlined />, label: '重点关注学生', path: '/platform/key-students' },
     { key: 'students', icon: <TeamOutlined />, label: '学生管理', path: '/platform/students' },
+    { key: 'student-profile', icon: <SolutionOutlined />, label: '学生档案', path: '/platform/student-profile' },
     { key: 'questionnaires', icon: <FileTextOutlined />, label: '问卷管理', path: '/platform/questionnaires' },
     { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },

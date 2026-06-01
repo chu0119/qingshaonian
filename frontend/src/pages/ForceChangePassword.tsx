@@ -45,7 +45,7 @@ export default function ForceChangePassword() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(160deg, #020a1f 0%, #0a1a3a 25%, #0d2456 55%, #10306e 100%)' }}>
-      <Card style={{ width: 460, borderRadius: 16, border: '1px solid rgba(0,212,255,0.2)', background: 'rgba(0,20,60,0.5)', backdropFilter: 'blur(20px)' }}>
+      <Card style={{ width: 'min(460px, 90vw)', borderRadius: 16, border: '1px solid rgba(0,212,255,0.2)', background: 'rgba(0,20,60,0.5)', backdropFilter: 'blur(20px)' }}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <SafetyOutlined style={{ fontSize: 40, color: '#00d4ff', marginBottom: 8 }} />
           <Typography.Title level={3} style={{ color: '#e8f4ff', marginBottom: 4 }}>

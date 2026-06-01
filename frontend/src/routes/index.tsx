@@ -62,6 +62,7 @@ import PlatformSmsCenter from '../pages/platform/Notifications';
 import PlatformAIAnalysis from '../pages/platform/AIAnalysis';
 import PlatformStudentManagement from '../pages/platform/StudentManagement';
 import PlatformQuestionnaireManagement from '../pages/platform/QuestionnaireManagement';
+import PlatformStudentProfilePage from '../pages/platform/StudentProfilePage';
 
 function RootRedirect() {
   const { user } = useAuthStore();
@@ -168,6 +169,7 @@ export default function AppRoutes() {
         <Route path="risks" element={<PlatformRiskCenter />} />
         <Route path="students" element={<PlatformStudentManagement />} />
         <Route path="students/:id" element={<PlatformStudentProfile />} />
+        <Route path="student-profile" element={<PlatformStudentProfilePage />} />
         <Route path="questionnaires" element={<PlatformQuestionnaireManagement />} />
         <Route path="questionnaires/new" element={<QuestionnaireEditor />} />
         <Route path="questionnaires/:id/edit" element={<QuestionnaireEditor />} />

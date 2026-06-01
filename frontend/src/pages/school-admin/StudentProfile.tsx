@@ -88,12 +88,15 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
       // 1. Basic student info
       let studentData: StudentInfo | null = null;
       try {
-        const sr = await client.get(`${apiPrefix}/users/students/${studentId}`);
+        // platformMode: /platform/students/{id}; school-admin: /users/students/{id}
+        const studentUrl = platformMode ? `${apiPrefix}/students/${studentId}` : `${apiPrefix}/users/students/${studentId}`;
+        const sr = await client.get(studentUrl);
         studentData = sr.data.data as StudentInfo;
       } catch {
         // fallback: search in list
         try {
-          const sr = await client.get(`${apiPrefix}/users/students`, { params: { page_size: 1, student_id: studentId } });
+          const listUrl = platformMode ? `${apiPrefix}/students` : `${apiPrefix}/users/students`;
+          const sr = await client.get(listUrl, { params: { page_size: 1, keyword: studentId } });
           const items = sr.data.data?.items || sr.data.data || [];
           if (Array.isArray(items) && items.length > 0) studentData = items[0];
         } catch { /* ignore */ }

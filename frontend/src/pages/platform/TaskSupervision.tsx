@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Select, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Empty, Progress, Row, Col, Statistic, Popconfirm, Modal, DatePicker, Form, Input, message } from 'antd';
+import { Table, Tag, Select, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Empty, Progress, Row, Col, Statistic, Popconfirm, Modal, DatePicker, Form, Input, message, Tabs, Collapse } from 'antd';
 import { ExportOutlined, EyeOutlined, CloseCircleOutlined, FieldTimeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../../api/client';
@@ -232,6 +232,10 @@ export default function PlatformTaskSupervision() {
     { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
     { title: '问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', width: 160, render: (v: string) => v || '-' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || v}</Tag> },
+    { title: '完成进度', key: 'progress', width: 140, render: (_: any, r: any) => {
+      const exp = r.expected_count || 0, comp = r.completed_count || 0;
+      return exp > 0 ? <span>{comp}/{exp} <Progress percent={Math.round(comp / exp * 100)} size="small" style={{ width: 60, display: 'inline-block', marginLeft: 4 }} /></span> : <span>-</span>;
+    }},
     { title: '开始时间', dataIndex: 'start_time', key: 'start_time', width: 110, sorter: (a: any, b: any) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '截止时间', dataIndex: 'end_time', key: 'end_time', width: 110, sorter: (a: any, b: any) => new Date(a.end_time || 0).getTime() - new Date(b.end_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '操作', key: 'action', width: 280, render: (_: any, r: any) => (
@@ -303,37 +307,48 @@ export default function PlatformTaskSupervision() {
               <Progress percent={detail.completion_rate} strokeColor={detail.completion_rate >= 80 ? '#52c41a' : detail.completion_rate >= 50 ? '#faad14' : '#ff4d4f'} />
             </Card>
 
-            {detail.grade_stats?.length > 0 && (
-              <Card title="年级完成情况" size="small" style={{ marginBottom: 16 }}>
-                <Table rowKey="grade_name" dataSource={detail.grade_stats} pagination={false} size="small"
-                  columns={[
-                    { title: '年级', dataIndex: 'grade_name' },
-                    { title: '目标学生', dataIndex: 'total', align: 'right' as const },
-                    { title: '已提交', dataIndex: 'submitted', align: 'right' as const },
-                    { title: '完成率', dataIndex: 'rate', render: (v: number) => <Progress percent={v} size="small" style={{ width: 120 }} /> },
-                  ]} />
-              </Card>
-            )}
-
-            {detail.student_details?.length > 0 && (
-              <Card title="学生完成明细" size="small">
-                <Table rowKey="student_id" dataSource={detail.student_details} pagination={false} size="small"
-                  columns={[
-                    { title: '学生', dataIndex: 'student_name' },
-                    { title: '状态', dataIndex: 'status', render: (v: string) => v === 'submitted' ? <Tag color="green">已提交</Tag> : v === 'in_progress' ? <Tag color="blue">答题中</Tag> : <Tag>未开始</Tag> },
-                    { title: '提交时间', dataIndex: 'submitted_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
-                    { title: '操作', key: 'action', width: 80, render: (_: any, r: any) => r.status === 'submitted' ? (
-                      <Popconfirm title="确定打回此答卷？" description="打回后学生需重新作答" onConfirm={async () => {
-                        try {
-                          await client.post(`/platform/tasks/${detail.id}/recall`, { student_id: r.student_id });
-                          message.success('已打回');
-                          viewDetail({ id: detail.id });
-                        } catch (err: any) { message.error(err?.response?.data?.detail || '操作失败'); }
-                      }}><Button size="small" type="link" danger>打回</Button></Popconfirm>
-                    ) : null },
-                  ]} />
-              </Card>
-            )}
+            {detail.student_details?.length > 0 && (() => {
+              const allStudents = detail.student_details as any[];
+              const classStats = detail.class_stats as any[] || [];
+              const completed = allStudents.filter((s: any) => s.status === 'submitted');
+              const uncompleted = allStudents.filter((s: any) => s.status !== 'submitted');
+              const studentColumns = [
+                { title: '学生', dataIndex: 'student_name' },
+                { title: '班级', dataIndex: 'class_name', width: 100 },
+                { title: '状态', dataIndex: 'status', width: 90, render: (v: string) => v === 'submitted' ? <Tag color="green">已提交</Tag> : v === 'in_progress' ? <Tag color="blue">答题中</Tag> : <Tag>未开始</Tag> },
+                { title: '提交时间', dataIndex: 'submitted_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
+                { title: '操作', key: 'action', width: 80, render: (_: any, r: any) => r.status === 'submitted' ? (
+                  <Popconfirm title="确定打回此答卷？" description="打回后学生需重新作答" onConfirm={async () => {
+                    try {
+                      await client.post(`/platform/tasks/${detail.id}/recall`, { student_id: r.student_id });
+                      message.success('已打回');
+                      viewDetail({ id: detail.id });
+                    } catch (err: any) { message.error(err?.response?.data?.detail || '操作失败'); }
+                  }}><Button size="small" type="link" danger>打回</Button></Popconfirm>
+                ) : null },
+              ];
+              return (
+                <Tabs defaultActiveKey="class" items={[
+                  { key: 'class', label: `按班级 (${classStats.length})`, children: (
+                    <Collapse accordion>
+                      {classStats.map((cs: any) => (
+                        <Collapse.Panel key={cs.class_name} header={
+                          <span>{cs.class_name} <Tag>{cs.grade_name}</Tag> {cs.submitted}/{cs.total} <Progress percent={cs.rate} size="small" style={{ width: 80, display: 'inline-block', marginLeft: 8 }} /></span>
+                        }>
+                          <Table rowKey="student_id" dataSource={allStudents.filter((s: any) => s.class_name === cs.class_name)} pagination={false} size="small" columns={studentColumns.filter(c => c.dataIndex !== 'class_name')} />
+                        </Collapse.Panel>
+                      ))}
+                    </Collapse>
+                  )},
+                  { key: 'completed', label: `已完成 (${completed.length})`, children: (
+                    <Table rowKey="student_id" dataSource={completed} pagination={false} size="small" columns={studentColumns} />
+                  )},
+                  { key: 'uncompleted', label: `未完成 (${uncompleted.length})`, children: (
+                    <Table rowKey="student_id" dataSource={uncompleted} pagination={false} size="small" columns={studentColumns} />
+                  )},
+                ]} />
+              );
+            })()}
           </div>
         ) : <Empty description="加载失败" />}
       </Drawer>

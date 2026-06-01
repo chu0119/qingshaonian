@@ -9,7 +9,6 @@ export function maskIdCard(id: string | undefined | null): string {
 /** risk_type 可能是逗号分隔的复合值，逐项翻译为中文 */
 export function translateRiskType(
   value: string | undefined | null,
-  _labels?: Record<string, string>,
 ): string {
   if (!value) return '-';
   return value

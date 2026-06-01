@@ -38,7 +38,7 @@ export default function RiskStudents() {
     { title: '学生姓名', dataIndex: 'student_name', key: 'student_name' },
     { title: '年级', dataIndex: 'grade_name', key: 'grade_name' },
     { title: '班级', dataIndex: 'class_name', key: 'class_name' },
-    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', render: (v: string) => translateRiskType(v, RISK_LABELS) },
+    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', render: (v: string) => translateRiskType(v) },
     { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={riskColors[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
     { title: '答题质量状态', dataIndex: 'quality_level', key: 'quality_level', render: (v: string) => qualityLabels[v] || v || '-' },

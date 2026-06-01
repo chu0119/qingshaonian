@@ -659,12 +659,15 @@ def platform_risk_alerts(
     page: int = Query(1), page_size: int = Query(20),
     school_id: int | None = Query(None), risk_level: str = Query(""),
     status: str = Query(""), keyword: str = Query(""),
+    student_id: int | None = Query(None),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """平台风险预警中心——跨校风险列表"""
     q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id)
     if school_id:
         q = q.filter(RiskAlert.school_id == school_id)
+    if student_id:
+        q = q.filter(RiskAlert.student_id == student_id)
     if risk_level:
         q = q.filter(RiskAlert.risk_level == risk_level)
     if status:
@@ -818,6 +821,10 @@ def platform_tasks(
     total = q.count()
     tasks = q.order_by(Task.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([t.school_id for t in tasks])).all()) if tasks else {}
+    # 批量获取完成数和目标数
+    task_ids = [t.id for t in tasks]
+    submitted_counts = dict(db.query(AnswerSheet.task_id, func.count(AnswerSheet.id)).filter(
+        AnswerSheet.task_id.in_(task_ids), AnswerSheet.status == "submitted").group_by(AnswerSheet.task_id).all()) if task_ids else {}
     return APIResponse.success({
         "items": [{
             "id": t.id, "name": t.name, "school_id": t.school_id,
@@ -827,6 +834,8 @@ def platform_tasks(
             "start_time": t.start_time.isoformat() if t.start_time else None,
             "end_time": t.end_time.isoformat() if t.end_time else None,
             "created_at": t.created_at.isoformat() if t.created_at else None,
+            "expected_count": len(t.target_snapshot.get("student_ids", []) if t.target_snapshot else []),
+            "completed_count": submitted_counts.get(t.id, 0),
         } for t in tasks],
         "total": total, "page": page, "page_size": page_size,
     })
@@ -862,17 +871,35 @@ def platform_task_detail(task_id: int, user: User = Depends(require_role("platfo
             "grade_name": g.name, "total": len(target_in_grade), "submitted": g_submitted,
             "rate": round(g_submitted / max(len(target_in_grade), 1) * 100, 1),
         })
-    # 学生完成明细
+    # 学生完成明细（含班级信息）
     students = db.query(User).filter(User.id.in_(student_ids), User.role == "student").all()
     sheets = {s.student_id: s for s in db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).all()}
+    class_map = {c.id: c.name for c in db.query(Class).filter(Class.id.in_([u.class_id for u in students if u.class_id])).all()}
+    grade_map = {g.id: g.name for g in db.query(Grade).filter(Grade.id.in_([u.grade_id for u in students if u.grade_id])).all()}
     student_details = []
+    class_agg: dict[str, dict] = {}
     for stu in students:
         sheet = sheets.get(stu.id)
+        status = sheet.status if sheet else "not_started"
+        cls_name = class_map.get(stu.class_id, "") if stu.class_id else ""
+        grd_name = grade_map.get(stu.grade_id, "") if stu.grade_id else ""
         student_details.append({
             "student_id": stu.id, "student_name": stu.real_name,
-            "status": sheet.status if sheet else "not_started",
+            "class_name": cls_name, "grade_name": grd_name,
+            "status": status,
             "submitted_at": sheet.submitted_at.isoformat() if sheet and sheet.submitted_at else None,
         })
+        # 按班级聚合
+        key = cls_name or "未分班"
+        if key not in class_agg:
+            class_agg[key] = {"class_name": key, "grade_name": grd_name, "total": 0, "submitted": 0}
+        class_agg[key]["total"] += 1
+        if status == "submitted":
+            class_agg[key]["submitted"] += 1
+    class_stats = [
+        {**v, "rate": round(v["submitted"] / max(v["total"], 1) * 100, 1)}
+        for v in sorted(class_agg.values(), key=lambda x: (-x["submitted"] / max(x["total"], 1), x["class_name"]))
+    ]
 
     return APIResponse.success({
         "id": task.id, "name": task.name, "school_name": school.name if school else "",
@@ -883,7 +910,7 @@ def platform_task_detail(task_id: int, user: User = Depends(require_role("platfo
         "published_at": task.published_at.isoformat() if task.published_at else None,
         "total_students": total_students, "submitted": submitted,
         "completion_rate": round(submitted / max(total_students, 1) * 100, 1) if total_students else 0,
-        "grade_stats": grade_stats, "student_details": student_details,
+        "grade_stats": grade_stats, "class_stats": class_stats, "student_details": student_details,
     })
 
 @router.post("/tasks/{task_id}/close")
@@ -1076,12 +1103,15 @@ def platform_delete_task(task_id: int, request: Request, user: User = Depends(re
 def platform_interventions(
     page: int = Query(1), page_size: int = Query(20),
     school_id: int | None = Query(None), status: str = Query(""),
+    student_id: int | None = Query(None),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """干预督办——跨校干预记录列表"""
     q = db.query(Intervention).join(User, User.id == Intervention.student_id).join(School, School.id == Intervention.school_id)
     if school_id:
         q = q.filter(Intervention.school_id == school_id)
+    if student_id:
+        q = q.filter(Intervention.student_id == student_id)
     if status:
         q = q.filter(Intervention.status == status)
     total = q.count()

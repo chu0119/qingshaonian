@@ -154,7 +154,7 @@ export default function PlatformRiskCenter() {
     { title: '年级', dataIndex: 'student_grade', key: 'student_grade', width: 60 },
     { title: '班级', dataIndex: 'student_class', key: 'student_class', width: 60 },
     { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 80, sorter: (a: any, b: any) => (riskLevelOrder[a.risk_level] ?? 9) - (riskLevelOrder[b.risk_level] ?? 9), render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || v}</Tag> },
-    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 140, ellipsis: true, render: (v: string) => <span>{translateRiskType(v, RISK_LABELS)}</span> },
+    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 140, ellipsis: true, render: (v: string) => <span>{translateRiskType(v)}</span> },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100, sorter: (a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '操作', key: 'action', width: 60, fixed: 'right' as const, render: (_: any, r: any) => <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button> },
@@ -195,7 +195,7 @@ export default function PlatformRiskCenter() {
               <Descriptions.Item label="风险等级">
                 <Tag color={RISK_COLORS[detail.risk_level]}>{RISK_LABELS[detail.risk_level] || detail.risk_level}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="风险类型">{translateRiskType(detail.risk_type, RISK_LABELS)}</Descriptions.Item>
+              <Descriptions.Item label="风险类型">{translateRiskType(detail.risk_type)}</Descriptions.Item>
               <Descriptions.Item label="状态"><Tag>{statusLabels[detail.status] || detail.status}</Tag></Descriptions.Item>
               <Descriptions.Item label="触发方式">{TRIGGER_METHOD_LABELS[detail.trigger_method] || detail.trigger_method || '-'}</Descriptions.Item>
               <Descriptions.Item label="生成时间" span={2}>{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
