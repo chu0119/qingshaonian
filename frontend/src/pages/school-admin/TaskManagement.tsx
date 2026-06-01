@@ -279,6 +279,16 @@ export default function TaskManagement() {
           columns={[
             { title: '学生', dataIndex: 'student_name', key: 'student_name' },
             { title: '提交时间', dataIndex: 'submitted_at', key: 'submitted_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
+            { title: '操作', key: 'action', width: 80, render: (_: any, r: any) => (
+              <Popconfirm title="确定打回此答卷？" description="打回后学生需重新作答" onConfirm={async () => {
+                try {
+                  await client.post(`/tasks/${selectedTask?.id}/recall`, { student_id: r.student_id });
+                  message.success('已打回');
+                  viewDetail(selectedTask);
+                  fetchData();
+                } catch (err: any) { message.error(err?.response?.data?.detail || '操作失败'); }
+              }}><Button size="small" type="link" danger>打回</Button></Popconfirm>
+            )},
           ]}
         />
       ),

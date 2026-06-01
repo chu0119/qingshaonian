@@ -782,6 +782,18 @@ def platform_task_detail(task_id: int, user: User = Depends(require_role("platfo
             "grade_name": g.name, "total": len(target_in_grade), "submitted": g_submitted,
             "rate": round(g_submitted / max(len(target_in_grade), 1) * 100, 1),
         })
+    # 学生完成明细
+    students = db.query(User).filter(User.id.in_(student_ids), User.role == "student").all()
+    sheets = {s.student_id: s for s in db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).all()}
+    student_details = []
+    for stu in students:
+        sheet = sheets.get(stu.id)
+        student_details.append({
+            "student_id": stu.id, "student_name": stu.real_name,
+            "status": sheet.status if sheet else "not_started",
+            "submitted_at": sheet.submitted_at.isoformat() if sheet and sheet.submitted_at else None,
+        })
+
     return APIResponse.success({
         "id": task.id, "name": task.name, "school_name": school.name if school else "",
         "questionnaire_title": qnr.title if qnr else "", "status": task.status,
@@ -791,7 +803,7 @@ def platform_task_detail(task_id: int, user: User = Depends(require_role("platfo
         "published_at": task.published_at.isoformat() if task.published_at else None,
         "total_students": total_students, "submitted": submitted,
         "completion_rate": round(submitted / max(total_students, 1) * 100, 1) if total_students else 0,
-        "grade_stats": grade_stats,
+        "grade_stats": grade_stats, "student_details": student_details,
     })
 
 @router.post("/tasks/{task_id}/close")
@@ -852,7 +864,30 @@ def platform_archive_task(task_id: int, request: Request, user: User = Depends(r
     return APIResponse.success(message="任务已归档")
 
 
-@router.get("/schools/{school_id}/classes")
+@router.post("/tasks/{task_id}/recall")
+def platform_recall_answer_sheet(task_id: int, data: dict, request: Request, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """平台管理员打回已提交的答卷，让学生重做"""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    student_id = data.get("student_id")
+    if not student_id:
+        raise HTTPException(status_code=400, detail="请指定学生ID")
+    sheet = db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id, AnswerSheet.student_id == student_id).first()
+    if not sheet:
+        raise HTTPException(status_code=404, detail="该学生无此任务的答卷")
+    if sheet.status != "submitted":
+        raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
+    db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
+    db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
+    db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
+    sheet.status = "in_progress"
+    sheet.submitted_at = None
+    db.commit()
+    student = db.query(User).filter(User.id == student_id).first()
+    log_operation(db, user, request, module="task_supervision", action="recall", object_type="answer_sheet",
+                  object_id=sheet.id, object_name=f"{student.real_name if student else student_id}的答卷")
+    return APIResponse.success(message="答卷已打回，学生可重新作答")
 def platform_school_classes(school_id: int, user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     """获取指定学校的班级列表（用于发布任务）"""
     school = db.query(School).filter(School.id == school_id).first()

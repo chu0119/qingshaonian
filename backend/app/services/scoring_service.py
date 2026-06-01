@@ -502,8 +502,8 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
     total_q = len(records)
     total_time = sheet.total_duration_seconds or 0
 
-    # 按题型的最低时间阈值（秒）
-    type_thresholds = {"true_false": 1, "single_choice": 2, "scale": 2, "multi_choice": 4, "fill_blank": 8, "short_answer": 8}
+    # 按题型的最低时间阈值（秒）— 放宽阈值
+    type_thresholds = {"true_false": 1, "single_choice": 1, "scale": 1, "multi_choice": 2, "fill_blank": 5, "short_answer": 5}
     # 每道题的合理最低时间
     min_time_per_q = 0
     for r in records:
@@ -611,21 +611,27 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
                 contradiction_count += 1
                 contradiction_details.append({"group_id": cg.id, "score_a": ra.score, "score_b": rb.score, "diff": score_diff})
 
-    # 6. 规律作答检测（ABAB / ABCDABCD / AABB等模式）
+    # 6. 规律作答检测（ABAB / ABCDABCD / AABB等模式）— 需要更长序列
     pattern_detected = False
     pattern_detail = ""
-    if len(scores_list) >= 4:
-        # 检测ABAB模式
+    if len(scores_list) >= 6:
+        # 检测ABAB模式（需要至少6题连续）
+        consecutive_pattern = 0
         for i in range(len(scores_list) - 3):
             if scores_list[i] == scores_list[i + 2] and scores_list[i + 1] == scores_list[i + 3] and scores_list[i] != scores_list[i + 1]:
+                consecutive_pattern += 1
+            else:
+                consecutive_pattern = 0
+            if consecutive_pattern >= 3:  # 连续3组ABAB才算
                 pattern_detected = True; pattern_detail = "ABAB重复模式"
                 break
-        # 检测ABCDABCD模式（长度为4的重复）
-        if not pattern_detected and len(scores_list) >= 8:
-            for i in range(len(scores_list) - 7):
+        # 检测ABCDABCD模式（长度为4的重复，需要至少2轮）
+        if not pattern_detected and len(scores_list) >= 12:
+            for i in range(len(scores_list) - 11):
                 seg1 = scores_list[i:i+4]
                 seg2 = scores_list[i+4:i+8]
-                if seg1 == seg2 and len(set(seg1)) > 2:
+                seg3 = scores_list[i+8:i+12]
+                if seg1 == seg2 == seg3 and len(set(seg1)) > 2:
                     pattern_detected = True; pattern_detail = "四题段重复模式"
                     break
 
@@ -634,65 +640,65 @@ def calculate_quality(db: Session, sheet_id: int) -> dict:
     deductions = []
 
     if total_q > 0:
-        # 总时长过短（权重30%）
-        if total_time < min_time_per_q * 0.5:
-            quality_score -= 30; deductions.append("总答题时间严重不足")
-        elif total_time < min_time_per_q * 0.8:
-            quality_score -= 15; deductions.append("总答题时间偏短")
+        # 总时长过短（权重25%）
+        if total_time < min_time_per_q * 0.3:
+            quality_score -= 25; deductions.append("总答题时间严重不足")
+        elif total_time < min_time_per_q * 0.6:
+            quality_score -= 10; deductions.append("总答题时间偏短")
 
-        # 快速作答题目过多（权重20%）
+        # 快速作答题目过多（权重15%）
         fast_ratio = fast_count / total_q
-        if fast_ratio > 0.5:
-            quality_score -= 20; deductions.append(f"快速作答题目过多（{fast_count}/{total_q}）")
-        elif fast_ratio > 0.3:
-            quality_score -= 10; deductions.append(f"部分题目作答过快（{fast_count}/{total_q}）")
+        if fast_ratio > 0.7:
+            quality_score -= 15; deductions.append(f"快速作答题目过多（{fast_count}/{total_q}）")
+        elif fast_ratio > 0.5:
+            quality_score -= 8; deductions.append(f"部分题目作答过快（{fast_count}/{total_q}）")
 
         # 连续同选项（权重15%）
-        if max_consecutive_same >= 10:
+        if max_consecutive_same >= 12:
             quality_score -= 15; deductions.append(f"连续{max_consecutive_same}题选同一选项")
-        elif max_consecutive_same >= 7:
+        elif max_consecutive_same >= 8:
             quality_score -= 8; deductions.append(f"连续{max_consecutive_same}题选同一选项")
 
         # 选项分布异常（权重10%）
-        if same_option_ratio > 0.8:
+        if same_option_ratio > 0.9:
             quality_score -= 10; deductions.append("某一选项占比过高")
-        elif same_display_position_ratio > 0.8:
+        elif same_display_position_ratio > 0.9:
             quality_score -= 10; deductions.append("某一显示位置点击占比过高")
-        elif same_score_ratio > 0.8:
+        elif same_score_ratio > 0.9:
             quality_score -= 10; deductions.append("某一得分占比过高")
 
-        # 注意力检测失败（权重20%）
+        # 注意力检测失败（权重15%）
         if not attention_passed:
-            quality_score -= 20; deductions.append("注意力检测未通过")
+            quality_score -= 15; deductions.append("注意力检测未通过")
 
-        # 矛盾题（权重15%）
+        # 矛盾题（权重10%）
         if contradiction_count >= 4:
-            quality_score -= 20; deductions.append(f"存在{contradiction_count}组矛盾答案")
+            quality_score -= 15; deductions.append(f"存在{contradiction_count}组矛盾答案")
         elif contradiction_count >= 2:
-            quality_score -= 12; deductions.append(f"存在{contradiction_count}组矛盾答案")
+            quality_score -= 8; deductions.append(f"存在{contradiction_count}组矛盾答案")
         elif contradiction_count >= 1:
-            quality_score -= 6; deductions.append(f"存在{contradiction_count}组矛盾答案")
+            quality_score -= 4; deductions.append(f"存在{contradiction_count}组矛盾答案")
 
-        # 规律作答（权重10%）
+        # 规律作答（权重10%）— 需要更长序列才触发
         if pattern_detected:
-            quality_score -= 15; deductions.append(f"检测到规律作答（{pattern_detail}）")
+            quality_score -= 10; deductions.append(f"检测到规律作答（{pattern_detail}）")
 
     quality_score = max(quality_score, 0)
 
-    if quality_score >= 80:
+    if quality_score >= 70:
         quality_level = "normal"
         validity = "valid"
-    elif quality_score >= 60:
+    elif quality_score >= 50:
         quality_level = "mild_anomaly"
         validity = "basically_valid"
-    elif quality_score >= 40:
+    elif quality_score >= 30:
         quality_level = "moderate_anomaly"
         validity = "questionable"
     else:
         quality_level = "severe_anomaly"
         validity = "not_recommended"
 
-    suggest_retest = quality_level in ("moderate_anomaly", "severe_anomaly")
+    suggest_retest = quality_level == "severe_anomaly"
 
     existing = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet_id).first()
     if existing:

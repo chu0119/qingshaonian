@@ -316,6 +316,34 @@ def delete_task(task_id: int, request: Request, user: User = Depends(require_rol
     return APIResponse.success(message="任务已删除")
 
 
+@router.post("/{task_id}/recall")
+def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """打回已提交的答卷，让学生重做"""
+    school_id = getattr(user, '_effective_school_id', None) or user.school_id
+    task = db.query(Task).filter(Task.id == task_id, Task.school_id == school_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    student_id = data.get("student_id")
+    if not student_id:
+        raise HTTPException(status_code=400, detail="请指定学生ID")
+    sheet = db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id, AnswerSheet.student_id == student_id).first()
+    if not sheet:
+        raise HTTPException(status_code=404, detail="该学生无此任务的答卷")
+    if sheet.status != "submitted":
+        raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
+    # 清除评分、质检、风险预警
+    db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
+    db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
+    db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
+    sheet.status = "in_progress"
+    sheet.submitted_at = None
+    db.commit()
+    student = db.query(User).filter(User.id == student_id).first()
+    log_operation(db, user, request, module="questionnaire_task", action="recall", object_type="answer_sheet",
+                  object_id=sheet.id, object_name=f"{student.real_name if student else student_id}的答卷")
+    return APIResponse.success(message="答卷已打回，学生可重新作答")
+
+
 @router.get("/{task_id}/uncompleted")
 def task_uncompleted(task_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
     completion = task_completion(task_id, user, db).data

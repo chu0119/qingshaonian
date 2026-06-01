@@ -304,13 +304,33 @@ export default function PlatformTaskSupervision() {
             </Card>
 
             {detail.grade_stats?.length > 0 && (
-              <Card title="年级完成情况" size="small">
+              <Card title="年级完成情况" size="small" style={{ marginBottom: 16 }}>
                 <Table rowKey="grade_name" dataSource={detail.grade_stats} pagination={false} size="small"
                   columns={[
                     { title: '年级', dataIndex: 'grade_name' },
                     { title: '目标学生', dataIndex: 'total', align: 'right' as const },
                     { title: '已提交', dataIndex: 'submitted', align: 'right' as const },
                     { title: '完成率', dataIndex: 'rate', render: (v: number) => <Progress percent={v} size="small" style={{ width: 120 }} /> },
+                  ]} />
+              </Card>
+            )}
+
+            {detail.student_details?.length > 0 && (
+              <Card title="学生完成明细" size="small">
+                <Table rowKey="student_id" dataSource={detail.student_details} pagination={false} size="small"
+                  columns={[
+                    { title: '学生', dataIndex: 'student_name' },
+                    { title: '状态', dataIndex: 'status', render: (v: string) => v === 'submitted' ? <Tag color="green">已提交</Tag> : v === 'in_progress' ? <Tag color="blue">答题中</Tag> : <Tag>未开始</Tag> },
+                    { title: '提交时间', dataIndex: 'submitted_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
+                    { title: '操作', key: 'action', width: 80, render: (_: any, r: any) => r.status === 'submitted' ? (
+                      <Popconfirm title="确定打回此答卷？" description="打回后学生需重新作答" onConfirm={async () => {
+                        try {
+                          await client.post(`/platform/tasks/${detail.id}/recall`, { student_id: r.student_id });
+                          message.success('已打回');
+                          viewDetail({ id: detail.id });
+                        } catch (err: any) { message.error(err?.response?.data?.detail || '操作失败'); }
+                      }}><Button size="small" type="link" danger>打回</Button></Popconfirm>
+                    ) : null },
                   ]} />
               </Card>
             )}
