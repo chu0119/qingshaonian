@@ -19,19 +19,19 @@ frontend/src/
 backend/
   app/
     main.py / config.py / database.py / dependencies.py
-    routers/   — 16 个路由模块
+    routers/   — 18 个路由模块
     services/  — scoring_service(评分+质量检测), questionnaire_service, seed_service 等
-    models/    — user, questionnaire, task, risk, audit, external, system_config
+    models/    — user, questionnaire, task, risk, audit, external, system_config, notification
     schemas/   — Pydantic 请求/响应模型
-    questionnaire_bank/ — 10 套内置问卷
-    alembic/   — 5 个迁移 (001→002→003_qrf→003→004, 单 head)
-    tests/     — 6 个测试模块
+    questionnaire_bank/ — 38 套内置问卷 + 1 套综合问卷
+    alembic/   — 6 个迁移 (001→002→003_qrf→003→004→005, 单 head)
+    tests/     — 7 个测试模块
 ```
 
 ## 角色体系
 | 角色 | 路由前缀 | 权限范围 |
 |------|---------|---------|
-| platform_admin | /platform/ | 公安监管端, 11 项菜单, 可进入学校后台 |
+| platform_admin | /platform/ | 公安监管端, 13 项菜单, 可进入学校后台 |
 | school_admin | /school-admin/ | 本校完整管理 |
 | teacher/counselor | /teacher/ | 所负责班级 |
 | student | /student/ | 本人问卷 |
@@ -49,10 +49,11 @@ backend/
 2. 教师创建强制 role=teacher/counselor, 拒绝 school_admin/platform_admin 注入
 3. `selected_display_index` 后端根据 `option_orders` 计算, 不信任前端传值
 4. 敏感操作(查看学生详情/导出/AI分析/发送短信/进入学校)必须写 `operation_logs`
+5. 删除操作必须级联清理关联数据(答卷/评分/质检/风险预警/干预/教师班级关联)
 
 ### 兼容
-1. 不新增 Alembic 迁移(当前 5 个)
-2. 不修改数据库模型
+1. 新增 Alembic 迁移需谨慎(当前 6 个, head: 202606010005)
+2. 不修改数据库模型需评估影响
 3. 不修改问卷评分规则(`scoring_service.py`)和风险规则
 4. 不修改 AI/短信发送逻辑
 
@@ -65,15 +66,14 @@ backend/
 
 ## Alembic 迁移链
 ```
-base → 001(create_all) → 002(phase2) → 003_qrf(规则字段+hash) → 003(历史兼容) → 004(缺失列)
+base → 001(create_all) → 002(phase2) → 003_qrf(规则字段+hash) → 003(历史兼容) → 004(缺失列) → 005(通知表)
 ```
-- 单 head: `202605260004`
-- 003 是历史兼容迁移, 字段与 003_qrf 重复, 通过 `_add_column_if_missing` 幂等
+- 单 head: `202606010005`
 
 ## 测试
 - 后端: `cd backend && python -m compileall app -q && python -m pytest tests/ -v`
 - 前端: `cd frontend && npm run build`
-- 当前 64 测试通过
+- 当前 66 测试通过
 
 ## 服务器（参见 memory/baota-server-connection.md）
 - SSH: `ssh -i ~/.ssh/baota_key root@106.53.174.3`
