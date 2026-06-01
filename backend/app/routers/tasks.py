@@ -334,7 +334,8 @@ def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User =
         raise HTTPException(status_code=404, detail="该学生无此任务的答卷")
     if sheet.status != "submitted":
         raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
-    # 清除评分、质检、风险预警
+    # 清除答题记录、评分、质检、风险预警
+    db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id == sheet.id).delete()
     db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
     db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
     alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id == sheet.id).all()]
@@ -343,6 +344,7 @@ def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User =
     db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
     sheet.status = "in_progress"
     sheet.submitted_at = None
+    sheet.total_duration_seconds = None
     db.commit()
     student = db.query(User).filter(User.id == student_id).first()
     log_operation(db, user, request, module="questionnaire_task", action="recall", object_type="answer_sheet",
