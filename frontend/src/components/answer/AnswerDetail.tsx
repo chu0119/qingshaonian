@@ -3,6 +3,7 @@ import { Drawer, Descriptions, Tag, Table, Card, Empty, Spin, Space, Progress, R
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, VALIDITY_LABELS, QUALITY_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
+import { translateRiskType } from '../../utils/maskIdCard';
 
 interface Props {
   answerSheetId?: number;
@@ -124,7 +125,7 @@ export default function AnswerDetail({ answerSheetId, alertId, platformMode = fa
                     valueStyle={{ color: RISK_COLORS[detail.scoring.risk_level] }} />
                 </Col>
                 <Col span={6}>
-                  <Statistic title="风险类型" value={detail.scoring.risk_type || '-'} />
+                  <Statistic title="风险类型" value={translateRiskType(detail.scoring.risk_type)} />
                 </Col>
                 <Col span={6}>
                   <Statistic title="触发规则" value={(detail.scoring.triggered_rules || []).length} />

@@ -6,6 +6,7 @@ import {
 import { ArrowLeftOutlined, FileTextOutlined, AlertOutlined, MedicineBoxOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import client from '../../api/client';
+import { translateRiskType } from '../../utils/maskIdCard';
 import { RISK_LABELS, RISK_COLORS, DIMENSION_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS } from '../../utils/constants';
 
 const { Title, Text } = Typography;
@@ -191,7 +192,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
   /* ---------- columns ---------- */
   const riskColumns = [
     { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 120, render: (v: string) => <Tag color={RISK_COLORS[v] || 'default'}>{RISK_LABELS[v] || v}</Tag> },
-    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 120, render: (v: string) => v || '-' },
+    { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 160, render: (v: string) => translateRiskType(v) || '-' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) => <Tag>{statusLabels[v] || v}</Tag> },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
     { title: '触发时间', dataIndex: 'created_at', key: 'created_at', width: 170, render: formatDate },
