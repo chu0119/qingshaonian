@@ -716,6 +716,10 @@ def platform_risk_alerts_export(
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([a.school_id for a in items])).all()) if items else {}
     grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
     class_names = dict(db.query(Class.id, Class.name).filter(Class.id.in_([u.class_id for u in students.values() if u.class_id])).all()) if students else {}
+    # 通过 answer_sheet_id 获取总分
+    sheet_ids = [a.answer_sheet_id for a in items if a.answer_sheet_id]
+    score_map = dict(db.query(ScoringResult.answer_sheet_id, ScoringResult.total_score).filter(
+        ScoringResult.answer_sheet_id.in_(sheet_ids)).all()) if sheet_ids else {}
 
     risk_level_labels = {"low": "低风险", "medium": "中风险", "high": "高风险", "urgent": "危急"}
     status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "completed": "已完成"}
@@ -732,11 +736,12 @@ def platform_risk_alerts_export(
         school_name = school_names.get(a.school_id, "")
         grade_name = grade_names.get(stu.grade_id, "") if stu and stu.grade_id else ""
         class_name = class_names.get(stu.class_id, "") if stu and stu.class_id else ""
+        total_score = score_map.get(a.answer_sheet_id, 0) or 0
         writer.writerow([
             student_name, id_card, school_name, grade_name, class_name,
             risk_level_labels.get(a.risk_level, a.risk_level),
             a.risk_type or "", status_labels.get(a.status, a.status),
-            a.total_score or 0, a.trigger_method or "",
+            total_score, a.trigger_method or "",
             a.created_at.strftime("%Y-%m-%d %H:%M:%S") if a.created_at else "",
         ])
 
