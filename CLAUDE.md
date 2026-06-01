@@ -87,6 +87,3 @@ base → 001(create_all) → 002(phase2) → 003_qrf(规则字段+hash) → 003(
 - ScreenChart: ECharts 包装(resize 适配/空状态)
 - RankingList/LatestList: 排名/最新列表
 - 大屏**不强制全屏**, 不自动 navigate(-1)
-
-## 计划模式输出规则（必须遵守）
-**每次调用 ExitPlanMode 之前，必须先用 Write 工具把完整计划写入 `.claude/plans/` 目录，然后在 ExitPlanMode 之后，立刻用一段完整的文本把计划的全部内容（包括所有文件路径、修改方案、步骤编号）重新输出到对话中。不要只写"计划已保存"或"请查看计划"，要输出完整内容。这是硬性要求，不可省略。**
