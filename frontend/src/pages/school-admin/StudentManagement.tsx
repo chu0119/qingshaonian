@@ -109,9 +109,9 @@ export default function StudentManagement() {
       }
       setModalOpen(false);
       fetchData();
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'errorFields' in err) return;
-      message.error('操作失败');
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.detail || '操作失败');
     }
   };
 
