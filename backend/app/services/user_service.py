@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..models.user import User, Grade, Class, TeacherClass
+from ..models.task import Task, AnswerSheet, AnswerRecord
+from ..models.risk import RiskAlert, Intervention, ScoringResult, QualityAssessment
 from ..schemas.user import UserCreate, UserUpdate, UserInfo, ImportResult
 from ..utils.password import hash_password
 from ..utils.validators import validate_id_card, mask_phone
@@ -126,9 +128,28 @@ def update_user(db: Session, user_id: int, data: UserUpdate) -> User:
 
 def delete_user(db: Session, user_id: int):
     u = db.query(User).filter(User.id == user_id).first()
-    if u:
-        db.delete(u)
-        db.commit()
+    if not u:
+        return
+    if u.role == "student":
+        # 学生：级联删除答卷、评分、质检、风险预警、干预
+        sheet_ids = [s.id for s in db.query(AnswerSheet.id).filter(AnswerSheet.student_id == user_id).all()]
+        if sheet_ids:
+            db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(RiskAlert).filter(RiskAlert.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            db.query(AnswerSheet).filter(AnswerSheet.id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(RiskAlert).filter(RiskAlert.student_id == user_id).delete()
+        db.query(Intervention).filter(Intervention.student_id == user_id).delete()
+    elif u.role in ("teacher", "counselor"):
+        # 教师：级联删除教师-班级关联、干预记录
+        db.query(TeacherClass).filter(TeacherClass.teacher_id == user_id).delete()
+        db.query(Intervention).filter(Intervention.teacher_id == user_id).delete()
+        db.query(Class).filter(Class.head_teacher_id == user_id).update({Class.head_teacher_id: None})
+        db.query(Class).filter(Class.counselor_id == user_id).update({Class.counselor_id: None})
+        db.query(RiskAlert).filter(RiskAlert.assigned_teacher_id == user_id).update({RiskAlert.assigned_teacher_id: None})
+    db.delete(u)
+    db.commit()
 
 
 def get_user_info(db: Session, user_id: int) -> UserInfo:

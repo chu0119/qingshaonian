@@ -308,6 +308,9 @@ def delete_task(task_id: int, request: Request, user: User = Depends(require_rol
         db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
         db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
         db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.task_id == task_id).all()]
+        if alert_ids:
+            db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
         db.query(RiskAlert).filter(RiskAlert.task_id == task_id).delete(synchronize_session=False)
         db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).delete(synchronize_session=False)
     db.delete(task)
@@ -334,6 +337,9 @@ def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User =
     # 清除评分、质检、风险预警
     db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
     db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
+    alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id == sheet.id).all()]
+    if alert_ids:
+        db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
     db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
     sheet.status = "in_progress"
     sheet.submitted_at = None

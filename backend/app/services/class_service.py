@@ -64,8 +64,8 @@ def update_class(db: Session, class_id: int, data: ClassUpdate) -> Class:
 def delete_class(db: Session, class_id: int):
     c = db.query(Class).filter(Class.id == class_id).first()
     if c:
-        # 移除班级下的学生
         db.query(User).filter(User.class_id == class_id, User.role == "student").update({User.class_id: None})
+        db.query(TeacherClass).filter(TeacherClass.class_id == class_id).delete()
         db.delete(c)
         db.commit()
 

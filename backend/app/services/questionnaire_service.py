@@ -106,6 +106,9 @@ def delete_questionnaire(db: Session, qid: int):
             db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
             db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
             db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+            alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id.in_(sheet_ids)).all()]
+            if alert_ids:
+                db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
             db.query(RiskAlert).filter(RiskAlert.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
             db.query(AnswerSheet).filter(AnswerSheet.id.in_(sheet_ids)).delete(synchronize_session=False)
         db.query(Task).filter(Task.id.in_(task_ids)).delete(synchronize_session=False)
@@ -229,6 +232,10 @@ def update_question(db: Session, question_id: int, data: QuestionUpdate) -> Ques
 
 def delete_question(db: Session, question_id: int):
     db.query(Option).filter(Option.question_id == question_id).delete()
+    db.query(AnswerRecord).filter(AnswerRecord.question_id == question_id).delete()
+    db.query(ContradictionGroup).filter(
+        (ContradictionGroup.question_a_id == question_id) | (ContradictionGroup.question_b_id == question_id)
+    ).delete()
     db.query(Question).filter(Question.id == question_id).delete()
     db.commit()
 

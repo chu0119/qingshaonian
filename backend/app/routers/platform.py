@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import case, func
 from ..database import get_db
-from ..models.user import User, School, Grade, Class
+from ..models.user import User, School, Grade, Class, TeacherClass
 from ..models.task import Task, AnswerSheet, AnswerRecord
 from ..models.risk import RiskAlert, Intervention, ScoringResult, QualityAssessment
 from ..models.audit import LoginLog, OperationLog
@@ -210,13 +210,28 @@ def force_delete_school(school_id: int, request: Request, user: User = Depends(r
     if not school:
         raise HTTPException(status_code=404, detail="学校不存在")
     school_name = school.name
-    # 删除该学校所有关联数据
+    student_ids = [u.id for u in db.query(User.id).filter(User.school_id == school_id, User.role == "student").all()]
+    teacher_ids = [u.id for u in db.query(User.id).filter(User.school_id == school_id, User.role.in_(["teacher", "counselor"])).all()]
+    task_ids = [t.id for t in db.query(Task.id).filter(Task.school_id == school_id).all()]
+    sheet_ids = [s.id for s in db.query(AnswerSheet.id).filter(AnswerSheet.task_id.in_(task_ids)).all()] if task_ids else []
+    # 1. 删除答卷明细
+    if sheet_ids:
+        db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        db.query(AnswerSheet).filter(AnswerSheet.id.in_(sheet_ids)).delete(synchronize_session=False)
+    # 2. 删除风险和干预
     db.query(Intervention).filter(Intervention.school_id == school_id).delete()
     db.query(RiskAlert).filter(RiskAlert.school_id == school_id).delete()
-    db.query(AnswerSheet).filter(AnswerSheet.student_id.in_(
-        db.query(User.id).filter(User.school_id == school_id)
-    )).delete(synchronize_session=False)
+    # 3. 删除任务（不删除问卷，问卷是平台级资源）
     db.query(Task).filter(Task.school_id == school_id).delete()
+    # 4. 删除教师-班级关联
+    if teacher_ids:
+        db.query(TeacherClass).filter(TeacherClass.teacher_id.in_(teacher_ids)).delete(synchronize_session=False)
+    db.query(TeacherClass).filter(TeacherClass.class_id.in_(
+        db.query(Class.id).filter(Class.school_id == school_id)
+    )).delete(synchronize_session=False)
+    # 5. 删除用户、班级、年级
     db.query(User).filter(User.school_id == school_id).delete()
     db.query(Class).filter(Class.school_id == school_id).delete()
     db.query(Grade).filter(Grade.school_id == school_id).delete()
@@ -880,6 +895,9 @@ def platform_recall_answer_sheet(task_id: int, data: dict, request: Request, use
         raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
     db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
     db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
+    alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id == sheet.id).all()]
+    if alert_ids:
+        db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
     db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
     sheet.status = "in_progress"
     sheet.submitted_at = None
@@ -974,6 +992,9 @@ def platform_delete_task(task_id: int, request: Request, user: User = Depends(re
         db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
         db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
         db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).delete(synchronize_session=False)
+        alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.task_id == task_id).all()]
+        if alert_ids:
+            db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
         db.query(RiskAlert).filter(RiskAlert.task_id == task_id).delete(synchronize_session=False)
         db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id).delete(synchronize_session=False)
     db.delete(task)
