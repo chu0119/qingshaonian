@@ -37,10 +37,23 @@ def school_metrics(db: Session, school_id: int) -> dict:
     ai_calls = db.query(func.count(AIAnalysisLog.id)).filter(AIAnalysisLog.school_id == school_id).scalar() or 0
     sms_sends = db.query(func.count(SMSLog.id)).filter(SMSLog.school_id == school_id).scalar() or 0
 
+    # 完成率：按每个任务的学生完成率取平均
+    active_tasks = db.query(Task).filter(Task.school_id == school_id, Task.status.notin_(["draft", "archived"])).all()
+    task_rates = []
     expected = 0
-    for task in db.query(Task).filter(Task.school_id == school_id, Task.status.notin_(["draft", "archived"])).all():
-        expected += len(target_student_ids(db, task))
-    completed = db.query(func.count(AnswerSheet.id)).filter(AnswerSheet.school_id == school_id, AnswerSheet.status == "submitted").scalar() or sheets
+    completed = 0
+    for task in active_tasks:
+        target_ids = target_student_ids(db, task)
+        task_expected = len(target_ids)
+        task_completed = db.query(func.count(AnswerSheet.id)).filter(
+            AnswerSheet.task_id == task.id, AnswerSheet.status == "submitted"
+        ).scalar() or 0
+        expected += task_expected
+        completed += task_completed
+        if task_expected > 0:
+            task_rates.append(task_completed / task_expected * 100)
+    completion_rate = round(sum(task_rates) / max(len(task_rates), 1), 1) if task_rates else 0
+
     valid = (
         db.query(func.count(QualityAssessment.id))
         .join(AnswerSheet, AnswerSheet.id == QualityAssessment.answer_sheet_id)
@@ -70,7 +83,7 @@ def school_metrics(db: Session, school_id: int) -> dict:
         "expected_count": expected,
         "completed_count": completed,
         "uncompleted_count": max(expected - completed, 0),
-        "completion_rate": round(completed / max(expected, 1) * 100, 1) if expected else 0,
+        "completion_rate": completion_rate,
         "risk_rate": round(risks / max(students, 1) * 100, 1) if students else 0,
         "valid_answer_rate": round(valid / max(quality_total, 1) * 100, 1) if quality_total else 0,
         "intervention_completion_rate": round(handled_risks / max(risks, 1) * 100, 1) if risks else 0,
@@ -118,6 +131,18 @@ def platform_summary(db: Session) -> dict:
     for level in ["low", "medium", "high", "urgent"]:
         risk_level_dist[level] = db.query(func.count(RiskAlert.id)).filter(RiskAlert.risk_level == level).scalar() or 0
 
+    # 全局完成率：按学生维度计算（已完成独立答卷的学生 / 有任务的学生总数）
+    all_tasks = db.query(Task).filter(Task.status.notin_(["draft", "archived"])).all()
+    total_expected = 0
+    total_completed = 0
+    for task in all_tasks:
+        target_ids = target_student_ids(db, task)
+        total_expected += len(target_ids)
+        total_completed += db.query(func.count(AnswerSheet.id)).filter(
+            AnswerSheet.task_id == task.id, AnswerSheet.status == "submitted"
+        ).scalar() or 0
+    global_completion_rate = round(total_completed / max(total_expected, 1) * 100, 1) if total_expected else 0
+
     return {
         "school_total": len(schools),
         "enabled_school_total": len([s for s in schools if s.status]),
@@ -128,6 +153,7 @@ def platform_summary(db: Session) -> dict:
         "answer_sheet_total": sum(r["answer_sheet_count"] for r in rows),
         "risk_alert_total": sum(r["risk_count"] for r in rows),
         "pending_risk_total": sum(r["pending_risk_count"] for r in rows),
+        "completion_rate": global_completion_rate,
         "ai_call_total": db.query(func.count(AIAnalysisLog.id)).scalar() or 0,
         "sms_send_total": db.query(func.count(SMSLog.id)).scalar() or 0,
         "risk_level_distribution": risk_level_dist,

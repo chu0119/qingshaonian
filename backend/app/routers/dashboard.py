@@ -60,14 +60,20 @@ def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor"))
 
     tasks = [t for t in db.query(Task).filter(Task.school_id == _sid, Task.status.in_(["not_started", "in_progress", "active"])).all()
              if set(t.target_ids or []).intersection(class_ids)]
-    expected = sum(len([sid for sid in target_student_ids(db, t) if db.query(User.class_id).filter(User.id == sid).scalar() in class_ids]) for t in tasks)
-    completed = (
-        db.query(func.count(AnswerSheet.id))
-        .join(User, User.id == AnswerSheet.student_id)
-        .filter(User.class_id.in_(class_ids), AnswerSheet.status == "submitted")
-        .scalar()
-        if class_ids else 0
-    )
+    expected = 0
+    completed = 0
+    task_rates = []
+    for t in tasks:
+        t_target = [sid for sid in target_student_ids(db, t) if db.query(User.class_id).filter(User.id == sid).scalar() in class_ids]
+        t_expected = len(t_target)
+        t_completed = db.query(func.count(AnswerSheet.id)).filter(
+            AnswerSheet.task_id == t.id, AnswerSheet.student_id.in_(t_target), AnswerSheet.status == "submitted"
+        ).scalar() or 0 if t_target else 0
+        expected += t_expected
+        completed += t_completed
+        if t_expected > 0:
+            task_rates.append(t_completed / t_expected * 100)
+    avg_completion = round(sum(task_rates) / max(len(task_rates), 1), 1) if task_rates else 0
     pending_risks = (
         db.query(func.count(RiskAlert.id))
         .join(User, User.id == RiskAlert.student_id)
@@ -85,7 +91,7 @@ def teacher_dashboard(user: User = Depends(require_role("teacher", "counselor"))
             "my_classes": len(class_ids), "my_students": my_students,
             "active_tasks": len(tasks), "pending_risks": pending_risks,
             "pending_interventions": pending_interventions,
-            "average_completion_rate": round(completed / max(expected, 1) * 100, 1) if expected else 0,
+            "average_completion_rate": avg_completion,
             "uncompleted_students": max(expected - completed, 0),
         }
     })
