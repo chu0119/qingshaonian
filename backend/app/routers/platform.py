@@ -2011,7 +2011,7 @@ def platform_export_logs(page: int = Query(1), page_size: int = Query(20),
     return APIResponse.success({"items": [{
         "id": l.id, "operator_name": l.operator_name, "operator_role": l.operator_role,
         "module": l.module, "action": l.action, "object_name": l.object_name,
-        "created_at": l.created_at.isoformat() if l.created_at else None,
+        "created_at": l.operation_time.isoformat() if l.operation_time else None,
     } for l in items], "total": total, "page": page, "page_size": page_size})
 
 
