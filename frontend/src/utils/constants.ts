@@ -115,6 +115,18 @@ export const RISK_TAG_LABELS: Record<string, string> = {
   safety_awareness: '安全意识关注信号', mental_pressure: '心理压力关注信号',
   internet_addiction: '网络使用关注信号', family_relationship: '家庭关系关注信号',
   antisocial: '反社会倾向信号', digital_risk: '网络风险行为信号',
+  // 数据库中已存在的中文标签（直接映射，避免显示"未知"）
+  '反社会倾向信号': '反社会倾向信号',
+  '自我安全关注信号': '自我安全关注信号',
+  '家庭支持关注信号': '家庭支持关注信号',
+  '家庭支持缺失信号': '家庭支持缺失信号',
+  '网络风险行为信号': '网络风险行为信号',
+  '家庭环境与亲子关系': '家庭环境与亲子关系',
+  '社会支持与求助意识': '社会支持与求助意识',
+  '数字环境与网络行为': '数字环境与网络行为',
+  '社会规则与行为规范': '社会规则与行为规范',
+  '自我认知与心理特质': '自我认知与心理特质',
+  '校园生活与学习状态': '校园生活与学习状态',
 };
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
@@ -144,9 +156,10 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
 };
 
 export const SMS_TYPE_LABELS: Record<string, string> = {
-  task_publish: '任务发布', platform_urge: '平台催办', risk_alert: '风险预警',
-  password_reset: '密码重置', verification_login: '登录验证',
-  verification_forgot: '忘记密码', reminder: '提醒',
+  verification: '验证码', task_publish: '任务发布', task_reminder: '任务提醒',
+  unfinished_reminder: '未完成提醒', platform_urge: '平台催办',
+  risk_reminder: '风险关注', intervention_followup: '干预跟进',
+  password_reset: '密码重置', risk_alert: '风险预警',
 };
 
 export const SMS_STATUS_LABELS: Record<string, string> = {

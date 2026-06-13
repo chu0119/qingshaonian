@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User
@@ -215,6 +216,64 @@ def sort_questions(qid: int, question_ids: list[int] | None = None, user: User =
     return APIResponse.success(message="排序更新成功")
 
 
+# 选项管理
+
+@router.post("/{qid}/questions/{question_id}/options")
+def add_option(qid: int, question_id: int, data: dict, request: Request,
+               user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """添加选项"""
+    _get_accessible_questionnaire(db, qid, user, writable=True)
+    question = db.query(Question).filter(Question.id == question_id, Question.questionnaire_id == qid).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="题目不存在")
+    from ..models.questionnaire import Option
+    max_order = db.query(func.max(Option.sort_order)).filter(Option.question_id == question_id).scalar() or 0
+    option = Option(
+        question_id=question_id, content=data.get("content", ""),
+        score=data.get("score", 0), sort_order=data.get("sort_order", max_order + 1),
+        is_risk_option=data.get("is_risk_option", False),
+    )
+    db.add(option)
+    db.commit()
+    db.refresh(option)
+    log_operation(db, user, request, module="questionnaire", action="add_option", object_type="question", object_id=question_id)
+    return APIResponse.success({"id": option.id}, message="选项添加成功")
+
+
+@router.put("/{qid}/questions/{question_id}/options/{option_id}")
+def update_option(qid: int, question_id: int, option_id: int, data: dict, request: Request,
+                  user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """更新选项"""
+    _get_accessible_questionnaire(db, qid, user, writable=True)
+    from ..models.questionnaire import Option
+    option = db.query(Option).filter(Option.id == option_id, Option.question_id == question_id).first()
+    if not option:
+        raise HTTPException(status_code=404, detail="选项不存在")
+    allowed_fields = {"content", "score", "sort_order", "is_risk_option"}
+    for k, v in data.items():
+        if k in allowed_fields and hasattr(option, k):
+            setattr(option, k, v)
+    db.commit()
+    return APIResponse.success(message="选项更新成功")
+
+
+@router.delete("/{qid}/questions/{question_id}/options/{option_id}")
+def delete_option(qid: int, question_id: int, option_id: int, request: Request,
+                  user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """删除选项"""
+    _get_accessible_questionnaire(db, qid, user, writable=True)
+    from ..models.questionnaire import Option
+    option = db.query(Option).filter(Option.id == option_id, Option.question_id == question_id).first()
+    if not option:
+        raise HTTPException(status_code=404, detail="选项不存在")
+    count = db.query(func.count(Option.id)).filter(Option.question_id == question_id).scalar()
+    if count <= 2:
+        raise HTTPException(status_code=400, detail="每道题至少需要2个选项")
+    db.delete(option)
+    db.commit()
+    return APIResponse.success(message="选项删除成功")
+
+
 # 矛盾题组管理
 @router.get("/{qid}/contradictions")
 def list_contradictions(qid: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
@@ -238,4 +297,64 @@ def delete_contradiction(qid: int, cg_id: int, user: User = Depends(require_role
         raise HTTPException(status_code=404, detail="矛盾题组不存在")
     qs.delete_contradiction_group(db, cg_id)
     return APIResponse.success(message="矛盾题组删除成功")
+
+
+# ======================== 问卷版本管理 ========================
+
+@router.get("/{qid}/versions")
+def list_versions(qid: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """查看问卷版本历史"""
+    _get_accessible_questionnaire(db, qid, user)
+    current = db.query(Questionnaire).filter(Questionnaire.id == qid).first()
+    versions = [{"id": current.id, "version": current.version or 1, "title": current.title, "status": current.status, "created_at": current.created_at.isoformat() if current.created_at else None}]
+    copies = db.query(Questionnaire).filter(Questionnaire.source_questionnaire_id == qid).order_by(Questionnaire.version.desc()).all()
+    for c in copies:
+        versions.append({"id": c.id, "version": c.version or 1, "title": c.title, "status": c.status, "created_at": c.created_at.isoformat() if c.created_at else None})
+    return APIResponse.success(versions)
+
+
+@router.post("/{qid}/new-version")
+def create_new_version(qid: int, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """从当前问卷创建新版本"""
+    source = _get_accessible_questionnaire(db, qid, user)
+    existing_copies = db.query(func.count(Questionnaire.id)).filter(Questionnaire.source_questionnaire_id == qid).scalar() or 0
+    new_version = (source.version or 1) + 1 + existing_copies
+
+    new_q = Questionnaire(
+        school_id=source.school_id, title=f"{source.title} v{new_version}",
+        description=source.description, category=source.category,
+        applicable_grades=source.applicable_grades, is_builtin=False,
+        source_type="school_custom", disclaimer=source.disclaimer,
+        dimensions=source.dimensions, scoring_rule=source.scoring_rule,
+        risk_rules=source.risk_rules, quality_rules=source.quality_rules,
+        status="draft", created_by=user.id, version=new_version,
+        locked_after_publish=False, source_questionnaire_id=qid,
+    )
+    db.add(new_q)
+    db.flush()
+
+    questions = db.query(Question).filter(Question.questionnaire_id == qid).order_by(Question.sort_order).all()
+    from ..models.questionnaire import Option
+    q_id_map = {}
+    for old_q in questions:
+        new_question = Question(
+            questionnaire_id=new_q.id, title=old_q.title, description=old_q.description,
+            type=old_q.type, sort_order=old_q.sort_order, required=old_q.required,
+            dimension=old_q.dimension, is_attention_check=old_q.is_attention_check,
+        )
+        db.add(new_question)
+        db.flush()
+        q_id_map[old_q.id] = new_question.id
+        old_options = db.query(Option).filter(Option.question_id == old_q.id).order_by(Option.sort_order).all()
+        for old_opt in old_options:
+            db.add(Option(
+                question_id=new_question.id, content=old_opt.content, score=old_opt.score,
+                sort_order=old_opt.sort_order, is_risk_option=old_opt.is_risk_option,
+            ))
+
+    db.commit()
+    log_operation(db, user, request, module="questionnaire", action="create_version",
+                  object_type="questionnaire", object_id=new_q.id, object_name=new_q.title,
+                  detail=f"source={qid};version={new_version}")
+    return APIResponse.success({"id": new_q.id, "version": new_version}, message=f"新版本 v{new_version} 创建成功")
 

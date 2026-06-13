@@ -50,8 +50,12 @@ class Settings(BaseSettings):
 
     # 可选外部服务开关。生产环境只有显式启用时才强制校验密钥。
     SMS_ENABLED: bool = os.getenv("SMS_ENABLED", "false").lower() == "true"
+    SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "")  # tencent / aliyun / custom
     SMS_API_URL: str = os.getenv("SMS_API_URL", "")
-    SMS_APP_KEY: str = os.getenv("SMS_APP_KEY", "")
+    SMS_APP_KEY: str = os.getenv("SMS_APP_KEY", "")  # 腾讯云: SecretId / 阿里云: AccessKeyId
+    SMS_APP_SECRET: str = os.getenv("SMS_APP_SECRET", "")  # 腾讯云: SecretKey / 阿里云: AccessKeySecret
+    SMS_SIGN_NAME: str = os.getenv("SMS_SIGN_NAME", "")  # 短信签名
+    SMS_SDK_APP_ID: str = os.getenv("SMS_SDK_APP_ID", "")  # 腾讯云短信应用 SDKAppID
     AI_ENABLED: bool = os.getenv("AI_ENABLED", "false").lower() == "true"
     AI_API_URL: str = os.getenv("AI_API_URL", "")
     AI_API_KEY: str = os.getenv("AI_API_KEY", "")
@@ -92,8 +96,15 @@ def validate_production_settings(current: Settings = settings) -> None:
         errors.append("ADMIN_PASSWORD must be configured and stronger than the demo default")
     if current.PLATFORM_ADMIN_PASSWORD in WEAK_PASSWORD_VALUES or len(current.PLATFORM_ADMIN_PASSWORD) < 10:
         errors.append("PLATFORM_ADMIN_PASSWORD must be configured and stronger than the demo default")
-    if current.SMS_ENABLED and (not current.SMS_API_URL or not current.SMS_APP_KEY):
-        errors.append("SMS_API_URL and SMS_APP_KEY are required when SMS_ENABLED=true")
+    if current.SMS_ENABLED:
+        provider = (current.SMS_PROVIDER or "").lower()
+        if provider == "custom":
+            # 自定义 HTTP 网关：仅需 API_URL
+            if not current.SMS_API_URL:
+                errors.append("SMS_API_URL is required when SMS_ENABLED=true with SMS_PROVIDER=custom")
+        elif not current.SMS_APP_KEY or not current.SMS_APP_SECRET:
+            # 腾讯云/阿里云：需 SecretId(APP_KEY) + SecretKey(APP_SECRET)
+            errors.append("SMS_APP_KEY (SecretId) and SMS_APP_SECRET (SecretKey) are required when SMS_ENABLED=true (或设置 SMS_PROVIDER=custom + SMS_API_URL 使用自定义网关)")
     if current.AI_ENABLED and (not current.AI_API_URL or not current.AI_API_KEY):
         errors.append("AI_API_URL and AI_API_KEY are required when AI_ENABLED=true")
 

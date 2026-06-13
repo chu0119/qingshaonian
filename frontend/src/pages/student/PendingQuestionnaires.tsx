@@ -12,8 +12,8 @@ export default function PendingQuestionnaires() {
     setLoading(true);
     client.get('/student/tasks/pending').then(r => {
       setTasks((r.data.data || []).filter((t: any) => t.status !== 'submitted'));
-    }).catch(() => {
-      message.error('获取待填写问卷失败');
+    }).catch((err: any) => {
+      message.error(err._friendlyMessage || '获取待填写问卷失败');
     }).finally(() => setLoading(false));
   }, []);
 

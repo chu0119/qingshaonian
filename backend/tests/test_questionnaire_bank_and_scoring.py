@@ -279,6 +279,7 @@ class QuestionnaireBankAndScoringTests(unittest.TestCase):
         self.db.commit()
 
         result = calculate_scores(self.db, sheet.id)
+        # risk_tag_rule 可将低分基础升级到规则配置的等级（此处为 high）
         self.assertEqual(result["risk_level"], "high")
         self.assertIn("校园欺凌关注信号", result["risk_type"])
 

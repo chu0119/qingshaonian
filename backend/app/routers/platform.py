@@ -1,5 +1,4 @@
 import json
-import httpx
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -23,8 +22,26 @@ from ..utils.jwt import create_access_token
 from ..config import settings
 from ..services.audit_service import log_operation
 from ..services.stats_service import platform_summary, recent_school_activity, school_metrics, target_student_ids
+from ..services.recall_service import recall_answer_sheet as do_recall
 
 router = APIRouter(prefix="/api/v1/platform", tags=["平台管理"])
+
+
+def _escape_like(value: str) -> str:
+    """转义 LIKE 通配符，防止搜索注入"""
+    return value.replace('%', '\\%').replace('_', '\\_')
+
+# ---- 中文标签映射常量 ----
+_RISK_LEVEL_LABELS = {"low": "关注", "medium": "预警", "high": "警告", "urgent": "危急"}
+_RISK_STATUS_LABELS = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "follow_up": "持续跟进", "resolved": "已解决", "completed": "已完成", "closed": "已关闭"}
+_QUALITY_LEVEL_LABELS = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "高度异常"}
+_VALIDITY_LABELS = {"valid": "有效", "basically_valid": "基本有效", "questionable": "存疑", "not_recommended": "不建议纳入", "invalid": "无效"}
+_METHOD_LABELS = {"student_talk": "学生谈话", "teacher_communication": "班主任沟通", "counselor_guidance": "心理老师辅导", "family_school": "家校沟通", "home_visit": "家访", "referral": "转介专业机构", "observation": "持续观察", "other": "其他"}
+_INTER_STATUS_LABELS = {"pending": "待处理", "processing": "处理中", "follow_up": "持续跟进", "completed": "已完成", "closed": "已关闭"}
+_SMS_TYPE_LABELS = {"task_publish": "任务发布通知", "task_reminder": "任务提醒", "risk_alert": "风险预警通知", "platform_urge": "平台催办", "intervention_reminder": "干预提醒"}
+_SMS_STATUS_LABELS = {"sent": "已发送", "failed": "发送失败", "delivered": "已送达", "not_configured": "未配置"}
+_AI_TYPE_LABELS = {"student_risk": "学生风险分析", "class_report": "班级报告分析", "school_overview": "学校总览分析", "regional": "区域分析"}
+_AI_STATUS_LABELS = {"success": "成功", "failure": "失败", "pending": "处理中"}
 
 
 def _validate_initial_password(password: str) -> None:
@@ -64,7 +81,7 @@ def list_schools(page: int = Query(1), page_size: int = Query(20), keyword: str 
                  user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     q = db.query(School)
     if keyword:
-        q = q.filter(School.name.contains(keyword) | School.code.contains(keyword))
+        q = q.filter(School.name.contains(_escape_like(keyword)) | School.code.contains(_escape_like(keyword)))
     total = q.count()
     schools = q.order_by(School.id).offset((page - 1) * page_size).limit(page_size).all()
     items = []
@@ -87,6 +104,20 @@ def list_schools(page: int = Query(1), page_size: int = Query(20), keyword: str 
         })
     return APIResponse.success({"items": items, "total": total, "page": page, "page_size": page_size,
                                 "total_pages": max((total + page_size - 1) // page_size, 1)})
+
+
+@router.get("/grades")
+def platform_grades(school_id: int = Query(...), user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """公安端根据学校ID获取年级列表"""
+    grades = db.query(Grade).filter(Grade.school_id == school_id, Grade.status == True).order_by(Grade.sort_order).all()
+    return APIResponse.success([{"id": g.id, "name": g.name} for g in grades])
+
+
+@router.get("/classes")
+def platform_classes(grade_id: int = Query(...), user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
+    """公安端根据年级ID获取班级列表"""
+    classes = db.query(Class).filter(Class.grade_id == grade_id, Class.status == True).order_by(Class.id).all()
+    return APIResponse.success([{"id": c.id, "name": c.name} for c in classes])
 
 
 @router.post("/schools")
@@ -369,7 +400,7 @@ def platform_students(
     if class_id:
         q = q.filter(User.class_id == class_id)
     if keyword:
-        q = q.filter(User.real_name.contains(keyword) | User.username.contains(keyword) | User.student_no.contains(keyword))
+        q = q.filter(User.real_name.contains(_escape_like(keyword)) | User.username.contains(_escape_like(keyword)) | User.student_no.contains(_escape_like(keyword)))
     total = q.count()
     items = q.order_by(User.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
@@ -453,13 +484,36 @@ def reveal_student_id_card(
     return APIResponse.success({"id_card": student.username})
 
 
+@router.put("/students/{student_id}")
+def platform_update_student(
+    student_id: int, data: dict, request: Request,
+    user: User = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """平台管理员编辑学生信息"""
+    student = db.query(User).filter(User.id == student_id, User.role == "student").first()
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+
+    from ..services.user_service import update_user
+    from ..schemas.user import UserUpdate
+
+    update_data = UserUpdate(**{k: v for k, v in data.items() if v is not None})
+    updated = update_user(db, student_id, update_data)
+
+    log_operation(db, user, request, module="platform_student", action="update",
+                  object_type="student", object_id=student_id,
+                  object_name=updated.real_name, detail="平台管理员编辑学生信息")
+    return APIResponse.success(message="学生信息更新成功")
+
+
 @router.get("/settings")
 def get_platform_settings(user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     from ..models.system_config import SystemConfig
     config_keys = [
         "platform_system_name", "platform_support_contact", "platform_default_admin_password",
         "sms_enabled", "sms_provider", "sms_api_url", "sms_app_key", "sms_api_secret",
-        "sms_template_code", "sms_sign_name",
+        "sms_template_code", "sms_sign_name", "sms_sdk_app_id", "sms_templates",
         "ai_provider", "ai_api_key", "ai_base_url", "ai_model", "ai_system_prompt",
         "password_min_length", "password_expire_days", "login_lock_threshold", "login_lock_minutes", "session_timeout_minutes",
         "feature_ai_analysis", "feature_sms_notify", "feature_student_view_result", "feature_data_export", "feature_auto_risk_alert",
@@ -481,6 +535,8 @@ def get_platform_settings(user: User = Depends(require_role("platform_admin")), 
         "sms_api_secret": "••••••" if configs.get("sms_api_secret") else "",
         "sms_template_code": configs.get("sms_template_code", ""),
         "sms_sign_name": configs.get("sms_sign_name", ""),
+        "sms_sdk_app_id": configs.get("sms_sdk_app_id", ""),
+        "sms_templates": configs.get("sms_templates", "{}"),
         "ai_provider": configs.get("ai_provider", "openai"),
         "ai_api_key": "••••••" if configs.get("ai_api_key") else "",
         "ai_base_url": configs.get("ai_base_url", ""),
@@ -519,6 +575,8 @@ def update_platform_settings(data: dict, user: User = Depends(require_role("plat
         "sms_api_secret": "sms_api_secret",
         "sms_template_code": "sms_template_code",
         "sms_sign_name": "sms_sign_name",
+        "sms_sdk_app_id": "sms_sdk_app_id",
+        "sms_templates": "sms_templates",
         "ai_provider": "ai_provider",
         "ai_api_key": "ai_api_key",
         "ai_base_url": "ai_base_url",
@@ -660,9 +718,11 @@ def platform_risk_alerts(
     school_id: int | None = Query(None), risk_level: str = Query(""),
     status: str = Query(""), keyword: str = Query(""),
     student_id: int | None = Query(None),
+    sort_by: str = Query(""), sort_order: str = Query("desc"),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """平台风险预警中心——跨校风险列表"""
+    from sqlalchemy import asc, desc as sa_desc, case
     q = db.query(RiskAlert).join(User, User.id == RiskAlert.student_id).join(School, School.id == RiskAlert.school_id)
     if school_id:
         q = q.filter(RiskAlert.school_id == school_id)
@@ -673,9 +733,24 @@ def platform_risk_alerts(
     if status:
         q = q.filter(RiskAlert.status == status)
     if keyword:
-        q = q.filter(User.real_name.contains(keyword))
+        q = q.filter(User.real_name.contains(_escape_like(keyword)))
     total = q.count()
-    items = q.order_by(RiskAlert.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    sort_dir = sa_desc if sort_order == "desc" else asc
+    sort_map = {
+        "created_at": RiskAlert.created_at,
+        "risk_level": case(
+            (RiskAlert.risk_level == "urgent", 4), (RiskAlert.risk_level == "high", 3),
+            (RiskAlert.risk_level == "medium", 2), (RiskAlert.risk_level == "low", 1), else_=0,
+        ),
+        "student_name": User.real_name,
+        "school_name": School.name,
+        "status": RiskAlert.status,
+    }
+    if sort_by in sort_map:
+        q = q.order_by(sort_dir(sort_map[sort_by]))
+    else:
+        q = q.order_by(sa_desc(RiskAlert.id))
+    items = q.offset((page - 1) * page_size).limit(page_size).all()
     students = {u.id: u for u in db.query(User).filter(User.id.in_([a.student_id for a in items])).all()} if items else {}
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([a.school_id for a in items])).all()) if items else {}
     grade_names = dict(db.query(Grade.id, Grade.name).filter(Grade.id.in_([u.grade_id for u in students.values() if u.grade_id])).all()) if students else {}
@@ -686,7 +761,9 @@ def platform_risk_alerts(
             "id_card": mask_id_card(students.get(a.student_id).username) if students.get(a.student_id) else "",
             "school_id": a.school_id, "school_name": school_names.get(a.school_id, ""),
             "risk_level": a.risk_level, "risk_type": a.risk_type or "",
-            "status": a.status, "created_at": a.created_at.isoformat() if a.created_at else None,
+            "risk_level_label": _RISK_LEVEL_LABELS.get(a.risk_level, a.risk_level),
+            "status": a.status, "status_label": _RISK_STATUS_LABELS.get(a.status, a.status),
+            "created_at": a.created_at.isoformat() if a.created_at else None,
             "student_grade": grade_names.get(students[a.student_id].grade_id, "") if a.student_id in students else "",
             "student_class": class_names.get(students[a.student_id].class_id, "") if a.student_id in students else "",
         } for a in items],
@@ -712,7 +789,7 @@ def platform_risk_alerts_export(
     if status:
         q = q.filter(RiskAlert.status == status)
     if keyword:
-        q = q.filter(User.real_name.contains(keyword))
+        q = q.filter(User.real_name.contains(_escape_like(keyword)))
     items = q.order_by(RiskAlert.id.desc()).all()
 
     students = {u.id: u for u in db.query(User).filter(User.id.in_([a.student_id for a in items])).all()} if items else {}
@@ -724,8 +801,8 @@ def platform_risk_alerts_export(
     score_map = dict(db.query(ScoringResult.answer_sheet_id, ScoringResult.total_score).filter(
         ScoringResult.answer_sheet_id.in_(sheet_ids)).all()) if sheet_ids else {}
 
-    risk_level_labels = {"low": "低风险", "medium": "中风险", "high": "高风险", "urgent": "危急"}
-    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "completed": "已完成"}
+    risk_level_labels = {"low": "关注", "medium": "预警", "high": "警告", "urgent": "危急"}
+    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "resolved": "已解决", "completed": "已完成", "closed": "已关闭", "follow_up": "持续跟进"}
 
     buf = io.StringIO()
     buf.write('﻿')  # BOM for Excel
@@ -793,7 +870,14 @@ def platform_key_students(
 
     return APIResponse.success({
         "items": [{
-            **{k: v for k, v in a.__dict__.items() if not k.startswith("_")},
+            "id": a.id, "school_id": a.school_id, "student_id": a.student_id,
+            "answer_sheet_id": a.answer_sheet_id, "task_id": a.task_id,
+            "risk_level": a.risk_level, "risk_type": a.risk_type,
+            "trigger_method": a.trigger_method, "trigger_detail": a.trigger_detail,
+            "assigned_teacher_id": a.assigned_teacher_id, "status": a.status,
+            "due_at": a.due_at.isoformat() if a.due_at else None,
+            "latest_handled_at": a.latest_handled_at.isoformat() if a.latest_handled_at else None,
+            "closed_reason": a.closed_reason, "source_rule_version": a.source_rule_version,
             "student_name": students.get(a.student_id).real_name if students.get(a.student_id) else "",
             "id_card": mask_id_card(students.get(a.student_id).username) if students.get(a.student_id) else "",
             "school_name": school_names.get(a.school_id, ""),
@@ -810,16 +894,27 @@ def platform_key_students(
 def platform_tasks(
     page: int = Query(1), page_size: int = Query(20),
     school_id: int | None = Query(None), status: str = Query(""),
+    sort_by: str = Query(""), sort_order: str = Query("desc"),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """测评任务监管——跨校任务列表"""
+    from sqlalchemy import asc, desc as sa_desc
     q = db.query(Task).join(School, School.id == Task.school_id)
     if school_id:
         q = q.filter(Task.school_id == school_id)
     if status:
         q = q.filter(Task.status == status)
     total = q.count()
-    tasks = q.order_by(Task.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    sort_dir = sa_desc if sort_order == "desc" else asc
+    sort_map = {
+        "name": Task.name, "status": Task.status, "created_at": Task.created_at,
+        "start_time": Task.start_time, "end_time": Task.end_time,
+    }
+    if sort_by in sort_map:
+        q = q.order_by(sort_dir(sort_map[sort_by]))
+    else:
+        q = q.order_by(sa_desc(Task.id))
+    tasks = q.offset((page - 1) * page_size).limit(page_size).all()
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([t.school_id for t in tasks])).all()) if tasks else {}
     # 批量获取完成数和目标数
     task_ids = [t.id for t in tasks]
@@ -978,24 +1073,7 @@ def platform_recall_answer_sheet(task_id: int, data: dict, request: Request, use
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     student_id = data.get("student_id")
-    if not student_id:
-        raise HTTPException(status_code=400, detail="请指定学生ID")
-    sheet = db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id, AnswerSheet.student_id == student_id).first()
-    if not sheet:
-        raise HTTPException(status_code=404, detail="该学生无此任务的答卷")
-    if sheet.status != "submitted":
-        raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
-    db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id == sheet.id).delete()
-    db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
-    db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
-    alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id == sheet.id).all()]
-    if alert_ids:
-        db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
-    db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
-    sheet.status = "in_progress"
-    sheet.submitted_at = None
-    sheet.total_duration_seconds = None
-    db.commit()
+    sheet = do_recall(db, task_id, student_id)
     student = db.query(User).filter(User.id == student_id).first()
     log_operation(db, user, request, module="task_supervision", action="recall", object_type="answer_sheet",
                   object_id=sheet.id, object_name=f"{student.real_name if student else student_id}的答卷")
@@ -1104,9 +1182,11 @@ def platform_interventions(
     page: int = Query(1), page_size: int = Query(20),
     school_id: int | None = Query(None), status: str = Query(""),
     student_id: int | None = Query(None),
+    sort_by: str = Query(""), sort_order: str = Query("desc"),
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
 ):
     """干预督办——跨校干预记录列表"""
+    from sqlalchemy import asc, desc as sa_desc
     q = db.query(Intervention).join(User, User.id == Intervention.student_id).join(School, School.id == Intervention.school_id)
     if school_id:
         q = q.filter(Intervention.school_id == school_id)
@@ -1115,7 +1195,16 @@ def platform_interventions(
     if status:
         q = q.filter(Intervention.status == status)
     total = q.count()
-    items = q.order_by(Intervention.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    sort_dir = sa_desc if sort_order == "desc" else asc
+    sort_map = {
+        "student_name": User.real_name, "school_name": School.name,
+        "status": Intervention.status, "created_at": Intervention.created_at,
+    }
+    if sort_by in sort_map:
+        q = q.order_by(sort_dir(sort_map[sort_by]))
+    else:
+        q = q.order_by(sa_desc(Intervention.id))
+    items = q.offset((page - 1) * page_size).limit(page_size).all()
     students = {u.id: u for u in db.query(User).filter(User.id.in_([iv.student_id for iv in items])).all()} if items else {}
     teacher_names = dict(db.query(User.id, User.real_name).filter(User.id.in_([iv.teacher_id for iv in items if iv.teacher_id])).all()) if items else {}
     school_names = dict(db.query(School.id, School.name).filter(School.id.in_([iv.school_id for iv in items])).all()) if items else {}
@@ -1130,7 +1219,9 @@ def platform_interventions(
             "teacher_name": teacher_names.get(iv.teacher_id, ""),
             "student_grade": grade_names.get(students[iv.student_id].grade_id, "") if iv.student_id in students else "",
             "student_class": class_names.get(students[iv.student_id].class_id, "") if iv.student_id in students else "",
-            "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+            "method": iv.method, "method_label": _METHOD_LABELS.get(iv.method, iv.method or "其他"),
+            "status": iv.status, "status_label": _INTER_STATUS_LABELS.get(iv.status, iv.status),
+            "content": (iv.content or "")[:200],
             "need_follow_up": iv.need_follow_up,
             "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,
             "next_follow_up_time": iv.next_follow_up_time.isoformat() if iv.next_follow_up_time else None,
@@ -1228,9 +1319,11 @@ def platform_audit_logs(
         "platform_school": "学校管理", "auth": "认证管理", "student": "学生管理",
         "teacher": "教师管理", "ai_analysis": "AI研判", "sms": "短信管理",
         "platform_supervision": "监管督办", "system": "系统设置", "intervention": "干预管理",
-        "report": "报告管理", "questionnaire": "问卷管理", "task": "任务管理", "risk": "风险预警",
+        "report": "报告管理", "questionnaire": "问卷管理", "questionnaire_task": "任务管理",
+        "task": "任务管理", "risk": "风险预警", "risk_alert": "风险预警",
         "platform_student": "学生管理", "platform_risk": "风险预警", "platform_sms": "短信管理",
         "platform_ai": "AI研判", "school_admin_account": "学校管理员",
+        "class": "班级管理", "export": "导出", "task_supervision": "任务监管",
     }
     ACTION_LABELS = {
         "create": "创建", "update": "更新", "delete": "删除", "disable": "停用",
@@ -1242,12 +1335,18 @@ def platform_audit_logs(
         "update_school_info": "更新学校信息", "update_risk_config": "更新风险配置",
         "update_sms_config": "更新短信配置", "update_screen_config": "更新大屏配置",
         "create_grade": "创建年级", "delete_grade": "删除年级",
+        "publish": "发布", "close": "关闭", "extend": "延期", "archive": "归档",
+        "recall": "撤回", "analyze": "分析", "send_business": "发送",
+        "retry": "重试", "change_class": "调整班级", "export_students": "导出学生",
+        "edit": "编辑",
     }
     OBJECT_TYPE_LABELS = {
         "school": "学校", "user": "用户", "student_list": "学生列表", "student_batch": "学生批次",
-        "config": "配置", "risk_alert": "风险预警", "intervention": "干预记录",
-        "sms_log": "短信记录", "report": "报告", "phone": "手机号", "grade": "年级",
-        "sms": "短信", "task": "任务", "student": "学生",
+        "config": "配置", "risk_alert": "风险预警", "risk_alerts": "风险预警",
+        "intervention": "干预记录", "sms_log": "短信记录", "report": "报告",
+        "phone": "手机号", "grade": "年级", "sms": "短信", "task": "任务",
+        "student": "学生", "answer_sheet": "答卷", "class": "班级",
+        "questionnaire": "问卷", "platform_admin": "平台管理员",
     }
     q = db.query(OperationLog)
     if module:
@@ -1258,9 +1357,9 @@ def platform_audit_logs(
         q = q.filter(OperationLog.operator_role == operator_role)
     if keyword:
         q = q.filter(
-            OperationLog.operator_name.contains(keyword) |
-            OperationLog.module.contains(keyword) |
-            OperationLog.action.contains(keyword)
+            OperationLog.operator_name.contains(_escape_like(keyword)) |
+            OperationLog.module.contains(_escape_like(keyword)) |
+            OperationLog.action.contains(_escape_like(keyword))
         )
     total = q.count()
     items = q.order_by(OperationLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
@@ -1293,13 +1392,14 @@ def platform_sms_logs(
     if status:
         q = q.filter(SMSLog.status == status)
     if keyword:
-        q = q.filter(SMSLog.phone.contains(keyword))
+        q = q.filter(SMSLog.phone.contains(_escape_like(keyword)))
     total = q.count()
     items = q.order_by(SMSLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return APIResponse.success({
         "items": [{
             "id": s.id, "recipient_name": s.recipient_name, "phone": mask_phone(s.phone),
-            "sms_type": s.sms_type or "", "status": s.status or "",
+            "sms_type": s.sms_type or "", "sms_type_label": _SMS_TYPE_LABELS.get(s.sms_type, s.sms_type or ""),
+            "status": s.status or "", "status_label": _SMS_STATUS_LABELS.get(s.status, s.status or ""),
             "failure_reason": s.failure_reason or "", "school_id": s.school_id,
             "sent_at": s.sent_at.isoformat() if s.sent_at else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -1321,46 +1421,13 @@ def platform_send_sms(
     if not content:
         raise HTTPException(status_code=400, detail="请输入短信内容")
 
-    sms_sent = False
-    failure_reason = ""
-    from ..models.system_config import SystemConfig
-    sms_url_config = db.query(SystemConfig).filter(
-        SystemConfig.config_key == "sms_api_url", SystemConfig.school_id.is_(None)).first()
-    sms_key_config = db.query(SystemConfig).filter(
-        SystemConfig.config_key == "sms_app_key", SystemConfig.school_id.is_(None)).first()
-    sms_url = settings.SMS_API_URL or (sms_url_config.config_value if sms_url_config else "")
-    sms_key = settings.SMS_APP_KEY or (sms_key_config.config_value if sms_key_config else "")
-
-    if sms_url and sms_key:
-        try:
-            with httpx.Client(timeout=10) as client:
-                resp = client.post(
-                    sms_url,
-                    json={"phone": phone, "content": content},
-                    headers={"Authorization": f"Bearer {sms_key}"},
-                )
-                sms_sent = resp.status_code == 200
-                if not sms_sent:
-                    failure_reason = f"短信服务返回 HTTP {resp.status_code}"
-        except Exception as exc:
-            failure_reason = str(exc)[:300]
-    else:
-        failure_reason = "短信服务暂未配置"
-
-    status = "sent" if sms_sent else ("not_configured" if not sms_url else "failed")
-    db.add(SMSLog(
-        recipient_name="", phone=phone,
-        school_id=None, sms_type="platform_urge",
-        template_code="manual", content=content,
-        status=status, failure_reason=failure_reason,
-        sender_id=user.id, sent_at=datetime.now(),
-    ))
-    db.commit()
+    from ..services.sms_service import send_custom_sms
+    sms_sent, failure_reason = send_custom_sms(db, sender=user, phone=phone, content=content)
 
     log_operation(db, user, request, module="platform_sms", action="send",
                   object_type="sms", object_id=phone[-4:],
                   result="success" if sms_sent else "failure",
-                  detail=f"status={status};content_len={len(content)}")
+                  detail=f"content_len={len(content)}")
 
     if not sms_sent:
         return APIResponse.success({"message": "短信发送失败", "reason": failure_reason, "sms_sent": False}, message="发送失败")
@@ -1383,7 +1450,6 @@ def platform_batch_send_sms(
         student_ids = [int(s) for s in (snapshot.get("student_ids", []) or []) if str(s).isdigit()]
         if not student_ids:
             return APIResponse.success({"sent": 0, "failed": 0, "message": "无目标学生"}, message="无目标学生")
-        # 已提交的学生
         submitted_ids = set(
             r[0] for r in db.query(AnswerSheet.student_id).filter(
                 AnswerSheet.task_id == task_id, AnswerSheet.student_id.in_(student_ids),
@@ -1393,52 +1459,21 @@ def platform_batch_send_sms(
         if not uncompleted_ids:
             return APIResponse.success({"sent": 0, "failed": 0, "message": "所有学生已完成"}, message="所有学生已完成")
         students = db.query(User).filter(User.id.in_(uncompleted_ids), User.role == "student").all()
-        # 获取短信配置
-        from ..models.system_config import SystemConfig
-        sms_url_config = db.query(SystemConfig).filter(
-            SystemConfig.config_key == "sms_api_url", SystemConfig.school_id.is_(None)).first()
-        sms_key_config = db.query(SystemConfig).filter(
-            SystemConfig.config_key == "sms_app_key", SystemConfig.school_id.is_(None)).first()
-        sms_url = settings.SMS_API_URL or (sms_url_config.config_value if sms_url_config else "")
-        sms_key = settings.SMS_APP_KEY or (sms_key_config.config_value if sms_key_config else "")
-        content_template = data.get("content") or f"您有一项测评任务「{task.name}」尚未完成，请尽快完成。"
+
+        from ..services.sms_service import send_business_sms
         sent_count = 0
         failed_count = 0
         for stu in students:
-            phone = (stu.phone or "").strip()
-            if not phone or len(phone) < 11:
-                failed_count += 1
-                continue
-            sms_sent = False
-            failure_reason = ""
-            if sms_url and sms_key:
-                try:
-                    with httpx.Client(timeout=10) as http_client:
-                        resp = http_client.post(
-                            sms_url,
-                            json={"phone": phone, "content": content_template},
-                            headers={"Authorization": f"Bearer {sms_key}"},
-                        )
-                        sms_sent = resp.status_code == 200
-                        if not sms_sent:
-                            failure_reason = f"HTTP {resp.status_code}"
-                except Exception as exc:
-                    failure_reason = str(exc)[:200]
-            else:
-                failure_reason = "短信服务暂未配置"
-            status_val = "sent" if sms_sent else ("not_configured" if not sms_url else "failed")
-            db.add(SMSLog(
-                recipient_name=stu.real_name or stu.username, phone=phone,
-                school_id=task.school_id, sms_type="task_reminder",
-                template_code="task_uncompleted", content=content_template,
-                status=status_val, failure_reason=failure_reason,
-                sender_id=user.id, sent_at=datetime.now(),
-            ))
-            if sms_sent:
+            log = send_business_sms(
+                db, sender=user, recipient=stu,
+                sms_type="task_reminder",
+                template_code="unfinished_reminder",
+            )
+            if log.status == "sent":
                 sent_count += 1
             else:
                 failed_count += 1
-        db.commit()
+
         log_operation(db, user, request, module="platform_sms", action="send",
                       object_type="task", object_id=task.id, object_name=task.name,
                       result="success" if sent_count > 0 else "failure",
@@ -1472,15 +1507,18 @@ def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(r
         except Exception: pass
     return APIResponse.success({
         "id": alert.id, "risk_level": alert.risk_level, "risk_type": alert.risk_type or "",
-        "status": alert.status, "trigger_method": alert.trigger_method or "",
+        "risk_level_label": _RISK_LEVEL_LABELS.get(alert.risk_level, alert.risk_level),
+        "status": alert.status, "status_label": _RISK_STATUS_LABELS.get(alert.status, alert.status),
+        "trigger_method": alert.trigger_method or "",
         "student_name": student.real_name if student else "", "student_id": alert.student_id,
         "school_name": school.name if school else "", "school_id": alert.school_id,
         "total_score": sr.total_score if sr else 0, "dimension_scores": sr.dimension_scores if sr else {},
         "risk_description": sr.risk_description if sr else "",
         "dimension_analysis": dim_analysis,
-        "quality_level": qa.quality_level if qa else "", "quality_score": qa.quality_score if qa else 0,
+        "quality_level": qa.quality_level if qa else "", "quality_level_label": _QUALITY_LEVEL_LABELS.get(qa.quality_level, qa.quality_level) if qa else "",
+        "quality_score": qa.quality_score if qa else 0,
         "quality_duration": str(qa.total_duration_seconds or 0) + "秒" if qa else "-",
-        "validity": qa.validity if qa else "",
+        "validity": qa.validity if qa else "", "validity_label": _VALIDITY_LABELS.get(qa.validity, qa.validity) if qa else "",
         "suggest_retest": qa.suggest_retest if qa else False,
         "attention_passed": qa.attention_passed if qa else None,
         "max_consecutive_same": qa.max_consecutive_same if qa else None,
@@ -1488,7 +1526,9 @@ def platform_risk_detail(alert_id: int, request: Request, user: User = Depends(r
         "pattern_detected": qa.pattern_detected if qa else None,
         "fast_question_count": qa.fast_question_count if qa else None,
         "quality_deductions": (qa.details or {}).get("deductions", []) if qa else [],
-        "interventions": [{"id": iv.id, "method": iv.method, "status": iv.status, "content": iv.content or "",
+        "interventions": [{"id": iv.id, "method": iv.method, "method_label": _METHOD_LABELS.get(iv.method, iv.method or "其他"),
+            "status": iv.status, "status_label": _INTER_STATUS_LABELS.get(iv.status, iv.status),
+            "content": iv.content or "",
             "created_at": iv.created_at.isoformat() if iv.created_at else None} for iv in interventions],
         "created_at": alert.created_at.isoformat() if alert.created_at else None,
     })
@@ -1538,12 +1578,18 @@ def platform_student_profile(student_id: int, request: Request, user: User = Dep
         "school_name": student.school.name if student.school else "",
         "grade": student.grade.name if student.grade else "", "class": student.class_.name if student.class_ else "",
         "alerts": [{"id": a.id, "risk_level": a.risk_level, "risk_type": a.risk_type or "", "status": a.status,
+            "risk_level_label": _RISK_LEVEL_LABELS.get(a.risk_level, a.risk_level),
+            "status_label": _RISK_STATUS_LABELS.get(a.status, a.status),
             "created_at": a.created_at.isoformat() if a.created_at else None} for a in alerts],
         "interventions": [{"id": iv.id, "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+            "method_label": _METHOD_LABELS.get(iv.method, iv.method or "其他"),
+            "status_label": _INTER_STATUS_LABELS.get(iv.status, iv.status),
             "created_at": iv.created_at.isoformat() if iv.created_at else None} for iv in interventions],
         "scores": [{"total_score": s.total_score, "risk_level": s.risk_level, "dimension_scores": s.dimension_scores or {},
             "created_at": s.created_at.isoformat() if s.created_at else None} for s in scores],
-        "quality": [{"level": q.quality_level, "score": q.quality_score, "validity": q.validity} for q in qas],
+        "quality": [{"level": q.quality_level, "score": q.quality_score, "validity": q.validity,
+            "level_label": _QUALITY_LEVEL_LABELS.get(q.quality_level, q.quality_level),
+            "validity_label": _VALIDITY_LABELS.get(q.validity, q.validity)} for q in qas],
     })
 
 
@@ -1555,7 +1601,7 @@ def platform_overdue_interventions(user: User = Depends(require_role("platform_a
     tz = timezone(timedelta(hours=8))
     deadline = datetime.now(tz) - timedelta(days=7)
     items = db.query(Intervention).filter(
-        Intervention.status.in_(["pending", "in_progress", "follow_up"]),
+        Intervention.status.in_(["pending", "processing", "follow_up"]),
         Intervention.created_at < deadline,
     ).order_by(Intervention.created_at).limit(50).all()
     students = {u.id: u for u in db.query(User).filter(User.id.in_([iv.student_id for iv in items])).all()} if items else {}
@@ -1571,7 +1617,9 @@ def platform_overdue_interventions(user: User = Depends(require_role("platform_a
         "teacher_name": teacher_names.get(iv.teacher_id, ""),
         "student_grade": grade_names.get(students[iv.student_id].grade_id, "") if iv.student_id in students else "",
         "student_class": class_names.get(students[iv.student_id].class_id, "") if iv.student_id in students else "",
-        "method": iv.method, "status": iv.status, "content": (iv.content or "")[:200],
+        "method": iv.method, "method_label": _METHOD_LABELS.get(iv.method, iv.method or "其他"),
+        "status": iv.status, "status_label": _INTER_STATUS_LABELS.get(iv.status, iv.status),
+        "content": (iv.content or "")[:200],
         "need_follow_up": iv.need_follow_up,
         "intervention_time": iv.intervention_time.isoformat() if iv.intervention_time else None,
         "created_at": iv.created_at.isoformat() if iv.created_at else None,
@@ -1598,7 +1646,10 @@ def platform_ai_logs(page: int = Query(1), page_size: int = Query(20), user: Use
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()
     return APIResponse.success({"items": [{
-        "id": l.id, "analysis_type": l.analysis_type, "model_name": l.model_name or "", "status": l.status or "",
+        "id": l.id, "analysis_type": l.analysis_type,
+        "analysis_type_label": _AI_TYPE_LABELS.get(l.analysis_type, l.analysis_type or ""),
+        "model_name": l.model_name or "", "status": l.status or "",
+        "status_label": _AI_STATUS_LABELS.get(l.status, l.status or ""),
         "duration_ms": l.duration_ms or 0, "user_role": l.user_role or "", "error_message": l.error_message or "",
         "created_at": l.created_at.isoformat() if l.created_at else None,
     } for l in items], "total": total, "page": page, "page_size": page_size})
@@ -1727,6 +1778,158 @@ def platform_ai_regional(data: dict | None = None, request: Request = None, user
     })
 
 
+# ============ 问卷日志 ============
+
+@router.get("/answer-logs")
+def platform_answer_logs(
+    page: int = Query(1), page_size: int = Query(20),
+    school_id: int | None = Query(None), grade_id: int | None = Query(None),
+    class_id: int | None = Query(None), task_id: int | None = Query(None),
+    status: str = Query(""), keyword: str = Query(""),
+    risk_level: str = Query(""),
+    start_date: str = Query(""), end_date: str = Query(""),
+    sort_by: str = Query(""), sort_order: str = Query("desc"),
+    user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db),
+):
+    """公安端问卷日志——跨校答卷列表"""
+    from datetime import timedelta
+    from sqlalchemy import case, asc, desc as sa_desc
+
+    # 主查询：AnswerSheet + JOIN 筛选用的表
+    q = db.query(AnswerSheet).outerjoin(User, User.id == AnswerSheet.student_id)
+    q = q.outerjoin(Task, Task.id == AnswerSheet.task_id)
+    q = q.outerjoin(Questionnaire, Questionnaire.id == AnswerSheet.questionnaire_id)
+    q = q.outerjoin(ScoringResult, ScoringResult.answer_sheet_id == AnswerSheet.id)
+    q = q.outerjoin(QualityAssessment, QualityAssessment.answer_sheet_id == AnswerSheet.id)
+
+    if school_id:
+        q = q.filter(AnswerSheet.school_id == school_id)
+    if grade_id:
+        q = q.filter(User.grade_id == grade_id)
+    if class_id:
+        q = q.filter(User.class_id == class_id)
+    if task_id:
+        q = q.filter(AnswerSheet.task_id == task_id)
+    if status:
+        q = q.filter(AnswerSheet.status == status)
+    if keyword:
+        q = q.filter(User.real_name.contains(_escape_like(keyword)))
+    if risk_level:
+        q = q.filter(ScoringResult.risk_level == risk_level)
+    if start_date:
+        q = q.filter(AnswerSheet.submitted_at >= start_date)
+    if end_date:
+        end_dt = datetime.fromisoformat(end_date) + timedelta(days=1)
+        q = q.filter(AnswerSheet.submitted_at < end_dt.isoformat())
+
+    total = q.count()
+
+    # 服务端排序
+    sort_dir = sa_desc if sort_order == "desc" else asc
+    sort_map = {
+        "submitted_at": case((AnswerSheet.submitted_at.is_(None), AnswerSheet.created_at), else_=AnswerSheet.submitted_at),
+        "total_duration_seconds": AnswerSheet.total_duration_seconds,
+        "total_score": ScoringResult.total_score,
+        "risk_level": case(
+            (ScoringResult.risk_level == "urgent", 4),
+            (ScoringResult.risk_level == "high", 3),
+            (ScoringResult.risk_level == "medium", 2),
+            (ScoringResult.risk_level == "low", 1),
+            else_=0,
+        ),
+        "quality_level": case(
+            (QualityAssessment.quality_level == "severe_anomaly", 4),
+            (QualityAssessment.quality_level == "moderate_anomaly", 3),
+            (QualityAssessment.quality_level == "mild_anomaly", 2),
+            (QualityAssessment.quality_level == "normal", 1),
+            else_=0,
+        ),
+        "student_name": User.real_name,
+    }
+    if sort_by in sort_map:
+        q = q.order_by(sort_dir(sort_map[sort_by]))
+    else:
+        # 默认按风险等级降序，再按提交时间降序
+        q = q.order_by(sort_dir(sort_map["risk_level"]),
+                       sort_dir(sort_map["submitted_at"]))
+
+    sheets = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    if not sheets:
+        return APIResponse.success({"items": [], "total": 0, "page": page, "page_size": page_size})
+
+    # 批量加载关联数据
+    sheet_ids = [s.id for s in sheets]
+    student_ids = list({s.student_id for s in sheets})
+    school_ids = list({s.school_id for s in sheets if s.school_id})
+    task_ids = list({s.task_id for s in sheets if s.task_id})
+    qnr_ids = list({s.questionnaire_id for s in sheets if s.questionnaire_id})
+
+    students = {u.id: u for u in db.query(User).filter(User.id.in_(student_ids)).all()} if student_ids else {}
+    schools = {s.id: s for s in db.query(School).filter(School.id.in_(school_ids)).all()} if school_ids else {}
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(task_ids)).all()} if task_ids else {}
+    qnrs = {q.id: q for q in db.query(Questionnaire).filter(Questionnaire.id.in_(qnr_ids)).all()} if qnr_ids else {}
+
+    # 年级和班级
+    grade_ids = list({students[sid].grade_id for sid in student_ids if students.get(sid) and students[sid].grade_id})
+    class_ids_list = list({students[sid].class_id for sid in student_ids if students.get(sid) and students[sid].class_id})
+    grades = {g.id: g for g in db.query(Grade).filter(Grade.id.in_(grade_ids)).all()} if grade_ids else {}
+    classes_map = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids_list)).all()} if class_ids_list else {}
+
+    # 评分和质量
+    scoring_map = {sr.answer_sheet_id: sr for sr in db.query(ScoringResult).filter(ScoringResult.answer_sheet_id.in_(sheet_ids)).all()}
+    quality_map = {qa.answer_sheet_id: qa for qa in db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id.in_(sheet_ids)).all()}
+
+    risk_labels = _RISK_LEVEL_LABELS
+    quality_labels = _QUALITY_LEVEL_LABELS
+    validity_labels = _VALIDITY_LABELS
+
+    items = []
+    for s in sheets:
+        stu = students.get(s.student_id)
+        school = schools.get(s.school_id) if s.school_id else None
+        task = tasks.get(s.task_id) if s.task_id else None
+        qnr = qnrs.get(s.questionnaire_id) if s.questionnaire_id else None
+        grade = grades.get(stu.grade_id) if stu and stu.grade_id else None
+        cls = classes_map.get(stu.class_id) if stu and stu.class_id else None
+        sr = scoring_map.get(s.id)
+        qa = quality_map.get(s.id)
+
+        id_card = ""
+        if stu and stu.username and len(stu.username) >= 7:
+            id_card = stu.username[:3] + "***********" + stu.username[-4:]
+
+        items.append({
+            "id": s.id,
+            "student_id": s.student_id,
+            "student_name": stu.real_name if stu else "",
+            "id_card": id_card,
+            "school_id": s.school_id,
+            "school_name": school.name if school else "",
+            "grade_name": grade.name if grade else "",
+            "class_name": cls.name if cls else "",
+            "task_id": s.task_id,
+            "task_name": task.name if task else "",
+            "questionnaire_title": qnr.title if qnr else "",
+            "status": s.status,
+            "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+            "total_duration_seconds": min(s.total_duration_seconds or 0, 7200),
+            "total_score": sr.total_score if sr else None,
+            "risk_level": sr.risk_level if sr else None,
+            "risk_level_label": risk_labels.get(sr.risk_level, "") if sr and sr.risk_level else "",
+            "quality_level": qa.quality_level if qa else None,
+            "quality_level_label": quality_labels.get(qa.quality_level, "") if qa and qa.quality_level else "",
+            "quality_score": qa.quality_score if qa else None,
+            "validity": qa.validity if qa else None,
+            "validity_label": validity_labels.get(qa.validity, "") if qa and qa.validity else "",
+            "suggest_retest": qa.suggest_retest if qa else None,
+        })
+
+    return APIResponse.success({
+        "items": items, "total": total, "page": page, "page_size": page_size,
+    })
+
+
 # ============ 答题详情 ============
 
 @router.get("/answer-sheets/{sheet_id}/detail")
@@ -1787,7 +1990,7 @@ def platform_login_logs(page: int = Query(1), page_size: int = Query(20), school
     user: User = Depends(require_role("platform_admin")), db: Session = Depends(get_db)):
     q = db.query(LoginLog).order_by(LoginLog.id.desc())
     if school_id: q = q.filter(LoginLog.school_id == school_id)
-    if keyword: q = q.filter(LoginLog.username.contains(keyword))
+    if keyword: q = q.filter(LoginLog.username.contains(_escape_like(keyword)))
     if result: q = q.filter(LoginLog.result == result)
     if user_role: q = q.filter(LoginLog.user_role == user_role)
     total = q.count()
@@ -1855,7 +2058,7 @@ def platform_reports_risk_summary(
     by_level = db.query(RiskAlert.risk_level, func.count(RiskAlert.id)).group_by(RiskAlert.risk_level).all()
     by_status = db.query(RiskAlert.status, func.count(RiskAlert.id)).group_by(RiskAlert.status).all()
     level_labels = {"low": "关注", "medium": "预警", "high": "警告", "urgent": "危急"}
-    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "completed": "已完成", "closed": "已关闭"}
+    status_labels = {"pending": "待处理", "viewed": "已查看", "processing": "处理中", "resolved": "已解决", "completed": "已完成", "closed": "已关闭", "follow_up": "持续跟进"}
     return APIResponse.success({
         "total": total,
         "by_level": [{"level": l, "label": level_labels.get(l, l), "count": c, "percentage": round(c / max(total, 1) * 100, 1)} for l, c in by_level],
@@ -1873,7 +2076,7 @@ def platform_reports_quality_summary(
     by_level = db.query(QualityAssessment.quality_level, func.count(QualityAssessment.id)).group_by(QualityAssessment.quality_level).all()
     effective_count = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.validity.in_(["valid", "basically_valid"])).scalar()
     retest_count = db.query(func.count(QualityAssessment.id)).filter(QualityAssessment.suggest_retest == True).scalar()
-    quality_labels = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "严重异常", "questionable": "存疑"}
+    quality_labels = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "高度异常", "questionable": "存疑"}
     return APIResponse.success({
         "total": total,
         "effective_count": effective_count,

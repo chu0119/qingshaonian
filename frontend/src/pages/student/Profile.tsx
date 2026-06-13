@@ -21,7 +21,7 @@ export default function Profile() {
         const r = await client.get('/student/tasks/completed');
         setRecords(r.data.data || []);
       } catch (err: any) {
-        message.error(err?.response?.data?.message || '获取测评记录失败');
+        message.error(err._friendlyMessage || '获取测评记录失败');
       } finally {
         setRecordsLoading(false);
       }

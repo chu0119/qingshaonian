@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Modal, Button, Typography, Spin, Tag, Space } from 'antd';
 import { RobotOutlined, CloseOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { analyzeData } from '../../api/ai';
@@ -134,13 +134,16 @@ export default function AiAnalysisModal({ open, type, data, title, onClose }: Pr
   const [configured, setConfigured] = useState(true);
   const [error, setError] = useState('');
 
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const runAnalysis = useCallback(() => {
-    if (!type || !data) return;
+    if (!type || !dataRef.current) return;
     setLoading(true);
     setResult('');
     setError('');
     setModel('');
-    analyzeData(type, data)
+    analyzeData(type, dataRef.current)
       .then((res) => {
         setResult(res.analysis);
         setModel(res.model);
@@ -150,7 +153,7 @@ export default function AiAnalysisModal({ open, type, data, title, onClose }: Pr
         setError(err?.response?.data?.detail || 'AI分析请求失败，请稍后重试');
       })
       .finally(() => setLoading(false));
-  }, [type, data]);
+  }, [type]);
 
   useEffect(() => {
     if (open) {

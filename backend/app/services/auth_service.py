@@ -272,7 +272,7 @@ def reset_user_password(db: Session, user_id: int, new_password: str):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    if new_password and len(new_password) < 6:
+    if not new_password or len(new_password) < 6:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码长度不能少于6位")
     user.password_hash = hash_password(new_password)
     user.must_change_password = True

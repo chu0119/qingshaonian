@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, message, Typography, Card, Descriptions } from 'antd';
+import { Form, Input, Button, message, Typography, Card, Descriptions, Alert } from 'antd';
 import { LockOutlined, UserOutlined, SafetyOutlined } from '@ant-design/icons';
 import client from '../api/client';
 import { useAuthStore } from '../stores/authStore';
 
 export default function ForceChangePassword() {
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuthStore();
   const [form] = Form.useForm();
 
   const onFinish = async (values: { old_password: string; new_password: string }) => {
     setLoading(true);
+    setErrorMsg('');
     try {
       await client.put('/auth/change-password', {
         old_password: values.old_password,
@@ -29,7 +31,24 @@ export default function ForceChangePassword() {
       };
       navigate(rolePathMap[user?.role || ''] || '/', { replace: true });
     } catch (err: any) {
-      message.error(err?.response?.data?.detail || '密码修改失败');
+      const detail = err?.response?.data?.detail;
+      let msg = '密码修改失败';
+      let hint = '';
+      if (typeof detail === 'object' && detail?.message) {
+        msg = detail.message;
+      } else if (typeof detail === 'string') {
+        msg = detail;
+      }
+      if (msg.includes('原密码错误') || msg.includes('当前密码')) {
+        hint = '请确认当前密码是否正确';
+      } else if (msg.includes('长度') || msg.includes('6位')) {
+        hint = '新密码需要至少6个字符';
+      } else if (msg.includes('相同') || msg.includes('一致')) {
+        hint = '请确保两次输入的新密码一致';
+      }
+      setErrorMsg(msg);
+      if (hint) message.warning(hint, 4);
+      else message.error(msg, 5);
     } finally {
       setLoading(false);
     }
@@ -67,6 +86,16 @@ export default function ForceChangePassword() {
         )}
 
         <Form form={form} layout="vertical" onFinish={onFinish} size="large">
+          {errorMsg && (
+            <Alert
+              type="error"
+              showIcon
+              closable
+              onClose={() => setErrorMsg('')}
+              message={errorMsg}
+              style={{ marginBottom: 16, borderRadius: 8 }}
+            />
+          )}
           <Form.Item name="old_password" label={<span style={{ color: '#c0d8f0' }}>当前密码</span>}
             rules={[{ required: true, message: '请输入当前密码' }]}>
             <Input.Password prefix={<LockOutlined />} placeholder="请输入当前密码" />

@@ -45,6 +45,73 @@ def my_classes(user: User = Depends(require_role("teacher", "counselor")), db: S
     return APIResponse.success(result)
 
 
+# ======================== 年级管理 ========================
+
+@router.get("/grades")
+def list_grades(user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
+    """年级列表"""
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    grades = db.query(Grade).filter(Grade.school_id == school_id).order_by(Grade.sort_order, Grade.id).all()
+    items = [{"id": g.id, "name": g.name, "sort_order": g.sort_order, "status": g.status} for g in grades]
+    return APIResponse.success({"items": items, "total": len(items)})
+
+
+@router.post("/grades")
+def create_grade(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """创建年级"""
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="年级名称不能为空")
+    existing = db.query(Grade).filter(Grade.school_id == school_id, Grade.name == name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="年级名称已存在")
+    grade = Grade(school_id=school_id, name=name, sort_order=data.get("sort_order", 0), status=data.get("status", True))
+    db.add(grade)
+    db.commit()
+    db.refresh(grade)
+    log_operation(db, user, request, module="grade", action="create", object_type="grade", object_id=grade.id, object_name=grade.name)
+    return APIResponse.success({"id": grade.id}, message="年级创建成功")
+
+
+@router.put("/grades/{grade_id}")
+def update_grade(grade_id: int, data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """更新年级"""
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    grade = db.query(Grade).filter(Grade.id == grade_id, Grade.school_id == school_id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="年级不存在")
+    if "name" in data and data["name"].strip():
+        existing = db.query(Grade).filter(Grade.school_id == school_id, Grade.name == data["name"].strip(), Grade.id != grade_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="年级名称已存在")
+        grade.name = data["name"].strip()
+    if "sort_order" in data:
+        grade.sort_order = data["sort_order"]
+    if "status" in data:
+        grade.status = data["status"]
+    db.commit()
+    log_operation(db, user, request, module="grade", action="update", object_type="grade", object_id=grade_id, object_name=grade.name)
+    return APIResponse.success(message="年级更新成功")
+
+
+@router.delete("/grades/{grade_id}")
+def delete_grade(grade_id: int, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """删除年级"""
+    from sqlalchemy import func as sa_func
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    grade = db.query(Grade).filter(Grade.id == grade_id, Grade.school_id == school_id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="年级不存在")
+    class_count = db.query(sa_func.count(ClassModel.id)).filter(ClassModel.grade_id == grade_id).scalar()
+    if class_count > 0:
+        raise HTTPException(status_code=400, detail=f"该年级下有 {class_count} 个班级，无法删除")
+    db.delete(grade)
+    db.commit()
+    log_operation(db, user, request, module="grade", action="delete", object_type="grade", object_id=grade_id, object_name=grade.name)
+    return APIResponse.success(message="年级删除成功")
+
+
 @router.get("/{class_id}")
 def get_class(class_id: int, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
     from ..schemas.class_ import ClassInfo

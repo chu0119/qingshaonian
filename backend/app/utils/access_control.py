@@ -58,6 +58,9 @@ def teacher_class_ids(db: Session, user: User) -> set[int]:
 def can_access_class(db: Session, user: User, class_id: int | None) -> bool:
     if not class_id:
         return False
+    # platform_admin 未进入学校视图时，可跨校访问
+    if user.role == "platform_admin" and effective_school_id(user) is None:
+        return True
     school_id = effective_school_id(user)
     klass = db.query(Class).filter(Class.id == class_id).first()
     if not klass or klass.school_id != school_id:
@@ -68,8 +71,13 @@ def can_access_class(db: Session, user: User, class_id: int | None) -> bool:
 
 
 def can_access_student(db: Session, user: User, student: User | None) -> bool:
+    if not student or student.role != "student":
+        return False
+    # platform_admin 未进入学校视图时，可跨校访问
+    if user.role == "platform_admin" and effective_school_id(user) is None:
+        return True
     school_id = effective_school_id(user)
-    if not student or student.school_id != school_id or student.role != "student":
+    if student.school_id != school_id:
         return False
     if is_school_scoped_admin(user):
         return True
@@ -94,8 +102,13 @@ def task_matches_student(student: User, task: Task) -> bool:
 
 
 def can_access_task(db: Session, user: User, task: Task | None) -> bool:
+    if not task:
+        return False
+    # platform_admin 未进入学校视图时，可跨校访问
+    if user.role == "platform_admin" and effective_school_id(user) is None:
+        return True
     school_id = effective_school_id(user)
-    if not task or task.school_id != school_id:
+    if task.school_id != school_id:
         return False
     if is_school_scoped_admin(user):
         return True

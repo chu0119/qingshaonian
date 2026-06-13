@@ -19,7 +19,6 @@ def school_dashboard(request: Request, user: User = Depends(require_role("school
     metrics = school_metrics(db, school_id)
     active_tasks = db.query(func.count(Task.id)).filter(Task.school_id == school_id, Task.status.in_(["not_started", "in_progress", "active"])).scalar()
 
-    total_sheets = db.query(func.count(AnswerSheet.id)).join(Task).filter(Task.school_id == school_id, AnswerSheet.status == "submitted").scalar()
     risk_count = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == school_id).scalar()
     pending_risks = db.query(func.count(RiskAlert.id)).filter(RiskAlert.school_id == school_id, RiskAlert.status == "pending").scalar()
     pending_interventions = db.query(func.count(Intervention.id)).filter(Intervention.school_id == school_id, Intervention.status.in_(["pending", "processing"])).scalar()
@@ -106,3 +105,82 @@ def student_dashboard(user: User = Depends(require_role("student")), db: Session
     return APIResponse.success({
         "pending_count": pending_count, "completed_count": completed_count,
     })
+
+
+# ======================== 趋势数据 ========================
+
+@router.get("/school/trends")
+def school_trends(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """学校维度的月度趋势数据（最近6个月）"""
+    from datetime import datetime
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    now = datetime.now()
+    trends = []
+    for i in range(5, -1, -1):
+        # 正确计算月份：先减去 i 个月，再取当月1日和下月1日
+        y = now.year
+        m = now.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        month_start = datetime(y, m, 1)
+        if i > 0:
+            nm, ny = m + 1, y
+            if nm > 12:
+                nm = 1
+                ny += 1
+            month_end = datetime(ny, nm, 1)
+        else:
+            month_end = now
+        month_label = month_start.strftime("%Y-%m")
+        # 该月提交的答卷数
+        submit_count = db.query(func.count(AnswerSheet.id)).join(Task).filter(
+            Task.school_id == school_id, AnswerSheet.status == "submitted",
+            AnswerSheet.submitted_at >= month_start, AnswerSheet.submitted_at < month_end
+        ).scalar() or 0
+        # 该月新增风险预警数
+        risk_count = db.query(func.count(RiskAlert.id)).filter(
+            RiskAlert.school_id == school_id,
+            RiskAlert.created_at >= month_start, RiskAlert.created_at < month_end
+        ).scalar() or 0
+        trends.append({"month": month_label, "submits": submit_count, "risks": risk_count})
+    return APIResponse.success(trends)
+
+
+@router.get("/teacher/trends")
+def teacher_trends(user: User = Depends(require_role("teacher", "counselor")), db: Session = Depends(get_db)):
+    """教师维度的月度趋势数据（最近6个月）"""
+    from datetime import datetime
+    class_ids = teacher_class_ids(db, user)
+    now = datetime.now()
+    student_ids = [s[0] for s in db.query(User.id).filter(User.class_id.in_(class_ids), User.role == "student").all()] if class_ids else []
+    trends = []
+    for i in range(5, -1, -1):
+        y = now.year
+        m = now.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        month_start = datetime(y, m, 1)
+        if i > 0:
+            nm, ny = m + 1, y
+            if nm > 12:
+                nm = 1
+                ny += 1
+            month_end = datetime(ny, nm, 1)
+        else:
+            month_end = now
+        month_label = month_start.strftime("%Y-%m")
+        submit_count = 0
+        risk_count = 0
+        if student_ids:
+            submit_count = db.query(func.count(AnswerSheet.id)).filter(
+                AnswerSheet.student_id.in_(student_ids), AnswerSheet.status == "submitted",
+                AnswerSheet.submitted_at >= month_start, AnswerSheet.submitted_at < month_end
+            ).scalar() or 0
+            risk_count = db.query(func.count(RiskAlert.id)).filter(
+                RiskAlert.student_id.in_(student_ids),
+                RiskAlert.created_at >= month_start, RiskAlert.created_at < month_end
+            ).scalar() or 0
+        trends.append({"month": month_label, "submits": submit_count, "risks": risk_count})
+    return APIResponse.success(trends)

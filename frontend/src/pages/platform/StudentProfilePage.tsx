@@ -29,7 +29,7 @@ export default function StudentProfilePage() {
   // 学校变化时加载年级列表
   useEffect(() => {
     if (!schoolId) { setGrades([]); setClasses([]); setGradeId(undefined); setClassId(undefined); return; }
-    client.get('/system/grades', { params: { school_id: schoolId } })
+    client.get('/platform/grades', { params: { school_id: schoolId } })
       .then(r => setGrades((r.data.data || []).map((g: any) => ({ value: g.id, label: g.name }))))
       .catch(() => setGrades([]));
     setClasses([]);
@@ -40,7 +40,7 @@ export default function StudentProfilePage() {
   // 年级变化时加载班级列表
   useEffect(() => {
     if (!gradeId) { setClasses([]); setClassId(undefined); return; }
-    client.get('/system/classes', { params: { grade_id: gradeId } })
+    client.get('/platform/classes', { params: { grade_id: gradeId } })
       .then(r => setClasses((r.data.data || []).map((c: any) => ({ value: c.id, label: c.name }))))
       .catch(() => setClasses([]));
     setClassId(undefined);

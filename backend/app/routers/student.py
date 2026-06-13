@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User
 from ..models.task import Task, AnswerSheet, AnswerRecord
+from ..models.risk import ScoringResult, QualityAssessment
 from ..models.questionnaire import Question, Option, Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services import scoring_service
@@ -41,12 +42,75 @@ def completed_tasks(user: User = Depends(require_role("student")), db: Session =
     for s in sheets:
         task = db.query(Task).filter(Task.id == s.task_id).first()
         qnr = db.query(Questionnaire).filter(Questionnaire.id == s.questionnaire_id).first()
+        scoring = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == s.id).first()
+        qa = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == s.id).first()
         items.append({
             "answer_sheet_id": s.id, "task_name": task.name if task else "",
             "questionnaire_title": qnr.title if qnr else "",
             "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+            "duration": s.total_duration_seconds,
+            "score": scoring.total_score if scoring else None,
+            "risk_level": scoring.risk_level if scoring else None,
+            "quality_level": qa.quality_level if qa else None,
         })
     return APIResponse.success(items)
+
+
+@router.get("/results")
+def my_results(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    """学生查看自己的测评结果列表"""
+    sheets = db.query(AnswerSheet).filter(
+        AnswerSheet.student_id == user.id, AnswerSheet.status == "submitted"
+    ).order_by(AnswerSheet.id.desc()).all()
+    items = []
+    for s in sheets:
+        task = db.query(Task).filter(Task.id == s.task_id).first()
+        qnr = db.query(Questionnaire).filter(Questionnaire.id == s.questionnaire_id).first()
+        scoring = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == s.id).first()
+        qa = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == s.id).first()
+        items.append({
+            "answer_sheet_id": s.id, "task_id": s.task_id,
+            "task_name": task.name if task else "",
+            "questionnaire_title": qnr.title if qnr else "",
+            "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+            "duration": s.total_duration_seconds,
+            "total_score": scoring.total_score if scoring else None,
+            "risk_level": scoring.risk_level if scoring else None,
+            "risk_type": scoring.risk_type if scoring else "",
+            "dimension_scores": scoring.dimension_scores if scoring else None,
+            "quality_level": qa.quality_level if qa else None,
+            "quality_score": qa.quality_score if qa else None,
+        })
+    return APIResponse.success(items)
+
+
+@router.get("/results/{sheet_id}")
+def my_result_detail(sheet_id: int, user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    """学生查看单次测评结果详情"""
+    sheet = db.query(AnswerSheet).filter(AnswerSheet.id == sheet_id, AnswerSheet.student_id == user.id).first()
+    if not sheet:
+        raise HTTPException(status_code=404, detail="答卷不存在")
+    task = db.query(Task).filter(Task.id == sheet.task_id).first()
+    qnr = db.query(Questionnaire).filter(Questionnaire.id == sheet.questionnaire_id).first()
+    scoring = db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).first()
+    qa = db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).first()
+    return APIResponse.success({
+        "answer_sheet_id": sheet.id, "task_id": sheet.task_id,
+        "task_name": task.name if task else "",
+        "questionnaire_title": qnr.title if qnr else "",
+        "submitted_at": sheet.submitted_at.isoformat() if sheet.submitted_at else None,
+        "duration": sheet.total_duration_seconds,
+        "total_score": scoring.total_score if scoring else None,
+        "risk_level": scoring.risk_level if scoring else None,
+        "risk_type": scoring.risk_type if scoring else "",
+        "risk_description": scoring.risk_description if scoring else "",
+        "dimension_scores": scoring.dimension_scores if scoring else None,
+        "triggered_rules": scoring.triggered_rules if scoring else None,
+        "quality_level": qa.quality_level if qa else None,
+        "quality_score": qa.quality_score if qa else None,
+        "validity": qa.validity if qa else None,
+        "attention_passed": qa.attention_passed if qa else None,
+    })
 
 
 @router.post("/tasks/{task_id}/start")
@@ -149,6 +213,6 @@ def submit_answer(sheet_id: int, user: User = Depends(require_role("student")), 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"提交失败: {str(e)}")
+        import logging
+        logging.getLogger(__name__).exception("submit_answer failed")
+        raise HTTPException(status_code=500, detail="提交失败，请稍后重试")

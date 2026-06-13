@@ -266,6 +266,14 @@ export default function DataReports() {
                 <Button icon={<ReloadOutlined />} onClick={fetchOverview}>
                   刷新
                 </Button>
+                <Button icon={<ExportOutlined />} onClick={async () => {
+                  try {
+                    const res = await client.get('/reports/school-overview/export', { responseType: 'blob' });
+                    const url = window.URL.createObjectURL(res.data);
+                    const a = document.createElement('a'); a.href = url; a.download = 'school_overview.xlsx';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+                  } catch { message.error('导出失败'); }
+                }}>导出Excel</Button>
                 <Button
                   icon={<RobotOutlined />}
                   onClick={() => openAiModal('overall_report', {
@@ -377,6 +385,14 @@ export default function DataReports() {
                 <Button icon={<ReloadOutlined />} onClick={fetchRiskData}>
                   刷新
                 </Button>
+                <Button icon={<ExportOutlined />} onClick={async () => {
+                  try {
+                    const res = await client.get('/reports/risk-summary/export', { responseType: 'blob' });
+                    const url = window.URL.createObjectURL(res.data);
+                    const a = document.createElement('a'); a.href = url; a.download = 'risk_summary.xlsx';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+                  } catch { message.error('导出失败'); }
+                }}>导出Excel</Button>
                 <Button
                   icon={<RobotOutlined />}
                   onClick={() => openAiModal('overall_report', {

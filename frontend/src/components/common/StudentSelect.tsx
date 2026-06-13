@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Select, Space, Spin, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import client from '../../api/client';
@@ -14,9 +14,6 @@ interface Props {
   placeholder?: string;
   style?: React.CSSProperties;
 }
-
-// 防抖搜索学生
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function toStudentOption(s: any): StudentOption {
   return {
@@ -37,18 +34,25 @@ function toStudentOption(s: any): StudentOption {
 export default function StudentSelect({ value, onChange, placeholder, style }: Props) {
   const [options, setOptions] = useState<StudentOption[]>([]);
   const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!value || options.some(item => item.value === value)) return;
+    if (!value) return;
+    let cancelled = false;
     client.get(`/users/students/${value}`)
-      .then(res => setOptions(prev => prev.some(item => item.value === value) ? prev : [toStudentOption(res.data.data), ...prev]))
+      .then(res => {
+        if (!cancelled) {
+          setOptions(prev => prev.some(item => item.value === value) ? prev : [toStudentOption(res.data.data), ...prev]);
+        }
+      })
       .catch(() => {});
-  }, [value, options]);
+    return () => { cancelled = true; };
+  }, [value]);
 
   const handleSearch = useCallback((keyword: string) => {
     if (!keyword || keyword.length < 1) { setOptions([]); return; }
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(async () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
       setSearching(true);
       try {
         const res = await client.get('/users/students', { params: { keyword, page_size: 20 } });

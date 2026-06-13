@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Body, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timezone
 from ..database import get_db
 from ..models.user import User
 from ..models.notification import Notification
-from ..dependencies import get_current_user
+from ..dependencies import get_current_user, require_role
 from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["消息通知"])
@@ -59,3 +59,43 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
     )
     db.commit()
     return APIResponse.success(message="全部已读")
+
+
+@router.post("")
+async def create_notification(request: Request, user: User = Depends(require_role("school_admin", "platform_admin")), db: Session = Depends(get_db)):
+    """创建通知"""
+    import json
+    try:
+        body = json.loads(await request.body())
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="请求体格式错误")
+    target_user_id = body.get("user_id")
+    if not target_user_id:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    target_user = db.query(User).filter(User.id == target_user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="目标用户不存在")
+    if user.role == "school_admin":
+        school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+        if target_user.school_id != school_id:
+            raise HTTPException(status_code=403, detail="只能给本校用户发送通知")
+    n = Notification(
+        user_id=target_user_id, sender_id=user.id,
+        type=body.get("type", "system"), title=body.get("title", ""),
+        content=body.get("content", ""),
+        related_type=body.get("related_type"), related_id=body.get("related_id"),
+    )
+    db.add(n)
+    db.commit()
+    return APIResponse.success({"id": n.id}, message="通知发送成功")
+
+
+@router.delete("/{notification_id}")
+def delete_notification(notification_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """删除通知"""
+    n = db.query(Notification).filter(Notification.id == notification_id, Notification.user_id == user.id).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    db.delete(n)
+    db.commit()
+    return APIResponse.success(message="删除成功")

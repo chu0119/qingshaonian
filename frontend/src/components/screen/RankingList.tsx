@@ -32,8 +32,12 @@ export default function RankingList({ title, items, valueLabel = '值', emptyTex
     <div style={{ fontSize: 12 }}>
       {list.map((item, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < list.length - 1 ? `1px solid ${theme.border}` : 'none' }}>
-          <span style={{ width: 20, textAlign: 'center', fontWeight: i < 3 ? 700 : 400, color: colors[i] || theme.textDim, flexShrink: 0, fontSize: i < 3 ? 14 : 12 }}>
-            {i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}
+          <span style={{ width: 20, textAlign: 'center', flexShrink: 0 }}>
+            {i < 3 ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: `${colors[i]}22`, color: colors[i], fontSize: 10, fontWeight: 700 }}>{i + 1}</span>
+            ) : (
+              <span style={{ color: theme.textDim, fontSize: 12 }}>{i + 1}</span>
+            )}
           </span>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.text }}>{truncate(item.name, 12)}</span>
           <span style={{ flexShrink: 0, color: theme.cyan, fontWeight: 600 }}>{item.value}{item.suffix || ''}</span>

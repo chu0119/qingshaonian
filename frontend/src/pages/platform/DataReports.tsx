@@ -7,7 +7,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import ReactECharts from 'echarts-for-react';
 import client from '../../api/client';
-import { RISK_LABELS, RISK_COLORS, QUALITY_LABELS, QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS } from '../../utils/constants';
+import { RISK_LABELS, RISK_COLORS, RISK_STATUS_LABELS, QUALITY_LABELS, QUESTIONNAIRE_STATUS_LABELS, QUESTIONNAIRE_CATEGORY_LABELS } from '../../utils/constants';
 
 // ---- types ----
 
@@ -271,7 +271,7 @@ export default function PlatformDataReports() {
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 100,
       render: (status: string) => (
-        <Tag color={riskStatusColors[status] || '#999'}>{status}</Tag>
+        <Tag color={riskStatusColors[status] || '#999'}>{RISK_STATUS_LABELS[status] || status}</Tag>
       ),
     },
     { title: '标签', dataIndex: 'label', key: 'label', width: 120 },

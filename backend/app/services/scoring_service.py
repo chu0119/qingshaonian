@@ -7,6 +7,7 @@ from ..models.questionnaire import Question, Option, ContradictionGroup, Questio
 from ..models.risk import ScoringResult, QualityAssessment, RiskAlert
 from ..models.user import User
 from ..utils.access_control import task_is_answerable, task_matches_student
+from .notification_service import create_notification
 
 tz = timezone(timedelta(hours=8))
 
@@ -121,6 +122,7 @@ def save_progress(db: Session, sheet_id: int, answers: list[dict]):
         if existing:
             existing.answer_content = content
             existing.duration_seconds = duration
+            existing.displayed_order = displayed_order
             existing.selected_display_index = display_idx
         else:
             db.add(AnswerRecord(
@@ -150,7 +152,8 @@ def submit_answer(db: Session, sheet_id: int) -> dict:
         started = sheet.started_at
         if started.tzinfo is None:
             started = started.replace(tzinfo=tz)
-        sheet.total_duration_seconds = int((now - started).total_seconds())
+        raw_seconds = int((now - started).total_seconds())
+        sheet.total_duration_seconds = raw_seconds
     db.commit()
 
     scoring = calculate_scores(db, sheet_id)
@@ -335,8 +338,9 @@ def _build_dimension_breakdown(questionnaire: Questionnaire | None, dimension_sc
     breakdown: dict[str, dict] = {}
     for dimension, score in dimension_scores.items():
         max_score = dimension_max_scores.get(dimension, 0.0)
+        label = dimension_labels.get(dimension) or dimension
         breakdown[dimension] = {
-            "label": dimension_labels.get(dimension, dimension),
+            "label": label,
             "score": score,
             "max_score": max_score,
             "pct": round((score / max_score) * 100, 2) if max_score else 0.0,
@@ -441,7 +445,8 @@ def _risk_types_chinese(risk_types: dict | set, risk_type_labels: dict[str, str]
         "safety_awareness": "安全意识关注信号", "self_safety": "自我安全关注信号",
         "emotion": "情绪关注信号", "sleep": "睡眠关注信号", "general": "综合关注信号",
         "internet_use": "网络使用关注信号", "family_support": "家庭支持关注信号",
-        "campus_safety": "校园安全关注信号",
+        "campus_safety": "校园安全关注信号", "antisocial": "反社会倾向信号",
+        "digital_risk": "网络风险行为信号",
     }
     labels = []
     for risk_tag in sorted(risk_types):
@@ -488,11 +493,11 @@ def _generate_dimension_analysis(dimension_breakdown: dict[str, dict]) -> list:
     analyses = []
     for dimension, item in dimension_breakdown.items():
         ratio = item.get("pct", 0)
-        label = item.get("label", dimension)
+        label = item.get("label") or dimension or ""
         if ratio >= 75:
-            analyses.append({"dimension": dimension, "label": label, "level": "偏高", "ratio": round(ratio), "suggestion": f"「{label}」维度关注信号相对更集中，建议结合班级观察和学生访谈进一步复核。"})
+            analyses.append({"type": "dimension_analysis", "dimension": dimension, "label": label, "level": "偏高", "ratio": round(ratio), "suggestion": f"「{label}」维度关注信号相对更集中，建议结合班级观察和学生访谈进一步复核。"})
         elif ratio >= 45:
-            analyses.append({"dimension": dimension, "label": label, "level": "中等", "ratio": round(ratio), "suggestion": f"「{label}」维度出现一定关注信号，建议保持关注并结合日常表现综合判断。"})
+            analyses.append({"type": "dimension_analysis", "dimension": dimension, "label": label, "level": "中等", "ratio": round(ratio), "suggestion": f"「{label}」维度出现一定关注信号，建议保持关注并结合日常表现综合判断。"})
     return sorted(analyses, key=lambda x: x["ratio"], reverse=True)
 
 
@@ -741,6 +746,23 @@ def check_risk_alerts(db: Session, sheet_id: int) -> dict:
         return {}
 
     if scoring.risk_level in ("medium", "high", "urgent"):
+        # 根据 triggered_rules 判断实际触发方式
+        rules = scoring.triggered_rules or []
+        trigger_methods = set()
+        for r in rules:
+            rtype = r.get("type", "") if isinstance(r, dict) else ""
+            if rtype == "dimension_threshold":
+                trigger_methods.add("dimension_rule")
+            elif rtype == "risk_tag_rule":
+                trigger_methods.add("risk_tag_rule")
+            elif rtype == "question_threshold":
+                trigger_methods.add("question_threshold")
+        # 总有总分作为基础触发
+        if not trigger_methods:
+            trigger_method = "total_score"
+        else:
+            trigger_method = ",".join(sorted(trigger_methods))
+
         existing = db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet_id).first()
         if not existing:
             student = db.query(User).filter(User.id == sheet.student_id).first()
@@ -749,13 +771,33 @@ def check_risk_alerts(db: Session, sheet_id: int) -> dict:
                 school_id=task.school_id if task else student.school_id if student else 1,
                 student_id=sheet.student_id, answer_sheet_id=sheet_id, task_id=sheet.task_id,
                 risk_level=scoring.risk_level, risk_type=scoring.risk_type,
-                trigger_method="total_score", trigger_detail=scoring.triggered_rules,
+                trigger_method=trigger_method, trigger_detail=scoring.triggered_rules,
                 status="pending", source_rule_version="v1",
             ))
+            db.flush()
+
+            school_id = task.school_id if task else (student.school_id if student else None)
+            if school_id and student:
+                RISK_LABELS = {"medium": "预警", "high": "警告", "urgent": "危急"}
+                risk_label = RISK_LABELS.get(scoring.risk_level, scoring.risk_level)
+                task_name = task.name if task else "未知任务"
+                notify_content = f"学生「{student.real_name}」在任务「{task_name}」中触发{risk_label}关注信号，请及时跟进。"
+                school_admins = db.query(User).filter(User.school_id == school_id, User.role == "school_admin", User.status == True).all()
+                for admin in school_admins:
+                    create_notification(db, user_id=admin.id, type="risk", title=f"{risk_label}关注信号",
+                                        content=notify_content, related_type="risk", related_id=None)
+                if student.class_id:
+                    from ..models.user import TeacherClass
+                    tc = db.query(TeacherClass).filter(TeacherClass.class_id == student.class_id).first()
+                    if tc:
+                        create_notification(db, user_id=tc.teacher_id, type="risk", title=f"{risk_label}关注信号",
+                                            content=notify_content, related_type="risk", related_id=None)
+                db.flush()
         elif RISK_ORDER.get(scoring.risk_level, 0) != RISK_ORDER.get(existing.risk_level, 0):
             # 风险等级变化（升高或降低）都更新预警
             existing.risk_level = scoring.risk_level
             existing.risk_type = scoring.risk_type
+            existing.trigger_method = trigger_method
             existing.trigger_detail = scoring.triggered_rules
             existing.source_rule_version = "v1"
             # 如果从高风险降为低风险，更新预警状态为已处理

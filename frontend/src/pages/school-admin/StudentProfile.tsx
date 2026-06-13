@@ -79,6 +79,7 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
   const [records, setRecords] = useState<LongitudinalRecord[]>([]);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [interventions, setInterventions] = useState<InterventionItem[]>([]);
+  const [normData, setNormData] = useState<any>(null);
 
   /* fetch all data */
   const fetchAll = useCallback(async () => {
@@ -134,8 +135,14 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
         intvItems = ir.data.data?.items || [];
       } catch { /* ignore */ }
       setInterventions(intvItems);
-    } catch {
-      message.error('加载学生档案失败');
+
+      // 5. Norm comparison
+      try {
+        const nr = await client.get(`${apiPrefix}/reports/norm-comparison/${studentId}`);
+        setNormData(nr.data.data);
+      } catch { /* ignore */ }
+    } catch (err: any) {
+      message.error(err._friendlyMessage || '加载学生档案失败');
     } finally {
       setLoading(false);
     }
@@ -175,20 +182,34 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
   /* ---------- radar chart ---------- */
   const radarOption = latestRecord && dimensionKeys.length > 0 ? {
     tooltip: {},
+    legend: { data: ['个人得分', '学校平均'], bottom: 0, textStyle: { fontSize: 11 } },
     radar: {
-      indicator: dimensionKeys.map((k) => ({ name: DIMENSION_LABELS[k] || '未知', max: 100 })),
+      indicator: dimensionKeys.map((k) => {
+        const avg = normData?.dimensions?.find((d: any) => d.dimension === k)?.school_avg || 0;
+        const max = Math.max(latestRecord.dimension_scores?.[k] || 0, avg, 100);
+        return { name: DIMENSION_LABELS[k] || '未知', max: Math.ceil(max * 1.2) };
+      }),
       shape: 'polygon' as const,
-      radius: '65%',
+      radius: '60%',
     },
     series: [{
       type: 'radar',
-      data: [{
-        value: dimensionValues,
-        name: latestRecord.questionnaire_title,
-        areaStyle: { opacity: 0.2 },
-        lineStyle: { color: '#1677ff' },
-        itemStyle: { color: '#1677ff' },
-      }],
+      data: [
+        {
+          value: dimensionValues,
+          name: '个人得分',
+          areaStyle: { opacity: 0.2 },
+          lineStyle: { color: '#1677ff', width: 2 },
+          itemStyle: { color: '#1677ff' },
+        },
+        ...(normData?.dimensions ? [{
+          value: dimensionKeys.map((k: string) => normData.dimensions.find((d: any) => d.dimension === k)?.school_avg || 0),
+          name: '学校平均',
+          lineStyle: { color: '#faad14', width: 2, type: 'dashed' as const },
+          itemStyle: { color: '#faad14' },
+          areaStyle: { opacity: 0.05 },
+        }] : []),
+      ],
     }],
   } : null;
 
@@ -271,6 +292,21 @@ export default function StudentProfile({ platformMode }: { platformMode?: boolea
           <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
             <Statistic title="最新风险" value={latestRecord ? (RISK_LABELS[latestRecord.risk_level] || '-') : '-'}
               valueStyle={{ color: latestRecord ? (RISK_COLORS[latestRecord.risk_level] || '#8c8c8c') : '#8c8c8c' }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic title="学校平均分" value={normData?.school_avg_total ?? '-'} valueStyle={{ color: '#faad14', fontSize: 20 }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+            <Statistic
+              title="与学校均值差异"
+              value={normData?.student && latestRecord ? (latestRecord.total_score - (normData.school_avg_total || 0)).toFixed(1) : '-'}
+              valueStyle={{ color: latestRecord && normData?.student ? (latestRecord.total_score > (normData.school_avg_total || 0) ? '#52c41a' : '#ff4d4f') : '#8c8c8c', fontSize: 20 }}
+              suffix="分"
+            />
           </Card>
         </Col>
         <Col xs={12} sm={6}>

@@ -26,7 +26,7 @@ export default function RiskStudents() {
       setData(r.data.data.items || []);
       setTotal(r.data.data.total || 0);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取风险提示列表失败');
+      message.error(err._friendlyMessage || '获取风险提示列表失败');
     } finally {
       setLoading(false);
     }
@@ -41,7 +41,7 @@ export default function RiskStudents() {
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', render: (v: string) => translateRiskType(v) },
     { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', render: (v: string) => <Tag color={riskColors[v] || 'default'}>{RISK_LABELS[v] || '未知'}</Tag> },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
-    { title: '答题质量状态', dataIndex: 'quality_level', key: 'quality_level', render: (v: string) => qualityLabels[v] || '未知' || '-' },
+    { title: '答题质量状态', dataIndex: 'quality_level', key: 'quality_level', render: (v: string) => qualityLabels[v] || '-' },
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     {

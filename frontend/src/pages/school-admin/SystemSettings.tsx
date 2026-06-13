@@ -8,7 +8,7 @@ import {
   PlusOutlined, DeleteOutlined, SafetyOutlined, InfoCircleOutlined,
   SettingOutlined, LockOutlined,
   BankOutlined, WarningOutlined, DesktopOutlined, RobotOutlined,
-  ApiOutlined, KeyOutlined, CheckCircleOutlined, ReloadOutlined,
+  ApiOutlined, KeyOutlined, CheckCircleOutlined, ReloadOutlined, MessageOutlined, SendOutlined,
 } from '@ant-design/icons';
 import {
   getSchoolInfo, updateSchoolInfo, getRiskConfig, updateRiskConfig,
@@ -17,6 +17,7 @@ import {
   type SchoolInfo, type RiskLevelItem, type GradeItem, type SmsConfig, type ScreenConfig,
 } from '../../api/system';
 import { getAiConfig, updateAiConfig, type AiConfig } from '../../api/ai';
+import client from '../../api/client';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -35,8 +36,6 @@ const AI_PROVIDERS: Record<string, { name: string; url: string }> = {
 // 预置国内主流短信服务商
 const SMS_PROVIDERS: Record<string, { name: string; url: string }> = {
   tencent: { name: '腾讯云短信', url: 'https://sms.tencentcloudapi.com' },
-  aliyun: { name: '阿里云短信', url: 'https://dysmsapi.aliyuncs.com' },
-  custom: { name: '自定义', url: '' },
 };
 
 export default function SystemSettings() {
@@ -51,9 +50,6 @@ export default function SystemSettings() {
   // ---- SMS config state ----
   const [smsConfig, setSmsConfig] = useState<SmsConfig | null>(null);
   const [smsLoading, setSmsLoading] = useState(false);
-  const [selectedSmsProvider, setSelectedSmsProvider] = useState<string>('tencent');
-  const [savingSms, setSavingSms] = useState(false);
-  const [smsForm] = Form.useForm();
 
   // ---- risk config state ----
   const [riskLevels, setRiskLevels] = useState<RiskLevelItem[]>([]);
@@ -136,6 +132,7 @@ export default function SystemSettings() {
       }
     } catch {
       message.error('获取学校信息失败');
+
     } finally {
       setSchoolLoading(false);
     }
@@ -147,40 +144,11 @@ export default function SystemSettings() {
       const data = await getSmsConfig();
       setSmsConfig(data);
     } catch {
-      // SMS配置为预留接口，获取失败不提示错误
+      // SMS配置获取失败不提示
     } finally {
       setSmsLoading(false);
     }
   }, []);
-
-  const handleSaveSms = async () => {
-    try {
-      const values = await smsForm.validateFields();
-      setSavingSms(true);
-      await updateSmsConfig({
-        sms_api_url: values.sms_api_url || '',
-        sms_template_id: values.sms_template_id || '',
-        // 根据平台类型发送不同的密钥字段
-        ...(selectedSmsProvider === 'tencent' ? {
-          sms_secret_id: values.sms_secret_id || '',
-          sms_secret_key: values.sms_secret_key || '',
-        } : {}),
-        ...(selectedSmsProvider === 'aliyun' ? {
-          sms_access_key: values.sms_access_key || '',
-          sms_access_secret: values.sms_access_secret || '',
-        } : {}),
-        ...(selectedSmsProvider === 'custom' ? {
-          sms_app_key: values.sms_app_key || '',
-        } : {}),
-      });
-      message.success('短信配置保存成功');
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'errorFields' in err) return;
-      message.error('保存失败，请重试');
-    } finally {
-      setSavingSms(false);
-    }
-  };
 
   const fetchRiskConfig = useCallback(async () => {
     setRiskLoading(true);
@@ -578,67 +546,28 @@ export default function SystemSettings() {
       ),
       children: (
         <div>
-          <Card title={<Space><LockOutlined style={{ color: '#1677ff' }} /><span>短信服务配置</span></Space>}
+          <Card title={<Space><MessageOutlined style={{ color: '#1677ff' }} /><span>短信服务</span></Space>}
             bordered={false} style={{ boxShadow: 'none', marginBottom: 24 }}>
-            <Alert message="短信服务用于重置密码验证和登录二次验证。选择短信平台后填写相应的参数即可启用。" type="info" showIcon style={{ marginBottom: 20 }} />
-
-            <Form form={smsForm} layout="vertical" style={{ maxWidth: 600 }} disabled={savingSms}>
-              {/* 平台选择 */}
-              <Form.Item label="短信平台">
-                <Select size="large" value={selectedSmsProvider} onChange={(v) => {
-                  setSelectedSmsProvider(v);
-                  const p = SMS_PROVIDERS[v];
-                  if (p) {
-                    smsForm.setFieldsValue({ sms_api_url: p.url, sms_sign: '青少年心理健康' });
-                  }
-                }} options={Object.entries(SMS_PROVIDERS).map(([k, p]) => ({ value: k, label: p.name }))} />
-              </Form.Item>
-
-              <Form.Item name="sms_api_url" label="API地址" rules={[{ required: true }]}>
-                <Input placeholder="选择平台后自动填充，也可手动修改" size="large" />
-              </Form.Item>
-
-              {selectedSmsProvider === 'tencent' && (
-                <>
-                  <Form.Item name="sms_secret_id" label="SecretId" rules={[{ required: true }]}>
-                    <Input placeholder="腾讯云 SecretId" size="large" />
-                  </Form.Item>
-                  <Form.Item name="sms_secret_key" label="SecretKey">
-                    <Input.Password placeholder="腾讯云 SecretKey" size="large" />
-                  </Form.Item>
-                </>
-              )}
-
-              {selectedSmsProvider === 'aliyun' && (
-                <>
-                  <Form.Item name="sms_access_key" label="AccessKey ID" rules={[{ required: true }]}>
-                    <Input placeholder="阿里云 AccessKey ID" size="large" />
-                  </Form.Item>
-                  <Form.Item name="sms_access_secret" label="AccessKey Secret">
-                    <Input.Password placeholder="阿里云 AccessKey Secret" size="large" />
-                  </Form.Item>
-                </>
-              )}
-
-              {(selectedSmsProvider === 'custom' || !selectedSmsProvider) && (
-                <Form.Item name="sms_app_key" label="API密钥" rules={[{ required: true }]}>
-                  <Input.Password placeholder="第三方短信平台API密钥" size="large" />
-                </Form.Item>
-              )}
-
-              <Form.Item name="sms_template_id" label="短信模板ID" rules={[{ required: true }]}>
-                <Input placeholder="短信平台审核通过的模板ID" size="large" />
-              </Form.Item>
-
-              <Form.Item name="sms_sign" label="短信签名">
-                <Input placeholder="短信签名内容（如：青少年心理健康）" size="large" />
-              </Form.Item>
-
-              <Divider />
-              <Button type="primary" loading={savingSms} onClick={handleSaveSms} icon={<CheckCircleOutlined />} size="large">
-                保存短信配置
-              </Button>
-            </Form>
+            <Alert
+              message="短信服务由平台管理员统一配置"
+              description="短信服务的启用、密钥配置、模板ID等均由平台管理端（公安端）统一管理，学校端无需单独配置。如需修改短信配置，请联系平台管理员。"
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            {smsConfig?.sms_enabled === 'true' ? (
+              <div style={{ padding: '12px 0' }}>
+                <Descriptions column={1} size="small" bordered>
+                  <Descriptions.Item label="短信状态"><Tag color="green">已启用</Tag></Descriptions.Item>
+                  <Descriptions.Item label="短信服务商">{smsConfig?.sms_provider === 'tencent' ? '腾讯云短信' : smsConfig?.sms_provider || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="短信签名">{smsConfig?.sms_sign_name || '-'}</Descriptions.Item>
+                </Descriptions>
+              </div>
+            ) : (
+              <div style={{ padding: '12px 0', color: '#999' }}>
+                短信服务当前未启用
+              </div>
+            )}
           </Card>
         </div>
       ),

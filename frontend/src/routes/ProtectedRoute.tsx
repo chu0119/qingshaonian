@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Spin } from 'antd';
 import { useAuthStore } from '../stores/authStore';
@@ -11,16 +11,15 @@ interface Props {
   roles?: string[];
 }
 
-let _userRefreshed = false;
-
 export default function ProtectedRoute({ children, roles }: Props) {
   const { user, token } = useAuthStore();
   const location = useLocation();
-  const [refreshing, setRefreshing] = useState(!!token && !!user && !_userRefreshed);
+  const userRefreshed = useRef(false);
+  const [refreshing, setRefreshing] = useState(!!token && !!user && !userRefreshed.current);
 
   useEffect(() => {
-    if (!token || !user || _userRefreshed) return;
-    _userRefreshed = true;
+    if (!token || !user || userRefreshed.current) return;
+    userRefreshed.current = true;
     setRefreshing(true);
     client.get('/auth/me').then(r => {
       const serverUser = r.data.data;
@@ -41,7 +40,7 @@ export default function ProtectedRoute({ children, roles }: Props) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.must_change_password && location.pathname !== '/change-password') {
+  if (user.must_change_password && location.pathname !== '/change-password' && !sessionStorage.getItem('skip_password_change')) {
     return <Navigate to="/change-password" replace />;
   }
 

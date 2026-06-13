@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Select, Typography, Space, Drawer, Descriptions, Card, Spin, Button, Empty, Progress, Row, Col, Statistic, Popconfirm, Modal, DatePicker, Form, Input, message, Tabs, Collapse, List } from 'antd';
-import { ExportOutlined, EyeOutlined, CloseCircleOutlined, FieldTimeOutlined, EditOutlined, DeleteOutlined, MessageOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ExportOutlined, EyeOutlined, CloseCircleOutlined, FieldTimeOutlined, EditOutlined, DeleteOutlined, MessageOutlined, FileTextOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../../api/client';
 import { TASK_STATUS_LABELS } from '../../utils/constants';
@@ -44,6 +44,8 @@ export default function PlatformTaskSupervision() {
 
   // 短信发送中状态
   const [smsSending, setSmsSending] = useState(false);
+  const [sortField, setSortField] = useState('');
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | undefined>(undefined);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -57,10 +59,11 @@ export default function PlatformTaskSupervision() {
       const params: Record<string, unknown> = { page, page_size: 20 };
       if (filters.status) params.status = filters.status;
       if (filters.school_id) params.school_id = filters.school_id;
+      if (sortField) { params.sort_by = sortField; params.sort_order = sortOrder === 'ascend' ? 'asc' : 'desc'; }
       const r = await client.get('/platform/tasks', { params });
       setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
     } finally { setLoading(false); }
-  }, [page, filters]);
+  }, [page, filters, sortField, sortOrder]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -224,6 +227,15 @@ export default function PlatformTaskSupervision() {
     }
   };
 
+  // 复制任务
+  const handleDuplicate = async (task: any) => {
+    try {
+      await client.post(`/tasks/${task.id}/duplicate`);
+      message.success('任务复制成功');
+      fetchData();
+    } catch (err: any) { message.error(err?.response?.data?.detail || '复制失败'); }
+  };
+
   // 删除任务
   const handleDelete = async (task: any) => {
     try {
@@ -277,16 +289,16 @@ export default function PlatformTaskSupervision() {
   };
 
   const columns = [
-    { title: '任务名称', dataIndex: 'name', key: 'name', width: 200, sorter: (a: any, b: any) => (a.name || '').localeCompare(b.name || ''), render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
-    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
+    { title: '任务名称', dataIndex: 'name', key: 'name', width: 200, sorter: true, render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
+    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 120, sorter: true },
     { title: '问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', width: 160, render: (v: string) => v || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: true, render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
     { title: '完成进度', key: 'progress', width: 140, render: (_: any, r: any) => {
       const exp = r.expected_count || 0, comp = r.completed_count || 0;
       return exp > 0 ? <span>{comp}/{exp} <Progress percent={Math.round(comp / exp * 100)} size="small" style={{ width: 60, display: 'inline-block', marginLeft: 4 }} /></span> : <span>-</span>;
     }},
-    { title: '开始时间', dataIndex: 'start_time', key: 'start_time', width: 110, sorter: (a: any, b: any) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
-    { title: '截止时间', dataIndex: 'end_time', key: 'end_time', width: 110, sorter: (a: any, b: any) => new Date(a.end_time || 0).getTime() - new Date(b.end_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
+    { title: '开始时间', dataIndex: 'start_time', key: 'start_time', width: 110, sorter: true, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
+    { title: '截止时间', dataIndex: 'end_time', key: 'end_time', width: 110, sorter: true, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '操作', key: 'action', width: 280, render: (_: any, r: any) => (
       <Space size="small" wrap>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
@@ -306,6 +318,7 @@ export default function PlatformTaskSupervision() {
             <Button size="small" type="link">归档</Button>
           </Popconfirm>
         )}
+        <Button size="small" type="link" icon={<CopyOutlined />} onClick={() => handleDuplicate(r)}>复制</Button>
         {(r.status === 'draft' || r.status === 'archived') && (
           <Popconfirm title="确定删除此任务？" description="删除后不可恢复" onConfirm={() => handleDelete(r)}>
             <Button size="small" type="link" danger icon={<DeleteOutlined />}>删除</Button>
@@ -331,9 +344,12 @@ export default function PlatformTaskSupervision() {
           onChange={v => setFilters(f => ({ ...f, status: v || '' }))} options={Object.entries(statusLabels).map(([k, v]) => ({ value: k, label: v }))} />
       </Space>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
-        pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 个任务` }} />
+        pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 个任务` }}
+        onChange={(_pagination, _filters, sorter: any) => {
+          if (sorter.field) { setSortField(sorter.field); setSortOrder(sorter.order); }
+        }} />
 
-      <Drawer title="任务详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={640} destroyOnHidden>
+      <Drawer title="任务详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={640} style={{ maxWidth: '95vw' }} destroyOnHidden>
         {detailLoading ? <Spin /> : detail ? (
           <div>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>

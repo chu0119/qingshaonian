@@ -1,109 +1,78 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button, Typography } from 'antd';
-import { FullscreenOutlined, FullscreenExitOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import { theme } from './screenTheme';
+/**
+ * ScreenShell - 响应式大屏外壳
+ * 带返回按钮、自适应缩放
+ */
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { screenTheme as T } from './theme';
 
-export function useScreenMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  return isMobile;
-}
-
-interface Props {
+interface ScreenShellProps {
   title: string;
   subtitle?: string;
-  updatedAt?: string;
-  onBack?: () => void;
   children: React.ReactNode;
+  backTo?: string;
 }
 
-export default function ScreenShell({ title, subtitle, updatedAt, onBack, children }: Props) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [time, setTime] = useState(new Date());
-  const [fs, setFs] = useState(false);
-  const isMobile = useScreenMobile();
+export default function ScreenShell({ title, subtitle, children, backTo }: ScreenShellProps) {
+  const navigate = useNavigate();
+  const [s, setS] = useState(1);
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const fit = () => setS(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
   }, []);
 
-  useEffect(() => {
-    const onFullscreenChange = () => setFs(document.fullscreenElement === rootRef.current);
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
-
-  const toggleFs = async () => {
-    if (document.fullscreenElement === rootRef.current) {
-      await document.exitFullscreen();
-      return;
-    }
-    await rootRef.current?.requestFullscreen();
-  };
-
-  const dt = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
-  const tm = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}:${String(time.getSeconds()).padStart(2, '0')}`;
+  const cssVars: Record<string, string> = useMemo(() => ({
+    '--s': String(s),
+    '--header-h': `${Math.max(Math.round(64 * s), 40)}px`,
+    '--gap': `${Math.max(Math.round(10 * s), 5)}px`,
+    '--gap-sm': `${Math.max(Math.round(6 * s), 3)}px`,
+    '--radius': `${Math.max(Math.round(10 * s), 5)}px`,
+    '--pad': `${Math.max(Math.round(20 * s), 6)}px`,
+    '--pad-sm': `${Math.max(Math.round(12 * s), 4)}px`,
+    '--fs-title': `${Math.max(Math.round(24 * s), 13)}px`,
+    '--fs-subtitle': `${Math.max(Math.round(12 * s), 8)}px`,
+    '--fs-card-title': `${Math.max(Math.round(14 * s), 10)}px`,
+    '--fs-kpi': `${Math.max(Math.round(26 * s), 14)}px`,
+    '--fs-kpi-label': `${Math.max(Math.round(12 * s), 8)}px`,
+    '--fs-body': `${Math.max(Math.round(13 * s), 9)}px`,
+    '--fs-small': `${Math.max(Math.round(11 * s), 7)}px`,
+    '--fs-tiny': `${Math.max(Math.round(10 * s), 7)}px`,
+    '--fs-time': `${Math.max(Math.round(22 * s), 12)}px`,
+    '--icon-lg': `${Math.max(Math.round(24 * s), 14)}px`,
+    '--bar-h': `${Math.max(Math.round(7 * s), 3)}px`,
+    '--kpi-h': `${Math.max(Math.round(62 * s), 36)}px`,
+  }), [s]);
 
   return (
-    <div ref={rootRef} style={{
-      minHeight: '100vh',
-      background: `radial-gradient(ellipse at 50% 0%, rgba(0,184,240,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(77,159,255,0.06) 0%, transparent 40%), linear-gradient(180deg, ${theme.bg} 0%, #07162c 100%)`,
-      color: theme.text,
-      overflow: 'auto',
-    }}>
-      {/* Background effects */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <Stars />
-        <GridLines />
-      </div>
-
-      <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', padding: isMobile ? '12px 10px 16px' : '14px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', alignItems: 'center', gap: 10, marginBottom: isMobile ? 12 : 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {onBack && <Button size="small" ghost icon={<ArrowLeftOutlined />} onClick={onBack} style={{ borderColor: theme.border, color: theme.textDim }}>返回</Button>}
-          </div>
-          <div style={{ minWidth: 0, textAlign: isMobile ? 'left' : 'center' }}>
-            {/* Decorative line above title */}
-            {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 6 }}>
-                <span style={{ height: 1, width: 60, background: `linear-gradient(90deg, transparent, ${theme.cyan}66)`, display: 'block' }} />
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: theme.cyan, boxShadow: `0 0 10px ${theme.cyan}88` }} />
-                <span style={{ height: 1, width: 60, background: `linear-gradient(90deg, ${theme.cyan}66, transparent)`, display: 'block' }} />
-              </div>
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: T.bgGradient, fontFamily: T.fontFamily, color: T.text, ...cssVars }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 800px 600px at 20% 30%, rgba(64,158,255,0.06) 0%, transparent 70%), radial-gradient(ellipse 600px 400px at 80% 70%, rgba(103,194,58,0.04) 0%, transparent 70%)' }} />
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* 标题栏 */}
+        <div style={{ height: 'var(--header-h)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 var(--pad)`, flexShrink: 0, borderBottom: `1px solid ${T.border}`, background: 'rgba(10,14,39,0.6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-sm)' }}>
+            {backTo && (
+              <button onClick={() => navigate(backTo)} style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 'var(--radius)', color: T.textSecondary, cursor: 'pointer', padding: '6px 14px', fontSize: 'var(--fs-small)', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(64,158,255,0.15)'; e.currentTarget.style.color = T.textHighlight; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = T.textSecondary; }}
+              >
+                <span style={{ fontSize: 'var(--fs-body)' }}>←</span> 返回
+              </button>
             )}
-            <Typography.Title level={isMobile ? 5 : 3} style={{
-              color: '#fff',
-              margin: 0,
-              letterSpacing: isMobile ? 1 : 4,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              textShadow: `0 0 20px rgba(0,184,240,0.4), 0 0 40px rgba(0,184,240,0.15)`,
-            }}>
-              {title}
-            </Typography.Title>
-            {subtitle && <div style={{ color: theme.textDim, fontSize: isMobile ? 12 : 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: 1 }}>{subtitle}</div>}
+            <div style={{ width: 'var(--bar-h)', height: 'calc(var(--header-h) * 0.5)', borderRadius: 'var(--bar-h)', background: `linear-gradient(180deg, ${T.primary}, ${T.primaryLight})` }} />
+            <div>
+              <div style={{ fontSize: 'var(--fs-title)', fontWeight: 800, letterSpacing: 3, color: T.textHighlight }}>{title}</div>
+              {subtitle && <div style={{ fontSize: 'var(--fs-subtitle)', color: T.textMuted, marginTop: 1, letterSpacing: 1 }}>{subtitle}</div>}
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end', alignItems: 'center', gap: 8, color: theme.textDim, fontSize: 12 }}>
-            <span style={{ fontFamily: theme.numberFont, letterSpacing: 0.5 }}>{dt} {tm}{updatedAt ? ` · 数据: ${updatedAt}` : ''}</span>
-            {!isMobile && (
-              <Button size="small" ghost icon={fs ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={toggleFs} style={{ borderColor: theme.border, color: theme.textDim }}>
-                {fs ? '退出' : '全屏'}
-              </Button>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap)' }}>
+            <TimeDisplay />
+            <div style={{ padding: 'var(--gap-sm) var(--gap)', borderRadius: 20, background: 'rgba(64,158,255,0.1)', border: `1px solid ${T.border}`, fontSize: 'var(--fs-tiny)', color: T.primary }}>自动刷新 30s</div>
           </div>
         </div>
-
-        {/* Content */}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, padding: 'var(--gap-sm) var(--pad)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {children}
         </div>
       </div>
@@ -111,50 +80,14 @@ export default function ScreenShell({ title, subtitle, updatedAt, onBack, childr
   );
 }
 
-function Stars() {
-  const positions = [
-    [5,10],[15,3],[25,18],[35,5],[45,22],[55,8],[65,15],[75,4],[85,20],[95,10],
-    [10,30],[20,25],[30,45],[40,35],[50,55],[60,40],[70,50],[80,30],[90,60],[3,70],
-    [18,65],[28,75],[38,60],[48,80],[58,70],[68,55],[78,75],[88,65],[98,50],[8,90],
-    [22,85],[32,95],[42,88],[52,92],[62,82],[72,95],[82,85],[92,90],[7,50],[13,55],
-    [27,60],[37,52],[47,68],[57,48],[67,65],[77,45],[87,55],[97,42],[33,70],[55,30],
-  ];
+function TimeDisplay() {
+  const [t, setT] = useState(new Date());
+  useEffect(() => { const i = setInterval(() => setT(new Date()), 1000); return () => clearInterval(i); }, []);
+  const f = (n: number) => n.toString().padStart(2, '0');
   return (
-    <>
-      {positions.map(([x, y], i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          left: `${x}%`,
-          top: `${y}%`,
-          width: i % 5 === 0 ? 3 : 2,
-          height: i % 5 === 0 ? 3 : 2,
-          borderRadius: '50%',
-          background: '#dff8ff',
-          opacity: 0.12 + (i % 3) * 0.08,
-          boxShadow: '0 0 8px rgba(0,184,240,0.5)',
-          animation: i % 4 === 0 ? `twinkle ${3 + (i % 3)}s ease-in-out infinite` : 'none',
-          animationDelay: `${(i * 0.3) % 5}s`,
-        }} />
-      ))}
-      <style>{`
-        @keyframes twinkle {
-          0%, 100% { opacity: 0.1; }
-          50% { opacity: 0.35; }
-        }
-      `}</style>
-    </>
-  );
-}
-
-function GridLines() {
-  return (
-    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.03 }}>
-      <defs>
-        <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
-          <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#00b8f0" strokeWidth="0.5" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grid)" />
-    </svg>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: T.fontMono }}>
+      <span style={{ fontSize: 'var(--fs-time)', fontWeight: 700, color: T.textHighlight }}>{f(t.getHours())}:{f(t.getMinutes())}:{f(t.getSeconds())}</span>
+      <span style={{ fontSize: 'var(--fs-small)', color: T.textMuted }}>{t.getFullYear()}-{f(t.getMonth() + 1)}-{f(t.getDate())}</span>
+    </div>
   );
 }

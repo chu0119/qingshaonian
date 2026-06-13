@@ -7,7 +7,7 @@ import {
   LogoutOutlined, KeyOutlined, MenuOutlined,
   BankOutlined, SafetyOutlined, ScheduleOutlined, CheckSquareOutlined, ContactsOutlined,
   FundOutlined, AuditOutlined, MessageOutlined, RobotOutlined, EyeOutlined,
-  IdcardOutlined, SolutionOutlined,
+  IdcardOutlined, SolutionOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { changePassword } from '../../api/auth';
@@ -55,11 +55,11 @@ const menuConfigs: Record<string, { key: string; icon: React.ReactNode; label: s
     { key: 'dashboard', icon: <DashboardOutlined />, label: '监管首页', path: '/platform/dashboard' },
     { key: 'schools', icon: <BankOutlined />, label: '学校监管', path: '/platform/schools' },
     { key: 'risks', icon: <AlertOutlined />, label: '风险预警中心', path: '/platform/risks' },
-    { key: 'key-students', icon: <IdcardOutlined />, label: '重点关注学生', path: '/platform/key-students' },
     { key: 'students', icon: <TeamOutlined />, label: '学生管理', path: '/platform/students' },
     { key: 'student-profile', icon: <SolutionOutlined />, label: '学生档案', path: '/platform/student-profile' },
     { key: 'questionnaires', icon: <FileTextOutlined />, label: '问卷管理', path: '/platform/questionnaires' },
     { key: 'tasks', icon: <ScheduleOutlined />, label: '测评任务监管', path: '/platform/tasks' },
+    { key: 'answer-logs', icon: <FileTextOutlined />, label: '问卷日志', path: '/platform/answer-logs' },
     { key: 'interventions', icon: <SafetyOutlined />, label: '干预督办', path: '/platform/interventions' },
     { key: 'reports', icon: <BarChartOutlined />, label: '数据报表', path: '/platform/reports' },
     { key: 'screen', icon: <FundOutlined />, label: '区域数据大屏', path: '/platform/screen' },
@@ -156,7 +156,13 @@ export default function MainLayout() {
           <SafetyOutlined style={{ fontSize: 20, color: '#fff' }} />
         </div>
         <span style={{ fontSize: 17, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', letterSpacing: 1 }}>
-          {user.role === 'platform_admin' ? '金盾护苗 · 公安监管端' : '金盾护苗'}
+          {user.role === 'platform_admin' && !localStorage.getItem('platform_token')
+            ? '金盾护苗 · 公安监管端'
+            : user.role === 'platform_admin'
+              ? '金盾护苗 · 学校管理端'
+              : user.role === 'school_admin'
+                ? '金盾护苗 · 学校管理端'
+                : '金盾护苗 · 教师端'}
         </span>
       </div>
     </div>
@@ -181,22 +187,22 @@ export default function MainLayout() {
 
       {/* 移动端: Drawer */}
       {isMobile && (
-        <Drawer placement="left" width={240} open={drawerOpen} onClose={() => setDrawerOpen(false)}
-          styles={{ body: { padding: 0, background: '#001529' } }}>
+        <Drawer placement="left" width={260} open={drawerOpen} onClose={() => setDrawerOpen(false)}
+          styles={{ body: { padding: 0, background: '#001529', overflowY: 'auto' } }}>
           {logoArea}
-          {navMenu}
+          <div style={{ padding: '8px 0 24px' }}>{navMenu}</div>
         </Drawer>
       )}
 
       <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 64 : 240), transition: 'margin-left 0.2s' }}>
-        <Header style={{ padding: isMobile ? '0 12px' : '0 24px', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, borderBottom: '1px solid #f0f0f0', boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
+        <Header style={{ padding: isMobile ? '0 8px' : '0 24px', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: isMobile ? 52 : 64, borderBottom: '1px solid #f0f0f0', boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isMobile ? (
               <Button type="text" icon={<MenuOutlined style={{ fontSize: 18 }} />} onClick={() => setDrawerOpen(true)}
                 style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
             ) : (
               <Button type="text"
-                icon={collapsed ? <SettingOutlined style={{ fontSize: 18 }} /> : <SettingOutlined style={{ fontSize: 18, transform: 'rotate(180deg)' }} />}
+                icon={collapsed ? <MenuUnfoldOutlined style={{ fontSize: 18 }} /> : <MenuFoldOutlined style={{ fontSize: 18 }} />}
                 onClick={() => setCollapsed(!collapsed)}
                 style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
             )}
@@ -227,20 +233,22 @@ export default function MainLayout() {
             type="info"
             showIcon
             message={
-              <span>当前通过平台管理员视角查看 <b>{platformSchoolName()}</b> 的数据</span>
+              isMobile
+                ? <span>代入 <b>{platformSchoolName()}</b></span>
+                : <span>当前通过平台管理员视角查看 <b>{platformSchoolName()}</b> 的数据</span>
             }
             action={
               <Button size="small" type="primary" onClick={() => {
                 restorePlatformSession();
                 window.location.href = '/platform/dashboard';
-              }}>← 返回平台管理</Button>
+              }}>← 返回平台</Button>
             }
-            style={{ margin: isMobile ? '12px 8px 0' : '20px 24px 0', borderRadius: 8 }}
+            style={{ margin: isMobile ? '8px 8px 0' : '20px 24px 0', borderRadius: 8 }}
             closable
           />
         )}
 
-        <Content style={{ margin: isMobile ? '12px 8px' : '20px 24px 24px', padding: isMobile ? 16 : 24, background: '#ffffff', borderRadius: 12, minHeight: 280, boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+        <Content style={{ margin: isMobile ? '8px' : '20px 24px 24px', padding: isMobile ? 10 : 24, background: '#ffffff', borderRadius: isMobile ? 8 : 12, minHeight: 280, boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
           <Outlet />
         </Content>
 

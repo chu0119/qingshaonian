@@ -16,6 +16,7 @@ import {
   getDictGrades, resetUserPassword, type UserInfo,
 } from '../../api/users';
 import { getClasses, type ClassInfo } from '../../api/classes';
+import client from '../../api/client';
 
 const { Title } = Typography;
 
@@ -48,8 +49,8 @@ export default function StudentManagement() {
       const res = await getStudents(params);
       setData(res.items);
       setTotal(res.total);
-    } catch {
-      message.error('获取学生列表失败');
+    } catch (err: any) {
+      message.error(err._friendlyMessage || '获取学生列表失败');
     } finally {
       setLoading(false);
     }
@@ -125,6 +126,31 @@ export default function StudentManagement() {
     } catch {
       message.error('模板下载失败');
     }
+  };
+
+  // 导出 Excel
+  const handleExportExcel = async () => {
+    try {
+      const res = await client.get('/users/students/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'students.xlsx';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); window.URL.revokeObjectURL(url);
+      message.success('导出成功');
+    } catch { message.error('导出失败'); }
+  };
+
+  // 批量删除
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const handleBatchDelete = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await client.post('/users/students/batch-delete', { ids: selectedRowKeys });
+      message.success(`成功删除 ${selectedRowKeys.length} 名学生`);
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err: any) { message.error(err?.response?.data?.detail || '删除失败'); }
   };
 
   // 批量导入 - 打开文件选择
@@ -335,6 +361,17 @@ export default function StudentManagement() {
                 下载导入模板
               </Button>
               <Button
+                icon={<DownloadOutlined />}
+                onClick={handleExportExcel}
+              >
+                导出Excel
+              </Button>
+              {selectedRowKeys.length > 0 && (
+                <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 名学生？`} onConfirm={handleBatchDelete}>
+                  <Button danger icon={<DeleteOutlined />}>批量删除 ({selectedRowKeys.length})</Button>
+                </Popconfirm>
+              )}
+              <Button
                 icon={<UploadOutlined />}
                 onClick={handleImportClick}
                 loading={importing}
@@ -369,6 +406,7 @@ export default function StudentManagement() {
       <Card style={{ borderRadius: 10 }} bodyStyle={{ padding: 0 }}>
         <Table
           rowKey="id"
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           dataSource={data}
           columns={columns}
           loading={loading}

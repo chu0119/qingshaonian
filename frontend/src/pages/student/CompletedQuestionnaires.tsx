@@ -15,7 +15,7 @@ export default function CompletedQuestionnaires() {
       const r = await client.get('/student/tasks/completed');
       setItems(r.data.data || []);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取已完成问卷失败');
+      message.error(err._friendlyMessage || '获取已完成问卷失败');
     } finally {
       setLoading(false);
     }

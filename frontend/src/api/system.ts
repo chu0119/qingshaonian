@@ -68,13 +68,19 @@ export async function seedDemoData() {
   return res.data;
 }
 
-// ===== 短信配置（预留） =====
+// ===== 短信配置 =====
 
 export interface SmsConfig {
+  sms_enabled: string;
+  sms_provider: string;
   sms_api_url: string;
   sms_app_key: string;
-  sms_template_id: string;
-  note?: string;
+  sms_app_key_masked?: string;
+  sms_app_secret: string;
+  sms_app_secret_masked?: string;
+  sms_sign_name: string;
+  sms_sdk_app_id: string;
+  sms_templates: string;
 }
 
 export async function getSmsConfig() {
@@ -82,11 +88,7 @@ export async function getSmsConfig() {
   return res.data.data as SmsConfig;
 }
 
-export async function updateSmsConfig(data: {
-  sms_api_url?: string;
-  sms_app_key?: string;
-  sms_template_id?: string;
-}) {
+export async function updateSmsConfig(data: Partial<SmsConfig>) {
   const res = await client.put('/system/sms-config', data);
   return res.data;
 }

@@ -185,6 +185,8 @@ export default function Dashboard() {
   const highCount = riskDist.high || 0;
   const interventionNeeded = urgentCount + highCount;
 
+  const isMobile = window.innerWidth < 768;
+
   return (
     <div>
       {/* 页面标题 */}
@@ -317,10 +319,10 @@ export default function Dashboard() {
           }}
           bodyStyle={{ padding: '12px 20px' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Space>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', gap: isMobile ? 8 : 0 }}>
+            <Space direction={isMobile ? 'vertical' : 'horizontal'} size={4}>
               <WarningOutlined style={{ color: '#ff4d4f', fontSize: 18 }} />
-              <Text strong style={{ color: '#cf1322' }}>
+              <Text strong style={{ color: '#cf1322', fontSize: isMobile ? 13 : 14 }}>
                 当前有 {urgentCount} 条危急关注信号和 {highCount} 条警告关注信号需要关注
               </Text>
             </Space>
@@ -328,6 +330,7 @@ export default function Dashboard() {
               size="small"
               danger
               onClick={() => navigate('/school-admin/risks')}
+              style={{ alignSelf: isMobile ? 'flex-end' : 'center' }}
             >
               立即处理
             </Button>

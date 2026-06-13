@@ -1,13 +1,14 @@
+/**
+ * 公安端学生管理 — 支持查看、编辑、档案、答题记录
+ */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Tag, Select, Input, Typography, Space, Drawer, Descriptions, Button, Modal, message, Empty } from 'antd';
-import { ExportOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Input, Typography, Space, Drawer, Descriptions, Button, Modal, message, Empty, Form, InputNumber } from 'antd';
+import { ExportOutlined, EyeOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons';
 import client from '../../api/client';
 import { maskIdCard } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
 import { RISK_LABELS, RISK_COLORS } from '../../utils/constants';
-
-const statusLabels: Record<string, string> = { true: '正常', false: '已禁用' };
 
 export default function PlatformStudentManagement() {
   const navigate = useNavigate();
@@ -31,6 +32,13 @@ export default function PlatformStudentManagement() {
   const [answerSheetId, setAnswerSheetId] = useState<number>();
   const [studentSheets, setStudentSheets] = useState<any[]>([]);
   const [sheetsModalOpen, setSheetsModalOpen] = useState(false);
+  // 编辑相关
+  const [editOpen, setEditOpen] = useState(false);
+  const [editStudent, setEditStudent] = useState<any>(null);
+  const [editForm] = Form.useForm();
+  const [editSaving, setEditSaving] = useState(false);
+  const [grades, setGrades] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
 
   useEffect(() => {
     client.get('/platform/schools', { params: { page: 1, page_size: 200 } })
@@ -59,6 +67,50 @@ export default function PlatformStudentManagement() {
     } catch { setDetail(null); }
   };
 
+  // 编辑学生
+  const openEdit = async (record: any) => {
+    setEditStudent(record);
+    setEditOpen(true);
+    // 加载年级和班级
+    try {
+      const schoolId = record.school_id;
+      if (schoolId) {
+        const [gradeRes, classRes] = await Promise.all([
+          client.get('/system/grades', { params: { school_id: schoolId } }).catch(() => ({ data: { data: [] } })),
+          client.get('/classes', { params: { page: 1, page_size: 500, school_id: schoolId } }).catch(() => ({ data: { data: { items: [] } } })),
+        ]);
+        setGrades(gradeRes.data.data || []);
+        setClasses(classRes.data.data?.items || []);
+      }
+    } catch { /* */ }
+    editForm.setFieldsValue({
+      real_name: record.student_name,
+      phone: record.phone,
+      gender: record.gender,
+      student_no: record.student_no,
+    });
+  };
+
+  const handleEditSave = async () => {
+    try {
+      const values = await editForm.validateFields();
+      setEditSaving(true);
+      await client.put(`/platform/students/${editStudent.id}`, {
+        real_name: values.real_name,
+        phone: values.phone || '',
+        gender: values.gender || '',
+        student_no: values.student_no || '',
+      });
+      message.success('学生信息更新成功');
+      setEditOpen(false);
+      fetchData();
+    } catch (err: any) {
+      message.error(err._friendlyMessage || '更新失败');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleVerify = async () => {
     if (!verifyPassword) { message.warning('请输入密码'); return; }
     setVerifyLoading(true);
@@ -70,7 +122,7 @@ export default function PlatformStudentManagement() {
       setVerifyPassword('');
       message.success('验证通过');
     } catch (err: any) {
-      message.error(err?.response?.data?.detail || '密码错误');
+      message.error(err._friendlyMessage || '密码错误');
     } finally { setVerifyLoading(false); }
   };
 
@@ -96,7 +148,7 @@ export default function PlatformStudentManagement() {
       message.success('验证通过，开始导出');
       doExportCSV();
     } catch (err: any) {
-      message.error(err?.response?.data?.detail || '密码错误');
+      message.error(err._friendlyMessage || '密码错误');
     } finally { setExportVerifying(false); }
   };
 
@@ -120,9 +172,10 @@ export default function PlatformStudentManagement() {
     { title: '班级', dataIndex: 'class_name', key: 'class_name', width: 100 },
     { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120, render: (v: string) => v ? v.slice(0, 3) + '****' + v.slice(-4) : '-' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 70, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '正常' : '已禁用'}</Tag> },
-    { title: '操作', key: 'action', width: 170, render: (_: any, r: any) => (
+    { title: '操作', key: 'action', width: 220, render: (_: any, r: any) => (
       <Space>
         <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button>
+        <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
         <Button size="small" type="link" icon={<FileTextOutlined />} onClick={() => navigate(`/platform/students/${r.id}`)}>档案</Button>
         <Button size="small" type="link" onClick={async () => {
           try {
@@ -150,7 +203,8 @@ export default function PlatformStudentManagement() {
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 名学生` }} />
 
-      <Drawer title="学生详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={520} destroyOnClose>
+      {/* 学生详情 */}
+      <Drawer title="学生详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={520} style={{ maxWidth: '95vw' }} destroyOnClose>
         {detail ? (
           <Descriptions bordered size="small" column={1}>
             <Descriptions.Item label="学生姓名">{detail.student_name}</Descriptions.Item>
@@ -167,19 +221,58 @@ export default function PlatformStudentManagement() {
         ) : null}
       </Drawer>
 
+      {/* 编辑学生 */}
+      <Drawer title="编辑学生信息" open={editOpen} onClose={() => setEditOpen(false)} width={480} style={{ maxWidth: '95vw' }} destroyOnClose
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setEditOpen(false)}>取消</Button>
+            <Button type="primary" loading={editSaving} onClick={handleEditSave}>保存</Button>
+          </div>
+        }>
+        {editStudent && (
+          <Form form={editForm} layout="vertical">
+            <Form.Item name="real_name" label="学生姓名" rules={[{ required: true, message: '请输入姓名' }]}>
+              <Input placeholder="请输入学生姓名" />
+            </Form.Item>
+            <Form.Item name="student_no" label="学号">
+              <Input placeholder="请输入学号" />
+            </Form.Item>
+            <Form.Item name="phone" label="手机号">
+              <Input placeholder="请输入手机号" maxLength={11} />
+            </Form.Item>
+            <Form.Item name="gender" label="性别">
+              <Select placeholder="请选择性别" allowClear
+                options={[{ value: '男', label: '男' }, { value: '女', label: '女' }]} />
+            </Form.Item>
+            <Descriptions size="small" column={1} bordered style={{ marginTop: 16 }}>
+              <Descriptions.Item label="学校">{editStudent.school_name || '-'}</Descriptions.Item>
+              <Descriptions.Item label="年级">{editStudent.grade_name || '-'}</Descriptions.Item>
+              <Descriptions.Item label="班级">{editStudent.class_name || '-'}</Descriptions.Item>
+              <Descriptions.Item label="身份证号">{maskIdCard(editStudent.id_card)}</Descriptions.Item>
+            </Descriptions>
+            <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+              注：学校、年级、班级、身份证号不可通过此界面修改，如需调整请联系学校管理员。
+            </div>
+          </Form>
+        )}
+      </Drawer>
+
+      {/* 身份验证 */}
       <Modal title="身份验证" open={verifyModalOpen} onOk={handleVerify} confirmLoading={verifyLoading}
         onCancel={() => { setVerifyModalOpen(false); setVerifyPassword(''); }} okText="确定" cancelText="取消" destroyOnClose>
         <p style={{ marginBottom: 12 }}>请输入您的登录密码以查看完整身份证号</p>
         <Input.Password value={verifyPassword} onChange={e => setVerifyPassword(e.target.value)} placeholder="请输入密码" onPressEnter={handleVerify} />
       </Modal>
 
+      {/* 导出验证 */}
       <Modal title="导出验证" open={exportVerifyOpen} onOk={handleExportVerify} confirmLoading={exportVerifying}
         onCancel={() => { setExportVerifyOpen(false); setExportPassword(''); }} okText="确定" cancelText="取消" destroyOnClose>
         <p style={{ marginBottom: 12 }}>导出包含敏感信息，请输入登录密码验证身份</p>
         <Input.Password value={exportPassword} onChange={e => setExportPassword(e.target.value)} placeholder="请输入密码" onPressEnter={handleExportVerify} />
       </Modal>
 
-      <Modal title="学生答题记录" open={sheetsModalOpen} onCancel={() => setSheetsModalOpen(false)} footer={null} width={600} destroyOnClose>
+      {/* 学生答题记录 */}
+      <Modal title="学生答题记录" open={sheetsModalOpen} onCancel={() => setSheetsModalOpen(false)} footer={null} width={600} style={{ maxWidth: '95vw' }} destroyOnClose>
         {studentSheets.length ? (
           <Table rowKey="answer_sheet_id" dataSource={studentSheets} pagination={false} size="small"
             columns={[

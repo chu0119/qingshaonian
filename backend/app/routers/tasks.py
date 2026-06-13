@@ -9,6 +9,8 @@ from ..models.risk import RiskAlert, ScoringResult, QualityAssessment, Intervent
 from ..models.questionnaire import Questionnaire
 from ..dependencies import get_current_user, require_role
 from ..services.audit_service import log_operation
+from ..services.notification_service import create_notification
+from ..services.recall_service import recall_answer_sheet as do_recall
 from ..services.stats_service import target_student_ids
 from ..utils.access_control import can_access_task, effective_school_id, effective_task_status, teacher_class_ids
 from ..utils.response import APIResponse
@@ -164,6 +166,15 @@ def create_task(data: dict, request: Request, user: User = Depends(require_role(
     db.commit()
     db.refresh(task)
     log_operation(db, user, request, module="questionnaire_task", action="publish", object_type="task", object_id=task.id, object_name=task.name)
+
+    if status_value != "draft":
+        student_ids = target_student_ids(db, task)
+        for sid in student_ids:
+            create_notification(db, user_id=sid, type="task", title="新测评任务",
+                                content=f"你有一个新的测评任务「{task.name}」，请及时完成。",
+                                sender_id=user.id, related_type="task", related_id=task.id)
+        db.commit()
+
     return APIResponse.success({"id": task.id}, message="任务发布成功")
 
 
@@ -231,6 +242,14 @@ def publish_task(task_id: int, request: Request, user: User = Depends(require_ro
     task.target_snapshot = {"student_ids": target_student_ids(db, task), "target_type": task.target_type, "target_ids": task.target_ids or []}
     db.commit()
     log_operation(db, user, request, module="questionnaire_task", action="publish", object_type="task", object_id=task.id, object_name=task.name)
+
+    student_ids = target_student_ids(db, task)
+    for sid in student_ids:
+        create_notification(db, user_id=sid, type="task", title="新测评任务",
+                            content=f"你有一个新的测评任务「{task.name}」，请及时完成。",
+                            sender_id=user.id, related_type="task", related_id=task.id)
+    db.commit()
+
     return APIResponse.success(message="任务已发布")
 
 
@@ -319,6 +338,29 @@ def delete_task(task_id: int, request: Request, user: User = Depends(require_rol
     return APIResponse.success(message="任务已删除")
 
 
+@router.post("/{task_id}/duplicate")
+def duplicate_task(task_id: int, request: Request, user: User = Depends(require_role("school_admin", "platform_admin")), db: Session = Depends(get_db)):
+    """复制任务（复制配置，不复制答卷）"""
+    task = db.query(Task).filter(Task.id == task_id, Task.school_id == (getattr(user, '_effective_school_id', None) or user.school_id)).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    new_task = Task(
+        school_id=task.school_id, questionnaire_id=task.questionnaire_id,
+        name=f"{task.name} (副本)", description=task.description,
+        target_type=task.target_type, target_ids=task.target_ids,
+        start_time=task.start_time, end_time=task.end_time,
+        status="draft", shuffle_questions=task.shuffle_questions,
+        shuffle_options=task.shuffle_options, allow_edit=task.allow_edit,
+        enable_quality_check=task.enable_quality_check,
+        target_snapshot=task.target_snapshot,
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    log_operation(db, user, request, module="questionnaire_task", action="duplicate", object_type="task", object_id=new_task.id, object_name=new_task.name)
+    return APIResponse.success({"id": new_task.id}, message="任务复制成功")
+
+
 @router.post("/{task_id}/recall")
 def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User = Depends(require_role("school_admin", "teacher")), db: Session = Depends(get_db)):
     """打回已提交的答卷，让学生重做"""
@@ -327,25 +369,7 @@ def recall_answer_sheet(task_id: int, data: dict, request: Request, user: User =
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     student_id = data.get("student_id")
-    if not student_id:
-        raise HTTPException(status_code=400, detail="请指定学生ID")
-    sheet = db.query(AnswerSheet).filter(AnswerSheet.task_id == task_id, AnswerSheet.student_id == student_id).first()
-    if not sheet:
-        raise HTTPException(status_code=404, detail="该学生无此任务的答卷")
-    if sheet.status != "submitted":
-        raise HTTPException(status_code=400, detail="只能打回已提交的答卷")
-    # 清除答题记录、评分、质检、风险预警
-    db.query(AnswerRecord).filter(AnswerRecord.answer_sheet_id == sheet.id).delete()
-    db.query(ScoringResult).filter(ScoringResult.answer_sheet_id == sheet.id).delete()
-    db.query(QualityAssessment).filter(QualityAssessment.answer_sheet_id == sheet.id).delete()
-    alert_ids = [a.id for a in db.query(RiskAlert.id).filter(RiskAlert.answer_sheet_id == sheet.id).all()]
-    if alert_ids:
-        db.query(Intervention).filter(Intervention.risk_alert_id.in_(alert_ids)).delete(synchronize_session=False)
-    db.query(RiskAlert).filter(RiskAlert.answer_sheet_id == sheet.id).delete()
-    sheet.status = "in_progress"
-    sheet.submitted_at = None
-    sheet.total_duration_seconds = None
-    db.commit()
+    sheet = do_recall(db, task_id, student_id)
     student = db.query(User).filter(User.id == student_id).first()
     log_operation(db, user, request, module="questionnaire_task", action="recall", object_type="answer_sheet",
                   object_id=sheet.id, object_name=f"{student.real_name if student else student_id}的答卷")

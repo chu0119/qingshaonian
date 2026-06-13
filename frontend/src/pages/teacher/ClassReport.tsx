@@ -19,7 +19,7 @@ export default function ClassReport() {
         const r = await client.get('/classes/my');
         setClasses(r.data.data || []);
       } catch (err: any) {
-        message.error(err?.response?.data?.message || '获取班级列表失败');
+        message.error(err._friendlyMessage || '获取班级列表失败');
       } finally {
         setLoading(false);
       }

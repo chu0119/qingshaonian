@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import type { UserInfo } from '../types/auth';
 
+function safeJsonParse<T>(str: string | null, fallback: T): T {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 interface AuthState {
   user: UserInfo | null;
   token: string | null;
@@ -15,7 +24,7 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  user: safeJsonParse<UserInfo | null>(localStorage.getItem('user'), null),
   token: localStorage.getItem('access_token'),
 
   setAuth: (user, token) => {
@@ -33,6 +42,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    sessionStorage.removeItem('skip_password_change');
     const hasPlatform = !!localStorage.getItem('platform_token');
     localStorage.removeItem('user');
     localStorage.removeItem('access_token');
@@ -54,7 +64,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   restorePlatformSession: () => {
     const token = localStorage.getItem('platform_token');
-    const user = JSON.parse(localStorage.getItem('platform_user') || 'null');
+    const user = safeJsonParse<UserInfo | null>(localStorage.getItem('platform_user'), null);
     if (token && user) {
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('access_token', token);

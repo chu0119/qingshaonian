@@ -37,8 +37,8 @@ export default function RiskDetail() {
       if (d.answer_sheet_id) {
         client.get(`/quality/${d.answer_sheet_id}`).then(r2 => setQuality(r2.data.data)).catch(() => {});
       }
-    }).catch(() => {
-      message.error('获取风险详情失败');
+    }).catch((err: any) => {
+      message.error(err._friendlyMessage || '获取风险详情失败');
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -72,9 +72,9 @@ export default function RiskDetail() {
             <Card title="答题质量评估" style={{ marginTop: 16 }}>
               <Row gutter={[16, 8]}>
                 <Col xs={12} sm={6}><Statistic title="质量评分" value={quality.quality_score} suffix="分" valueStyle={{ color: quality.quality_score >= 80 ? '#67C23A' : quality.quality_score >= 60 ? '#E6A23C' : '#FF4D4F', fontSize: 20 }} /></Col>
-                <Col xs={12} sm={6}><Statistic title="质量等级" value={qualityLabels[quality.quality_level] || '未知'} valueStyle={{ color: qualityColors[quality.quality_level] || '#666', fontSize: 20 }} /></Col>
+                <Col xs={12} sm={6}><Statistic title="质量等级" value={qualityLabels[quality.quality_level] || '-'} valueStyle={{ color: qualityColors[quality.quality_level] || '#666', fontSize: 20 }} /></Col>
                 <Col xs={12} sm={6}><Statistic title="答题时长" value={quality.total_duration_formatted || '-'} valueStyle={{ fontSize: 20 }} /></Col>
-                <Col xs={12} sm={6}><Statistic title="有效性" value={validityLabels[quality.validity] || quality.validity_label || '未知'} valueStyle={{ fontSize: 20 }} /></Col>
+                <Col xs={12} sm={6}><Statistic title="有效性" value={validityLabels[quality.validity] || quality.validity_label || '-'} valueStyle={{ fontSize: 20 }} /></Col>
               </Row>
               <Divider />
               <Descriptions column={{ xs: 1, sm: 2 }} size="small">
@@ -106,7 +106,7 @@ export default function RiskDetail() {
               Object.entries(dimScores).map(([dim, score]) => (
                 <div key={dim} style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 13 }}>{dimLabels[dim] || '未知'}</span>
+                    <span style={{ fontSize: 13 }}>{dimLabels[dim] || dim}</span>
                     <span style={{ fontWeight: 500 }}>{score as number} 分</span>
                   </div>
                   <Progress percent={Math.min((score as number) / 20 * 100, 100)} showInfo={false}
@@ -124,9 +124,9 @@ export default function RiskDetail() {
             </Card>
           )}
 
-          {detail.dimension_analysis?.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).length > 0 && (
+          {detail.dimension_analysis?.filter((item: any) => item && item.type === 'dimension_analysis' && item.label).length > 0 && (
             <Card title="维度分析" style={{ marginTop: 16 }}>
-              {detail.dimension_analysis.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).map((item: any, i: number) => (
+              {detail.dimension_analysis.filter((item: any) => item && item.type === 'dimension_analysis' && item.label).map((item: any, i: number) => (
                 <div key={i} style={{ marginBottom: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontWeight: 500 }}>{item.label}</span>
@@ -156,14 +156,14 @@ export default function RiskDetail() {
       <AiAnalysisModal open={aiOpen} type="student_risk" data={{
         student_id: detail.student_id,
         name: detail.student_name,
-        risk_level: riskLabels[detail.risk_level]?.label || '未知',
+        risk_level: riskLabels[detail.risk_level]?.label || '-',
         risk_type: translateRiskType(detail.risk_type) || '暂无分类',
         total_score: detail.total_score?.toFixed(1) || '-',
-        dimension_scores: Object.entries(detail.dimension_scores || {}).map(([k, v]) => `${dimLabels[k] || '未知'}: ${v}分`).join('、') || '暂无数据',
-        quality_level: quality ? (qualityLabels[quality.quality_level] || '未知') : '暂无数据',
+        dimension_scores: Object.entries(detail.dimension_scores || {}).map(([k, v]) => `${dimLabels[k] || k}: ${v}分`).join('、') || '暂无数据',
+        quality_level: quality ? (qualityLabels[quality.quality_level] || '-') : '暂无数据',
         quality_score: quality?.quality_score ?? '-',
         attention_passed: quality?.attention_passed ? '通过' : (quality ? '未通过' : '暂无数据'),
-        duration: quality?.total_duration_formatted || '未知',
+        duration: quality?.total_duration_formatted || '-',
       }} title={`AI分析 - ${detail.student_name}`} onClose={() => setAiOpen(false)} /></div>
   );
 }

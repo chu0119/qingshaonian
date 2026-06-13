@@ -143,7 +143,7 @@ export default function QuestionnaireEditor() {
         setRiskRanges(parseRiskRules(d.risk_rules || {}).length ? parseRiskRules(d.risk_rules || {}) : defaultRiskRanges);
         setQualityForm(parseQualityRules(d.quality_rules || {}));
         setApplicableGrades(d.applicable_grades ? d.applicable_grades.split(',').filter(Boolean) : []);
-      }).catch(() => message.error('获取问卷详情失败')).finally(() => setLoading(false));
+      }).catch((err: any) => message.error(err._friendlyMessage || '获取问卷详情失败')).finally(() => setLoading(false));
     }
   }, [qid, isNew]);
 

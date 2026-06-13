@@ -18,7 +18,7 @@ from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI分析"])
 
-AI_CONFIG_KEYS = ["ai_api_url", "ai_api_key", "ai_model_name"]
+AI_CONFIG_KEYS = ["ai_api_url", "ai_api_key", "ai_model_name", "ai_base_url", "ai_model", "ai_provider", "ai_system_prompt"]
 AI_DISCLAIMER = "本分析仅作为学校教育管理和学生关怀参考，不作为医学诊断依据。"
 
 
@@ -38,7 +38,7 @@ def _mask_api_key(key: str) -> str:
 
 
 def _get_ai_configs(db: Session) -> dict:
-    """从system_configs表读取AI配置"""
+    """从system_configs表读取AI配置，兼容两种key命名"""
     configs = db.query(SystemConfig).filter(
         SystemConfig.config_key.in_(AI_CONFIG_KEYS),
         SystemConfig.school_id.is_(None),
@@ -46,6 +46,12 @@ def _get_ai_configs(db: Session) -> dict:
     config_map = {}
     for c in configs:
         config_map[c.config_key] = c.config_value or ""
+    # 兼容映射：ai_base_url -> ai_api_url, ai_model -> ai_model_name
+    if not config_map.get("ai_api_url") and config_map.get("ai_base_url"):
+        config_map["ai_api_url"] = config_map["ai_base_url"]
+    if not config_map.get("ai_model_name") and config_map.get("ai_model"):
+        config_map["ai_model_name"] = config_map["ai_model"]
+    # 环境变量优先
     if settings.AI_API_URL:
         config_map["ai_api_url"] = settings.AI_API_URL
     if settings.AI_API_KEY:
@@ -315,16 +321,21 @@ def get_ai_config(user: User = Depends(require_role("school_admin")), db: Sessio
 @router.put("/config")
 def update_ai_config(data: dict, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
     """保存AI配置"""
-    data = {
+    save_data = {
         "ai_api_url": data.get("ai_api_url", data.get("api_url", "")),
         "ai_api_key": data.get("ai_api_key", data.get("api_key", "")),
         "ai_model_name": data.get("ai_model_name", data.get("model_name", "")),
     }
+    # 清理旧key，避免重复
+    old_keys_to_clean = ["ai_base_url", "ai_model"]
+    for old_key in old_keys_to_clean:
+        if save_data.get("ai_api_url") and old_key == "ai_base_url":
+            db.query(SystemConfig).filter(SystemConfig.config_key == old_key, SystemConfig.school_id.is_(None)).delete()
+        if save_data.get("ai_model_name") and old_key == "ai_model":
+            db.query(SystemConfig).filter(SystemConfig.config_key == old_key, SystemConfig.school_id.is_(None)).delete()
     updated = []
-    for key in AI_CONFIG_KEYS:
-        if key not in data:
-            continue
-        value = str(data[key]) if data[key] is not None else ""
+    for key, value in save_data.items():
+        value = str(value) if value is not None else ""
 
         # 特殊处理api_key：如果传入的值包含***（脱敏标记），说明用户未修改，保留原值
         if key == "ai_api_key" and "***" in value:

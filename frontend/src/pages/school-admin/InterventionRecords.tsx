@@ -32,7 +32,7 @@ export default function InterventionRecords() {
       setData(r.data.data.items || []);
       setTotal(r.data.data.total || 0);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取干预记录列表失败');
+      message.error(err._friendlyMessage || '获取干预记录列表失败');
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export default function InterventionRecords() {
         </Form>
       </Modal>
 
-      <Drawer title="干预记录详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={520}>
+      <Drawer title="干预记录详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={520} style={{ maxWidth: '95vw' }}>
         {detailRecord && (
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="学生姓名">{detailRecord.student_name}</Descriptions.Item>

@@ -81,8 +81,10 @@ export default function PlatformAuditLogs() {
               { value: 'ai_analysis', label: 'AI研判' }, { value: 'sms', label: '短信管理' },
               { value: 'platform_supervision', label: '监管督办' }, { value: 'system', label: '系统设置' },
               { value: 'intervention', label: '干预管理' }, { value: 'report', label: '报告管理' },
-              { value: 'questionnaire', label: '问卷管理' }, { value: 'task', label: '任务管理' },
-              { value: 'risk', label: '风险预警' },
+              { value: 'questionnaire', label: '问卷管理' }, { value: 'questionnaire_task', label: '任务管理' },
+              { value: 'task', label: '任务' }, { value: 'risk', label: '风险预警' },
+              { value: 'risk_alert', label: '风险预警' }, { value: 'class', label: '班级管理' },
+              { value: 'export', label: '导出' }, { value: 'task_supervision', label: '任务监管' },
             ]} />
           <Select placeholder="角色" allowClear style={{ width: 120 }} value={filters.operator_role || undefined} onChange={v => setFilters(f => ({ ...f, operator_role: v || '' }))}
             options={Object.entries(roleLabels).map(([k, v]) => ({ value: k, label: v }))} />

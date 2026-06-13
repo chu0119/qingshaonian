@@ -94,7 +94,7 @@ export default function TeacherManagement() {
     { title: '姓名', dataIndex: 'real_name', key: 'real_name' },
     { title: '手机号', dataIndex: 'phone', key: 'phone', render: (v: string) => v || '-' },
     { title: '教师类型', dataIndex: 'teacher_type', key: 'teacher_type', render: (v: string) => {
-      return TEACHER_TYPE_LABELS[v] || '未知' || '-';
+      return TEACHER_TYPE_LABELS[v] || '-';
     }},
     { title: '角色', dataIndex: 'role', key: 'role', render: (v: string) => v === 'counselor' ? <Tag color="purple">心理老师</Tag> : <Tag color="blue">教师</Tag> },
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '停用'}</Tag> },

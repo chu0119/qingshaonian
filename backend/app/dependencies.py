@@ -29,6 +29,13 @@ def get_current_user(
     if not user.status:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用")
 
+    # 安全：必须修改初始密码的用户只能访问认证相关接口，完成改密后方可使用系统
+    if getattr(user, "must_change_password", False) and not request.url.path.startswith("/api/v1/auth/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"message": "请先修改初始密码", "code": "MUST_CHANGE_PASSWORD"},
+        )
+
     # 平台管理员代入学堂上下文（不修改 ORM column，用独立属性）
     school_context_id = payload.get("school_context_id")
     if school_context_id:

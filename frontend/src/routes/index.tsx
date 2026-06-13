@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import ProtectedRoute from './ProtectedRoute';
@@ -47,6 +48,7 @@ import AnswerPage from '../pages/student/AnswerPage';
 import CompletedQuestionnaires from '../pages/student/CompletedQuestionnaires';
 import StudentProfile from '../pages/student/Profile';
 import StudentHealthTips from '../pages/student/HealthTips';
+import QREntry from '../pages/student/QREntry';
 
 // 平台管理员页面
 import SchoolManagement from '../pages/platform/SchoolManagement';
@@ -54,8 +56,8 @@ import PlatformDashboard from '../pages/platform/Dashboard';
 import PlatformSettings from '../pages/platform/Settings';
 import PlatformScreen from '../pages/platform/Screen';
 import PlatformRiskCenter from '../pages/platform/RiskCenter';
-import PlatformKeyStudents from '../pages/platform/KeyStudents';
 import PlatformTaskSupervision from '../pages/platform/TaskSupervision';
+import PlatformAnswerLogs from '../pages/platform/QuestionnaireLogs';
 import PlatformInterventionSupervision from '../pages/platform/InterventionSupervision';
 import PlatformAuditLogs from '../pages/platform/AuditLogs';
 import PlatformSmsCenter from '../pages/platform/Notifications';
@@ -67,6 +69,13 @@ import PlatformDataReports from '../pages/platform/DataReports';
 
 function RootRedirect() {
   const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (user?.role && !['school_admin', 'teacher', 'counselor', 'student', 'platform_admin'].includes(user.role)) {
+      useAuthStore.getState().logout();
+    }
+  }, [user]);
+
   if (!user) return <Navigate to="/login" replace />;
 
   const roleRedirectMap: Record<string, string> = {
@@ -77,7 +86,9 @@ function RootRedirect() {
     platform_admin: '/platform/dashboard',
   };
 
-  return <Navigate to={roleRedirectMap[user.role] || '/login'} replace />;
+  const target = roleRedirectMap[user.role];
+  if (!target) return <Navigate to="/login" replace />;
+  return <Navigate to={target} replace />;
 }
 
 export default function AppRoutes() {
@@ -118,6 +129,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<SchoolDashboard />} />
         <Route path="classes" element={<ClassManagement />} />
         <Route path="students" element={<StudentManagement />} />
@@ -144,6 +156,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<TeacherDashboard />} />
         <Route path="classes" element={<MyClasses />} />
         <Route path="questionnaires" element={<MyQuestionnaires />} />
@@ -165,6 +178,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<PlatformDashboard />} />
         <Route path="schools" element={<SchoolManagement />} />
         <Route path="risks" element={<PlatformRiskCenter />} />
@@ -174,8 +188,8 @@ export default function AppRoutes() {
         <Route path="questionnaires" element={<PlatformQuestionnaireManagement />} />
         <Route path="questionnaires/new" element={<QuestionnaireEditor />} />
         <Route path="questionnaires/:id/edit" element={<QuestionnaireEditor />} />
-        <Route path="key-students" element={<PlatformKeyStudents />} />
         <Route path="tasks" element={<PlatformTaskSupervision />} />
+        <Route path="answer-logs" element={<PlatformAnswerLogs />} />
         <Route path="interventions" element={<PlatformInterventionSupervision />} />
         <Route path="reports" element={<PlatformDataReports />} />
         <Route path="ai-analysis" element={<PlatformAIAnalysis />} />
@@ -193,6 +207,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<TeacherDashboard />} />
         <Route path="classes" element={<MyClasses />} />
         <Route path="students" element={<StudentManagement />} />
@@ -212,12 +227,14 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="home" replace />} />
         <Route path="home" element={<StudentHome />} />
         <Route path="pending" element={<PendingQuestionnaires />} />
         <Route path="answer/:answerSheetId" element={<AnswerPage />} />
         <Route path="completed" element={<CompletedQuestionnaires />} />
         <Route path="health-tips" element={<StudentHealthTips />} />
         <Route path="profile" element={<StudentProfile />} />
+        <Route path="qr" element={<QREntry />} />
       </Route>
 
       <Route path="/" element={<RootRedirect />} />

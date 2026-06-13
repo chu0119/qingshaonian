@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Card, Form, Input, Button, message, Typography, Descriptions, Tag, Statistic,
-  Row, Col, Spin, Switch, Select, Space, Tabs, Table, Modal, InputNumber, Popconfirm, Tooltip,
+  Row, Col, Spin, Switch, Select, Space, Tabs, Table, Modal, InputNumber, Popconfirm, Tooltip, Alert,
 } from 'antd';
 import {
   SaveOutlined, BankOutlined, TeamOutlined, UserOutlined, AlertOutlined,
   FileTextOutlined, MessageOutlined, RobotOutlined, SafetyOutlined,
   ControlOutlined, DatabaseOutlined, NotificationOutlined, PlusOutlined,
-  KeyOutlined, EditOutlined, ReloadOutlined,
+  KeyOutlined, EditOutlined, ReloadOutlined, SendOutlined,
 } from '@ant-design/icons';
 import client from '../../api/client';
 
@@ -15,6 +15,7 @@ const { TextArea } = Input;
 
 export default function Settings() {
   const [loading, setLoading] = useState(false);
+  const [testingSms, setTestingSms] = useState(false);
   const [form] = Form.useForm();
   const [smsForm] = Form.useForm();
   const [aiForm] = Form.useForm();
@@ -36,14 +37,22 @@ export default function Settings() {
       const d = r.data.data || {};
       form.setFieldsValue({ system_name: d.system_name || '金盾护苗 · 青少年关爱帮扶信息管理平台', support_contact: d.support_contact || '' });
       setSchoolDefaults({ admin_password: d.default_admin_password || '' });
+      // 解析模板ID JSON
+      let templates: Record<string, string> = {};
+      try { templates = d.sms_templates ? JSON.parse(d.sms_templates) : {}; } catch { templates = {}; }
       smsForm.setFieldsValue({
         sms_enabled: d.sms_enabled === 'true',
-        sms_provider: d.sms_provider || 'aliyun',
-        sms_api_url: d.sms_api_url || '',
+        sms_provider: d.sms_provider || 'tencent',
         sms_api_key: d.sms_api_key || '',
         sms_api_secret: d.sms_api_secret || '',
-        sms_template_code: d.sms_template_code || '',
+        sms_sdk_app_id: d.sms_sdk_app_id || '',
         sms_sign_name: d.sms_sign_name || '',
+        tpl_verification: templates.verification || '',
+        tpl_task_publish: templates.task_publish || '',
+        tpl_unfinished_reminder: templates.unfinished_reminder || '',
+        tpl_password_reset: templates.password_reset || '',
+        tpl_risk_reminder: templates.risk_reminder || '',
+        tpl_intervention_followup: templates.intervention_followup || '',
       });
       aiForm.setFieldsValue({
         ai_provider: d.ai_provider || 'openai',
@@ -109,12 +118,21 @@ export default function Settings() {
     const values = await smsForm.validateFields();
     setLoading(true);
     try {
+      // 收集 6 个模板ID 为 JSON
+      const templates: Record<string, string> = {};
+      if (values.tpl_verification) templates.verification = values.tpl_verification;
+      if (values.tpl_task_publish) templates.task_publish = values.tpl_task_publish;
+      if (values.tpl_unfinished_reminder) templates.unfinished_reminder = values.tpl_unfinished_reminder;
+      if (values.tpl_password_reset) templates.password_reset = values.tpl_password_reset;
+      if (values.tpl_risk_reminder) templates.risk_reminder = values.tpl_risk_reminder;
+      if (values.tpl_intervention_followup) templates.intervention_followup = values.tpl_intervention_followup;
+
       const payload: any = {
         sms_enabled: values.sms_enabled ? 'true' : 'false',
         sms_provider: values.sms_provider || '',
-        sms_api_url: values.sms_api_url || '',
-        sms_template_code: values.sms_template_code || '',
         sms_sign_name: values.sms_sign_name || '',
+        sms_sdk_app_id: values.sms_sdk_app_id || '',
+        sms_templates: JSON.stringify(templates),
       };
       if (values.sms_api_key && values.sms_api_key !== '••••••') payload.sms_api_key = values.sms_api_key;
       if (values.sms_api_secret && values.sms_api_secret !== '••••••') payload.sms_api_secret = values.sms_api_secret;
@@ -122,6 +140,33 @@ export default function Settings() {
       message.success('短信配置保存成功');
     } catch { message.error('短信配置保存失败'); }
     finally { setLoading(false); }
+  };
+
+  const handleSmsTest = async () => {
+    const phone = await new Promise<string>((resolve) => {
+      Modal.confirm({
+        title: '发送测试短信',
+        content: (
+          <div>
+            <p style={{ marginBottom: 8 }}>请输入要接收测试短信的手机号：</p>
+            <Input id="test-sms-phone" placeholder="请输入11位手机号" maxLength={11} style={{ marginTop: 8 }} />
+          </div>
+        ),
+        okText: '发送', cancelText: '取消',
+        onOk: () => { const input = document.getElementById('test-sms-phone') as HTMLInputElement; resolve(input?.value || ''); },
+        onCancel: () => resolve(''),
+      });
+    });
+    if (!phone) return;
+    if (!/^1\d{10}$/.test(phone)) { message.warning('请输入正确的11位手机号'); return; }
+    setTestingSms(true);
+    try {
+      const r = await client.post('/sms/test', { phone, template_code: 'verification' });
+      const result = r.data.data;
+      if (result.success) message.success(result.message || '测试短信发送成功');
+      else message.error(result.message || '测试短信发送失败');
+    } catch (err: any) { message.error(err._friendlyMessage || '测试发送失败'); }
+    finally { setTestingSms(false); }
   };
 
   const handleAiSave = async () => {
@@ -341,45 +386,92 @@ export default function Settings() {
           label: '短信服务',
           children: (
             <Card title={<Space><MessageOutlined />短信服务配置</Space>} style={{ marginBottom: 24 }}>
+              <Alert type="info" showIcon style={{ marginBottom: 16, maxWidth: 600 }}
+                message="腾讯云短信配置指引"
+                description={<>
+                  1. 在<a href="https://console.cloud.tencent.com/sms" target="_blank" rel="noreferrer">腾讯云短信控制台</a>创建应用，获取 SDKAppID<br/>
+                  2. 申请短信签名（如"金盾护苗"）并创建下方 6 个短信模板，等待审核通过<br/>
+                  3. 在<a href="https://console.cloud.tencent.com/cam/capi" target="_blank" rel="noreferrer">API密钥管理</a>获取 SecretId 和 SecretKey<br/>
+                  4. 每个模板审核通过后会分配一个模板ID（纯数字），填入对应字段
+                </>}
+              />
               <Form form={smsForm} layout="vertical" style={{ maxWidth: 600 }}>
                 <Form.Item name="sms_enabled" label="启用短信服务" valuePropName="checked" help="开启后，用户可通过短信验证码重置密码">
                   <Switch checkedChildren="开启" unCheckedChildren="关闭" />
                 </Form.Item>
                 <Form.Item name="sms_provider" label="短信服务商">
                   <Select options={[
-                    { value: 'aliyun', label: '阿里云短信' },
                     { value: 'tencent', label: '腾讯云短信' },
+                    { value: 'aliyun', label: '阿里云短信' },
                     { value: 'custom', label: '自定义接口' },
                   ]} />
                 </Form.Item>
-                <Form.Item name="sms_api_url" label="API 地址" help="自定义接口时填写完整 URL，阿里云/腾讯云可留空">
-                  <Input placeholder="如 https://dysmsapi.aliyuncs.com" />
+                <Form.Item name="sms_sdk_app_id" label="SDKAppID" help="腾讯云短信应用的 SDKAppID（在短信控制台 → 应用管理中获取）">
+                  <Input placeholder="如 123456789" />
                 </Form.Item>
                 <Row gutter={16}>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="sms_api_key" label="AccessKey ID">
-                      <Input placeholder="短信服务商的 AccessKey ID" />
+                    <Form.Item name="sms_api_key" label="SecretId" help="腾讯云 API 密钥的 SecretId">
+                      <Input placeholder="如 AKIDxxxxxxxx" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="sms_api_secret" label="AccessKey Secret">
-                      <Input.Password placeholder="短信服务商的 AccessKey Secret" />
+                    <Form.Item name="sms_api_secret" label="SecretKey" help="腾讯云 API 密钥的 SecretKey">
+                      <Input.Password placeholder="如 xxxxxxxxxx" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Form.Item name="sms_sign_name" label="短信签名" help="审核通过的短信签名（如 金盾护苗）">
+                  <Input placeholder="如 金盾护苗" />
+                </Form.Item>
+
+                <div style={{ fontWeight: 600, fontSize: 14, margin: '16px 0 8px', borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+                  短信模板 ID 配置
+                </div>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 12 }}>
+                  在腾讯云短信控制台创建以下 6 个模板，审核通过后将模板ID填入对应字段
+                </div>
+                <Row gutter={16}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="tpl_verification" label="验证码" help="内容：您的验证码是{1}，5分钟内有效">
+                      <Input placeholder="如 123456" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="tpl_task_publish" label="任务通知" help="内容：{1}您好，学校发布了新的心理测评任务">
+                      <Input placeholder="如 234567" />
                     </Form.Item>
                   </Col>
                 </Row>
                 <Row gutter={16}>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="sms_template_code" label="短信模板编码">
-                      <Input placeholder="如 SMS_123456789" />
+                    <Form.Item name="tpl_unfinished_reminder" label="未完成提醒" help="内容：{1}您好，您还有问卷未完成">
+                      <Input placeholder="如 345678" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="sms_sign_name" label="短信签名">
-                      <Input placeholder="如 金盾护苗" />
+                    <Form.Item name="tpl_password_reset" label="密码重置" help="内容：{1}您好，密码已重置">
+                      <Input placeholder="如 456789" />
                     </Form.Item>
                   </Col>
                 </Row>
-                <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSmsSave}>保存短信配置</Button>
+                <Row gutter={16}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="tpl_risk_reminder" label="风险关注" help="内容：{1}您好，有学生关怀事项需查看">
+                      <Input placeholder="如 567890" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="tpl_intervention_followup" label="干预跟进" help="内容：{1}您好，有跟进事项待处理">
+                      <Input placeholder="如 678901" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                <Space>
+                  <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSmsSave}>保存短信配置</Button>
+                  <Button icon={<SendOutlined />} loading={testingSms} onClick={handleSmsTest}>发送测试短信</Button>
+                </Space>
               </Form>
             </Card>
           ),
@@ -562,7 +654,8 @@ export default function Settings() {
       <Modal title={editingAdmin ? '编辑管理员' : '新增平台管理员'}
         open={adminModalOpen}
         onCancel={() => { setAdminModalOpen(false); setEditingAdmin(null); }}
-        onOk={handleAdminSubmit} okText={editingAdmin ? '保存' : '创建'} cancelText="取消">
+        onOk={handleAdminSubmit} okText={editingAdmin ? '保存' : '创建'} cancelText="取消"
+        style={{ maxWidth: '95vw' }}>
         <Form form={adminForm} layout="vertical">
           {!editingAdmin && (
             <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>

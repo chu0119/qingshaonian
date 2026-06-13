@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, message, Modal, Space, Spin } from 'antd';
-import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Typography, message, Modal, Space, Spin, Alert } from 'antd';
+import { UserOutlined, LockOutlined, SafetyOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { login, getCaptcha } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
 
@@ -29,6 +29,8 @@ export default function LoginPage() {
   const [captchaImage, setCaptchaImage] = useState('');
   const [captchaKey, setCaptchaKey] = useState('');
   const [captchaLoading, setCaptchaLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [errorHint, setErrorHint] = useState('');
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const isMobile = useIsMobile();
@@ -48,6 +50,7 @@ export default function LoginPage() {
 
   const onFinish = async (values: { username: string; password: string; captcha_code?: string }) => {
     setLoading(true);
+    setErrorMsg('');
     try {
       const loginData: any = { username: values.username, password: values.password };
       if (captchaRequired) {
@@ -72,19 +75,40 @@ export default function LoginPage() {
     } catch (error: any) {
       const errorDetail = error.response?.data?.detail;
       let errorMsg = '登录失败，请重试';
+      let errorHint = '';
       let needsCaptcha = false;
 
       if (typeof errorDetail === 'object' && errorDetail !== null) {
         errorMsg = errorDetail.message || errorMsg;
         needsCaptcha = !!errorDetail.captcha_required;
+        // 根据错误类型提供具体提示
+        if (errorMsg.includes('密码错误') || errorMsg.includes('账号或密码')) {
+          errorHint = '请检查账号和密码是否正确，注意区分大小写';
+        } else if (errorMsg.includes('锁定')) {
+          errorHint = '连续登录失败次数过多，请等待锁定时间结束后再试';
+        } else if (errorMsg.includes('验证码')) {
+          errorHint = '请输入正确的验证码，或点击验证码图片刷新';
+        } else if (errorMsg.includes('禁用')) {
+          errorHint = '请联系学校管理员或平台管理员启用账号';
+        }
       } else if (typeof errorDetail === 'string') {
         errorMsg = errorDetail;
       } else if (error.response?.status === 429) {
-        errorMsg = '当前网络登录请求过多，请稍后重试';
+        errorMsg = '当前网络登录请求过多';
+        errorHint = '请稍后再试，或换个网络环境';
       } else if (error.response?.status === 423) {
-        errorMsg = '账号已被锁定，请稍后重试';
+        errorMsg = '账号已被锁定';
+        errorHint = '请等待锁定时间结束后再试';
+      } else if (error.response?.status >= 500) {
+        errorMsg = '服务器异常';
+        errorHint = '请稍后重试，如持续出现问题请联系管理员';
+      } else if (!error.response) {
+        errorMsg = '网络连接失败';
+        errorHint = '请检查网络连接是否正常';
       }
 
+      setErrorMsg(errorMsg);
+      if (errorHint) setErrorHint(errorHint);
       message.error(errorMsg, 5);
 
       if (needsCaptcha && !captchaRequired) {
@@ -191,6 +215,21 @@ export default function LoginPage() {
 
         <div style={{ background: 'rgba(0,20,60,0.5)', backdropFilter: 'blur(20px)', borderRadius: 16, border: '1px solid rgba(0,212,255,0.2)', padding: '36px 28px', boxShadow: '0 0 30px rgba(0,212,255,0.06), 0 4px 24px rgba(0,0,0,0.3)' }}>
           <style>{`.login-form input::placeholder { color: rgba(200,220,240,0.45) !important; } .login-form .ant-input-password-icon { color: rgba(200,220,240,0.6) !important; }`}</style>
+
+          {errorMsg && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert
+                type="error"
+                showIcon
+                closable
+                onClose={() => { setErrorMsg(''); setErrorHint(''); }}
+                message={<span style={{ fontSize: 13, color: '#ffccc7' }}>{errorMsg}</span>}
+                description={errorHint ? <span style={{ fontSize: 12, color: '#ff7875' }}>{errorHint}</span> : undefined}
+                style={{ background: 'rgba(255,77,79,0.08)', border: '1px solid rgba(255,77,79,0.3)', borderRadius: 8 }}
+              />
+            </div>
+          )}
+
           <Form name="login" className="login-form" onFinish={onFinish} size="large" autoComplete="off">
             <Form.Item name="username" rules={[{ required: true, message: '请输入账号' }]}>
               <Input prefix={<UserOutlined style={{ color: '#5a8aaf' }} />} placeholder="请输入账号"
@@ -258,31 +297,57 @@ export default function LoginPage() {
           setResetPhone(vals.phone); setResetUsername(vals.username);
           setSendingCode(true);
           try {
-            await fetch('/api/v1/auth/send-sms-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: vals.phone, username: vals.username, purpose: 'reset_password' }) });
-            message.success('验证码已发送'); setForgotStep('code');
-          } catch { message.error('发送失败'); }
+            const res = await fetch('/api/v1/auth/send-sms-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: vals.phone, username: vals.username, purpose: 'reset_password' }),
+            });
+            const data = await res.json();
+            if (res.ok && data.data?.sms_sent !== false) {
+              message.success('验证码已发送'); setForgotStep('code');
+            } else {
+              message.error(data.data?.message || data.detail?.message || data.detail || '发送失败');
+            }
+          } catch { message.error('网络错误，请稍后重试'); }
           finally { setSendingCode(false); }
         }}>
-          <Form.Item name="username" label="登录账号" rules={[{ required: true }]}><Input placeholder="请输入账号" /></Form.Item>
-          <Form.Item name="phone" label="手机号" rules={[{ required: true, pattern: /^1\d{10}$/, message: '请输入11位手机号' }]}><Input placeholder="请输入绑定的手机号" /></Form.Item>
+          <Form.Item name="username" label="登录账号" rules={[{ required: true, message: '请输入账号' }]}>
+            <Input placeholder="请输入账号" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号" rules={[{ required: true, pattern: /^1\d{10}$/, message: '请输入11位手机号' }]}>
+            <Input placeholder="请输入绑定的手机号" />
+          </Form.Item>
           <Button type="primary" htmlType="submit" loading={sendingCode} block>获取验证码</Button>
         </Form>
       ) : (
         <Form layout="vertical" onFinish={async (vals: any) => {
           setResetLoading(true);
           try {
-            const res = await fetch('/api/v1/auth/reset-password-by-sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: resetPhone, username: resetUsername, code: vals.code, new_password: vals.new_password }) });
+            const res = await fetch('/api/v1/auth/reset-password-by-sms', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: resetPhone, username: resetUsername, code: vals.code, new_password: vals.new_password }),
+            });
             const data = await res.json();
-            if (res.ok && data.code === 200) { message.success('密码重置成功，请用新密码登录'); setForgotOpen(false); setForgotStep('form'); }
-            else { message.error(data.detail || data.message || '重置失败'); }
-          } catch { message.error('重置失败，请重试'); }
+            if (res.ok && data.code === 200) {
+              message.success('密码重置成功，请用新密码登录');
+              setForgotOpen(false); setForgotStep('form');
+            } else {
+              const errorMsg = data.detail?.message || data.detail || data.message || '重置失败';
+              message.error(errorMsg, 5);
+            }
+          } catch { message.error('网络错误，请稍后重试'); }
           finally { setResetLoading(false); }
         }}>
           <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, fontSize: 13, color: '#52c41a' }}>
             验证码已发送至 {resetPhone}
           </div>
-          <Form.Item name="code" label="短信验证码" rules={[{ required: true }]}><Input placeholder="请输入6位验证码" maxLength={6} /></Form.Item>
-          <Form.Item name="new_password" label="新密码" rules={[{ required: true, min: 6 }]}><Input.Password placeholder="请设置新密码（至少6位）" /></Form.Item>
+          <Form.Item name="code" label="短信验证码" rules={[{ required: true, message: '请输入验证码' }]}>
+            <Input placeholder="请输入6位验证码" maxLength={6} />
+          </Form.Item>
+          <Form.Item name="new_password" label="新密码" rules={[{ required: true, message: '请输入新密码' }, { min: 6, message: '密码至少6位' }]}>
+            <Input.Password placeholder="请设置新密码（至少6位）" />
+          </Form.Item>
           <Space style={{ width: '100%' }} direction="vertical">
             <Button type="primary" htmlType="submit" loading={resetLoading} block>重置密码</Button>
             <Button type="link" block onClick={() => setForgotStep('form')}>返回上一步</Button>

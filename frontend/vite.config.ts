@@ -13,4 +13,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
+            if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
+            if (id.includes('echarts')) return 'vendor-echarts';
+            return 'vendor-misc';
+          }
+        },
+      },
+    },
+  },
 })

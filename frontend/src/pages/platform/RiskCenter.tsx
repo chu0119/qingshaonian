@@ -35,6 +35,8 @@ export default function PlatformRiskCenter() {
   const [answerAlertId, setAnswerAlertId] = useState<number>();
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [drawerWidth, setDrawerWidth] = useState(640);
+  const [sortField, setSortField] = useState('risk_level');
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | undefined>('descend');
   const [intvModalOpen, setIntvModalOpen] = useState(false);
   const [intvForm, setIntvForm] = useState<any>({ method: 'other', content: '', result: '', follow_up_suggestion: '', need_follow_up: false, status: 'processing' });
   const [intvSaving, setIntvSaving] = useState(false);
@@ -61,10 +63,11 @@ export default function PlatformRiskCenter() {
       if (filters.status) params.status = filters.status;
       if (filters.keyword) params.keyword = filters.keyword;
       if (filters.school_id) params.school_id = filters.school_id;
+      if (sortField) { params.sort_by = sortField; params.sort_order = sortOrder === 'ascend' ? 'asc' : 'desc'; }
       const r = await client.get('/platform/risk-alerts', { params });
       setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
     } finally { setLoading(false); }
-  }, [page, filters]);
+  }, [page, filters, sortField, sortOrder]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -151,15 +154,16 @@ export default function PlatformRiskCenter() {
 
   const riskLevelOrder: Record<string, number> = { low: 0, medium: 1, high: 2, urgent: 3 };
   const columns = [
-    { title: '学生', dataIndex: 'student_name', key: 'student_name', width: 80, ellipsis: true, sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '') },
+    { title: '学生', dataIndex: 'student_name', key: 'student_name', width: 80, ellipsis: true, sorter: true },
     { title: '身份证号', dataIndex: 'id_card', key: 'id_card', width: 160, render: (v: string, r: any) => renderIdCard(v, r.student_id) },
-    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 100, ellipsis: true, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
+    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 100, ellipsis: true, sorter: true },
     { title: '年级', dataIndex: 'student_grade', key: 'student_grade', width: 60 },
     { title: '班级', dataIndex: 'student_class', key: 'student_class', width: 60 },
-    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 80, sorter: (a: any, b: any) => (riskLevelOrder[a.risk_level] ?? 9) - (riskLevelOrder[b.risk_level] ?? 9), render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '未知'}</Tag> },
+    { title: '风险等级', dataIndex: 'risk_level', key: 'risk_level', width: 80, sorter: true, defaultSortOrder: 'descend' as const,
+      render: (v: string) => <Tag color={RISK_COLORS[v]}>{RISK_LABELS[v] || '-'}</Tag> },
     { title: '风险类型', dataIndex: 'risk_type', key: 'risk_type', width: 140, ellipsis: true, render: (v: string) => <span>{translateRiskType(v)}</span> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 80, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100, sorter: (a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 80, sorter: true, render: (v: string) => <Tag>{statusLabels[v] || '-'}</Tag> },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100, sorter: true, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '操作', key: 'action', width: 60, fixed: 'right' as const, render: (_: any, r: any) => <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => viewDetail(r)}>详情</Button> },
   ];
 
@@ -186,7 +190,10 @@ export default function PlatformRiskCenter() {
         )}
       </Space>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 1000 }}
-        pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
+        pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }}
+        onChange={(_pagination, _filters, sorter: any) => {
+          if (sorter.field) { setSortField(sorter.field); setSortOrder(sorter.order); }
+        }} />
 
       <Drawer title="风险预警详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={drawerWidth} destroyOnClose>
         {detailLoading ? <Spin /> : detail ? (
@@ -196,11 +203,11 @@ export default function PlatformRiskCenter() {
               <Descriptions.Item label="身份证号">{renderIdCard(detail.id_card, detail.student_id)}</Descriptions.Item>
               <Descriptions.Item label="学校">{detail.school_name}</Descriptions.Item>
               <Descriptions.Item label="风险等级">
-                <Tag color={RISK_COLORS[detail.risk_level]}>{RISK_LABELS[detail.risk_level] || '未知'}</Tag>
+                <Tag color={RISK_COLORS[detail.risk_level]}>{RISK_LABELS[detail.risk_level] || '-'}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="风险类型">{translateRiskType(detail.risk_type)}</Descriptions.Item>
-              <Descriptions.Item label="状态"><Tag>{statusLabels[detail.status] || '未知'}</Tag></Descriptions.Item>
-              <Descriptions.Item label="触发方式">{TRIGGER_METHOD_LABELS[detail.trigger_method] || '未知' || '-'}</Descriptions.Item>
+              <Descriptions.Item label="状态"><Tag>{statusLabels[detail.status] || '-'}</Tag></Descriptions.Item>
+              <Descriptions.Item label="触发方式">{TRIGGER_METHOD_LABELS[detail.trigger_method] || '-'}</Descriptions.Item>
               <Descriptions.Item label="生成时间" span={2}>{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
             </Descriptions>
 
@@ -214,7 +221,7 @@ export default function PlatformRiskCenter() {
                   const maxScore = 100;
                   return (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ width: 70, fontSize: 13 }}>{dimensionLabels[key] || '未知'}</span>
+                      <span style={{ width: 70, fontSize: 13 }}>{dimensionLabels[key] || key}</span>
                       <Progress percent={Math.round(score / maxScore * 100)} size="small" style={{ flex: 1 }}
                         strokeColor={score > 70 ? '#FF4D4F' : score > 40 ? '#FA8C16' : '#1890FF'} />
                       <span style={{ fontSize: 13, width: 40 }}>{score}</span>
@@ -230,14 +237,14 @@ export default function PlatformRiskCenter() {
                   <Row gutter={[16, 8]} style={{ marginBottom: 12 }}>
                     <Col span={8}><Statistic title="质量评分" value={detail.quality_score || 0} suffix="分"
                       valueStyle={{ color: (detail.quality_score || 0) >= 70 ? '#67C23A' : (detail.quality_score || 0) >= 50 ? '#E6A23C' : '#FF4D4F', fontSize: 20 }} /></Col>
-                    <Col span={8}><Statistic title="质量等级" value={qualityLabels[detail.quality_level] || '未知'}
+                    <Col span={8}><Statistic title="质量等级" value={qualityLabels[detail.quality_level] || '-'}
                       valueStyle={{ fontSize: 20 }} /></Col>
                     <Col span={8}><Statistic title="建议复测" value={detail.suggest_retest ? '是' : '否'}
                       valueStyle={{ color: detail.suggest_retest ? '#FF4D4F' : '#67C23A', fontSize: 20 }} /></Col>
                   </Row>
                   <Descriptions bordered size="small" column={2}>
                     <Descriptions.Item label="答题时长">{detail.quality_duration || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="有效性">{validityLabels[detail.validity] || '未知' || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="有效性">{validityLabels[detail.validity] || '-'}</Descriptions.Item>
                     {detail.attention_passed !== undefined && <Descriptions.Item label="注意力检测">{detail.attention_passed ? '通过' : '未通过'}</Descriptions.Item>}
                     {detail.max_consecutive_same !== undefined && <Descriptions.Item label="连续同选">{detail.max_consecutive_same} 题</Descriptions.Item>}
                     {detail.contradiction_count !== undefined && <Descriptions.Item label="矛盾检测">{detail.contradiction_count} 组</Descriptions.Item>}
@@ -261,15 +268,15 @@ export default function PlatformRiskCenter() {
               </Card>
             )}
 
-            {detail.dimension_analysis?.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).length > 0 && (
+            {detail.dimension_analysis?.filter((item: any) => item && item.type === 'dimension_analysis' && item.label).length > 0 && (
               <Card title="维度分析" size="small" style={{ marginBottom: 16 }}>
-                {detail.dimension_analysis.filter((item: any) => item && (item.dimension || item.label || item.risk_tag)).map((item: any, i: number) => (
+                {detail.dimension_analysis.filter((item: any) => item && item.type === 'dimension_analysis' && item.label).map((item: any, i: number) => (
                   <div key={i} style={{ marginBottom: 8, padding: '6px 10px', background: '#fafafa', borderRadius: 4 }}>
                     <Space>
-                      <Tag color={item.level === 'high' ? 'red' : item.level === 'medium' ? 'orange' : 'blue'}>
-                        {item.label || dimensionLabels[item.dimension] || '未知' || RISK_TAG_LABELS[item.risk_tag] || '未知' || ''}
+                      <Tag color={item.level === '偏高' ? 'red' : item.level === '中等' ? 'orange' : 'blue'}>
+                        {item.label}
                       </Tag>
-                      <span style={{ fontSize: 13 }}>{item.label || item.suggestion || ''}</span>
+                      <span style={{ fontSize: 13 }}>{item.suggestion || ''}</span>
                     </Space>
                   </div>
                 ))}
@@ -282,8 +289,8 @@ export default function PlatformRiskCenter() {
                 detail.interventions.map((iv: any, idx: number) => (
                   <div key={iv.id} style={{ padding: '8px 0', borderBottom: idx < detail.interventions.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Tag>{methodLabels[iv.method] || '未知'}</Tag>
-                      <Tag color={iv.status === 'completed' ? 'green' : iv.status === 'pending' ? 'red' : 'blue'}>{statusLabels[iv.status] || '未知'}</Tag>
+                      <Tag>{methodLabels[iv.method] || '-'}</Tag>
+                      <Tag color={iv.status === 'completed' ? 'green' : iv.status === 'pending' ? 'red' : 'blue'}>{statusLabels[iv.status] || '-'}</Tag>
                     </div>
                     {iv.content && <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>{iv.content}</div>}
                     <div style={{ fontSize: 12, color: '#999' }}>{iv.created_at ? new Date(iv.created_at).toLocaleString('zh-CN') : '-'}</div>

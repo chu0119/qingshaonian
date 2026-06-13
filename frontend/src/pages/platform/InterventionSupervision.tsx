@@ -42,6 +42,8 @@ export default function PlatformInterventionSupervision() {
   const [answerAlertId, setAnswerAlertId] = useState<number>();
   const [revealedCards, setRevealedCards] = useState<Map<number, string>>(new Map());
   const [verifyStudentId, setVerifyStudentId] = useState<number>(0);
+  const [sortField, setSortField] = useState('');
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | undefined>(undefined);
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [verifyPassword, setVerifyPassword] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -69,11 +71,12 @@ export default function PlatformInterventionSupervision() {
         const params: Record<string, unknown> = { page, page_size: 20 };
         if (filters.status) params.status = filters.status;
         if (filters.school_id) params.school_id = filters.school_id;
+        if (sortField) { params.sort_by = sortField; params.sort_order = sortOrder === 'ascend' ? 'asc' : 'desc'; }
         const r = await client.get('/platform/interventions', { params });
         setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
       }
     } finally { setLoading(false); }
-  }, [tab, page, filters]);
+  }, [tab, page, filters, sortField, sortOrder]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -214,14 +217,14 @@ export default function PlatformInterventionSupervision() {
   };
 
   const tableColumns = [
-    { title: '学生', dataIndex: 'student_name', key: 'student_name', width: 100, ellipsis: true, sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || ''), render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
+    { title: '学生', dataIndex: 'student_name', key: 'student_name', width: 100, ellipsis: true, sorter: true, render: (v: string, r: any) => <a onClick={() => viewDetail(r)}>{v}</a> },
     { title: '身份证号', dataIndex: 'id_card', key: 'id_card', width: 150, render: (v: string, r: any) => renderIdCard(v, r.student_id) },
-    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 110, ellipsis: true, sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || '') },
+    { title: '学校', dataIndex: 'school_name', key: 'school_name', width: 110, ellipsis: true, sorter: true },
     { title: '负责教师', dataIndex: 'teacher_name', key: 'teacher_name', width: 90, ellipsis: true, render: (v: string) => v || '-' },
     { title: '方式', dataIndex: 'method', key: 'method', width: 100, render: (v: string) => <Tag style={{ maxWidth: 100 }}>{methodLabels[v] || '未知'}</Tag> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: (a: any, b: any) => (a.status || '').localeCompare(b.status || ''), render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 90, sorter: true, render: (v: string) => <Tag color={statusColors[v]}>{statusLabels[v] || '未知'}</Tag> },
     { title: '内容摘要', dataIndex: 'content', key: 'content', ellipsis: true, width: 180, render: (v: string) => v || '-' },
-    { title: '干预时间', dataIndex: 'intervention_time', key: 'intervention_time', width: 110, sorter: (a: any, b: any) => new Date(a.intervention_time || 0).getTime() - new Date(b.intervention_time || 0).getTime(), render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
+    { title: '干预时间', dataIndex: 'created_at', key: 'created_at', width: 110, sorter: true, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
     { title: '需跟进', dataIndex: 'need_follow_up', key: 'need_follow_up', width: 70, render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag>否</Tag> },
     actionColumn,
   ];
@@ -249,7 +252,10 @@ export default function PlatformInterventionSupervision() {
       ]} />
       <Table rowKey="id" dataSource={tab === 'overdue' ? overdueData : data} columns={tableColumns} loading={loading}
         scroll={{ x: 'max-content' }}
-        pagination={tab === 'overdue' ? false : { current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
+        pagination={tab === 'overdue' ? false : { current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }}
+        onChange={tab === 'overdue' ? undefined : (_pagination, _filters, sorter: any) => {
+          if (sorter.field) { setSortField(sorter.field); setSortOrder(sorter.order); }
+        }} />
 
       <Drawer title="干预详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={560} destroyOnClose>
         {detail ? (

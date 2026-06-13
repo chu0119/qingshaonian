@@ -16,7 +16,7 @@ export default function CompletionStatus() {
         const r = await client.get('/tasks', { params: { page: 1, page_size: 50 } });
         setTasks(r.data.data.items || []);
       } catch (err: any) {
-        message.error(err?.response?.data?.message || '获取任务列表失败');
+        message.error(err._friendlyMessage || '获取任务列表失败');
       } finally {
         setTaskLoading(false);
       }

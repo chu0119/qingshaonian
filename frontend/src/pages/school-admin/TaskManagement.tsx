@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Tag, Modal, Form, Input, DatePicker, Switch, message, Typography, Space, Row, Col, Statistic, Tabs, Select, Progress, Empty, Popconfirm, Descriptions, List } from 'antd';
-import { PlusOutlined, EditOutlined, FieldTimeOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, FieldTimeOutlined, EyeOutlined, DeleteOutlined, CopyOutlined, QrcodeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../../api/client';
 import { TASK_STATUS_LABELS } from '../../utils/constants';
@@ -26,6 +26,16 @@ export default function TaskManagement() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [completions, setCompletions] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrData, setQrData] = useState<{ token: string; task_name: string } | null>(null);
+
+  const handleShowQR = async (taskId: number) => {
+    try {
+      const r = await client.get(`/auth/qr-token?task_id=${taskId}`);
+      setQrData(r.data.data);
+      setQrOpen(true);
+    } catch { message.error('生成二维码失败'); }
+  };
   const [classes, setClasses] = useState<any[]>([]);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -54,7 +64,7 @@ export default function TaskManagement() {
       setData(r.data.data.items || []);
       setTotal(r.data.data.total || 0);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取任务列表失败');
+      message.error(err._friendlyMessage || '获取任务列表失败');
     } finally {
       setLoading(false);
     }
@@ -105,7 +115,7 @@ export default function TaskManagement() {
       fetchData();
     } catch (err: any) {
       if (err?.errorFields) return; // 表单验证错误，不做提示
-      message.error(err?.response?.data?.message || '发布任务失败');
+      message.error(err._friendlyMessage || '发布任务失败');
     } finally {
       setSubmitting(false);
     }
@@ -121,7 +131,7 @@ export default function TaskManagement() {
       const r = await client.get(`/tasks/${task.id}/completion`);
       setCompletions(r.data.data || []);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取完成情况失败');
+      message.error(err._friendlyMessage || '获取完成情况失败');
       setCompletions([]);
     } finally {
       setDetailLoading(false);
@@ -158,7 +168,7 @@ export default function TaskManagement() {
       fetchData();
     } catch (err: any) {
       if (err?.errorFields) return;
-      message.error(err?.response?.data?.message || '更新任务失败');
+      message.error(err._friendlyMessage || '更新任务失败');
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +199,7 @@ export default function TaskManagement() {
       fetchData();
     } catch (err: any) {
       if (err?.errorFields) return;
-      message.error(err?.response?.data?.message || '延期失败');
+      message.error(err._friendlyMessage || '延期失败');
     } finally {
       setSubmitting(false);
     }
@@ -251,6 +261,16 @@ export default function TaskManagement() {
               catch { message.error('操作失败'); }
             }}><Button size="small">归档</Button></Popconfirm>
           )}
+          {(r.status === 'active' || r.status === 'in_progress' || r.status === 'not_started') && (
+            <Button size="small" icon={<QrcodeOutlined />} onClick={() => handleShowQR(r.id)}>扫码</Button>
+          )}
+          <Button size="small" icon={<CopyOutlined />} onClick={async () => {
+            try {
+              await client.post(`/tasks/${r.id}/duplicate`);
+              message.success('任务复制成功');
+              fetchData();
+            } catch (err: any) { message.error(err?.response?.data?.detail || '复制失败'); }
+          }}>复制</Button>
           {(r.status === 'draft' || r.status === 'archived') && (
             <Popconfirm title="确定删除此任务？" description="删除后不可恢复" onConfirm={async () => {
               try { await client.delete(`/tasks/${r.id}`); message.success('任务已删除'); fetchData(); }
@@ -569,6 +589,21 @@ export default function TaskManagement() {
               </List.Item>
             )}
           />
+        )}
+      </Modal>
+
+      <Modal title="扫码答题" open={qrOpen} onCancel={() => setQrOpen(false)} footer={null} destroyOnHidden width={400}>
+        {qrData && (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <Typography.Title level={5} style={{ marginBottom: 16 }}>{qrData.task_name}</Typography.Title>
+            <div style={{ marginBottom: 16 }}>
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.origin + '/student/qr?token=' + qrData.token)}`} alt="QR Code" style={{ width: 200, height: 200 }} />
+            </div>
+            <Typography.Text type="secondary">学生扫描二维码即可进入答题</Typography.Text>
+            <div style={{ marginTop: 8 }}>
+              <Typography.Text type="secondary" copyable={{ text: window.location.origin + '/student/qr?token=' + qrData.token }} style={{ fontSize: 12 }}>复制链接</Typography.Text>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

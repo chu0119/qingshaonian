@@ -198,7 +198,7 @@ export default function SchoolManagement() {
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 所学校` }} />
 
       {/* 编辑弹窗 */}
-      <Modal title={editing ? '编辑学校' : '新增学校'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} okText="确定" cancelText="取消" width={520} destroyOnHidden>
+      <Modal title={editing ? '编辑学校' : '新增学校'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} okText="确定" cancelText="取消" width={520} style={{ maxWidth: '95vw' }} destroyOnHidden>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="学校名称" rules={[{ required: true }]}><Input placeholder="如：明德实验学校" /></Form.Item>
           <Form.Item name="code" label="学校编码" rules={[{ required: true }]}><Input placeholder="如：MINGDE" disabled={!!editing} /></Form.Item>
@@ -231,7 +231,7 @@ export default function SchoolManagement() {
       </Modal>
 
       {/* 详情弹窗 */}
-      <Modal title={detail ? `${detail.name} - 详细信息` : '学校详情'} open={detailOpen} onCancel={() => setDetailOpen(false)} width={800} footer={null} destroyOnHidden>
+      <Modal title={detail ? `${detail.name} - 详细信息` : '学校详情'} open={detailOpen} onCancel={() => setDetailOpen(false)} width={800} style={{ maxWidth: '95vw' }} footer={null} destroyOnHidden>
         {detailLoading ? <Typography.Text>加载中...</Typography.Text> : detail ? (
           <div>
             <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>

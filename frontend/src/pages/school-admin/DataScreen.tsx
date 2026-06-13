@@ -1,447 +1,187 @@
+/**
+ * 学校端数据大屏 - 丰富数据展示
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as echarts from 'echarts';
-import ScreenShell, { useScreenMobile } from '../../components/screen/ScreenShell';
-import ScreenCard from '../../components/screen/ScreenCard';
+import ScreenShell from '../../components/screen/ScreenShell';
 import ScreenChart, { darkTooltip } from '../../components/screen/ScreenChart';
-import RankingList from '../../components/screen/RankingList';
-import { theme, COLORS, fmtNumber, riskLabels, qualityLabels } from '../../components/screen/screenTheme';
+import { Card, CardHeader, KpiBig, StatusRow, MiniStat, EmptyBox, RiskLegend, ListItem, Tag } from '../../components/screen/ScreenComponents';
+import { screenTheme as T, riskLabels, qualityLabels } from '../../components/screen/theme';
 import { DIMENSION_LABELS, INTERVENTION_STATUS_LABELS } from '../../utils/constants';
 import client from '../../api/client';
 
-const textStyle = { color: theme.textDim, fontSize: 11 };
-const axisLine = { lineStyle: { color: theme.border } };
-const splitLine = { lineStyle: { color: 'rgba(255,255,255,0.04)' } };
+const axLine = { lineStyle: { color: 'rgba(64,158,255,0.1)' } };
+const spLine = { lineStyle: { color: 'rgba(255,255,255,0.03)' } };
 
 export default function DataScreen() {
-  const navigate = useNavigate();
-  const isMobile = useScreenMobile();
   const [data, setData] = useState<any>(null);
   const [quality, setQuality] = useState<any>(null);
   const [risks, setRisks] = useState<any>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [dRes, qRes, rRes] = await Promise.all([
-        client.get('/dashboard/school'),
-        client.get('/quality/statistics/school'),
-        client.get('/reports/risk-summary'),
-      ]);
-      setData(dRes.data?.data || {});
-      setQuality(qRes.data?.data || {});
-      setRisks(rRes.data?.data || {});
-    } catch {}
+      const [dRes, qRes, rRes] = await Promise.all([client.get('/dashboard/school'), client.get('/quality/statistics/school'), client.get('/reports/risk-summary')]);
+      setData(dRes.data?.data || {}); setQuality(qRes.data?.data || {}); setRisks(rRes.data?.data || {});
+    } catch { /* */ }
   }, []);
 
-  useEffect(() => {
-    fetchAll();
-    const timer = setInterval(fetchAll, 30000);
-    return () => clearInterval(timer);
-  }, [fetchAll]);
+  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30000); return () => clearInterval(t); }, [fetchAll]);
 
-  const stats = data?.stats || {};
+  const s = data?.stats || {};
   const riskDist = data?.risk_level_distribution || {};
   const qualityDist = data?.quality_distribution || {};
-  const riskByStatus = (risks?.by_status || []).filter((s: any) => (s.count || 0) > 0);
-  const qualityTotal = Object.values(qualityDist).reduce((sum: number, v: any) => sum + (v || 0), 0);
-  const effectiveRate = quality?.effective_rate ?? (qualityTotal > 0 ? Math.round(((qualityDist.normal || 0) / qualityTotal) * 100) : 0);
-  const completionRate = Math.round(stats.completion_rate || 0);
-  const interventionRate = Math.round(stats.intervention_completion_rate || 0);
-  const riskCount = stats.risk_count || 0;
-  const pendingRisks = stats.pending_risks || 0;
-
-  const topKpis = [
-    { label: '学生总数', value: stats.student_count || 0, color: theme.cyan },
-    { label: '教师总数', value: stats.teacher_count || 0, color: theme.blue },
-    { label: '班级数量', value: stats.class_count || 0, color: theme.gold },
-    { label: '进行中任务', value: stats.active_tasks || 0, color: theme.purple },
-    { label: '答卷总数', value: stats.total_answer_sheets || 0, color: theme.cyan },
-    { label: '风险提示', value: riskCount, color: theme.red },
-  ];
-  const sideKpis = [
-    { label: '测评完成率', value: completionRate, unit: '%', color: theme.cyan },
-    { label: '有效答卷率', value: effectiveRate, unit: '%', color: theme.green },
-    { label: '待处理风险', value: pendingRisks, color: theme.orange },
-    { label: '干预完成率', value: interventionRate, unit: '%', color: theme.blue },
-  ];
+  const riskByStatus = (risks?.by_status || []).filter((x: any) => (x.count || 0) > 0);
+  const qualityTotalCount = (Object.values(qualityDist) as number[]).reduce((a, v) => a + (v || 0), 0);
+  const effectiveRate = quality?.effective_rate ?? (qualityTotalCount > 0 ? Math.round(((qualityDist.normal || 0) / qualityTotalCount) * 100) : 0);
+  const completionRate = Math.round(s.completion_rate || 0);
+  const interventionRate = Math.round(s.intervention_completion_rate || 0);
 
   const dimensionItems = useMemo(() => {
     const dims = quality?.dimensions || quality?.dimension_scores;
     if (!dims) return [];
-    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: DIMENSION_LABELS[k] || '未知', score: v as number })))
-      .filter((d: any) => d.score !== undefined)
-      .slice(0, 8);
+    return (Array.isArray(dims) ? dims : Object.entries(dims).map(([k, v]) => ({ name: DIMENSION_LABELS[k] || k, score: v as number })))
+      .filter((d: any) => d.score !== undefined).slice(0, 8);
   }, [quality]);
 
-  const riskPie = useMemo(() => pieOption(riskDist, riskLabels, COLORS), [riskDist]);
-  const qualityPie = useMemo(() => pieOption(qualityDist, qualityLabels, {
-    normal: COLORS.normal,
-    mild_anomaly: COLORS.medium,
-    moderate_anomaly: COLORS.high,
-    severe_anomaly: COLORS.urgent,
-  }), [qualityDist]);
-  const dimensionBar = useMemo(() => horizontalBarOption(dimensionItems, 'score'), [dimensionItems]);
-  const interventionBar = useMemo(() => statusBarOption(riskByStatus), [riskByStatus]);
+  const dimBar = useMemo(() => {
+    if (!dimensionItems.length) return null;
+    return {
+      tooltip: darkTooltip, grid: { left: 110, right: 48, bottom: 4, top: 4, containLabel: false },
+      xAxis: { type: 'value' as const, max: 100, axisLabel: { color: T.textMuted, fontSize: 10 }, splitLine: spLine },
+      yAxis: { type: 'category' as const, data: dimensionItems.map(d => d.name.length > 5 ? d.name.slice(0, 5) + '…' : d.name).reverse(), axisLabel: { color: T.text, fontSize: 12 }, axisLine: axLine },
+      series: [{ type: 'bar' as const, data: dimensionItems.slice().reverse().map((d: any, i: number) => ({ value: d.score, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${T.chartColors[i % T.chartColors.length]}15` }, { offset: 1, color: T.chartColors[i % T.chartColors.length] }]), borderRadius: [0, 3, 3, 0] } })), barMaxWidth: 16, label: { show: true, position: 'right' as const, color: T.textSecondary, fontSize: 11 } }],
+    };
+  }, [dimensionItems]);
 
-  const cockpitGauge = useMemo(() => ({
-    tooltip: darkTooltip,
-    series: [
-      gaugeSeries('测评完成', completionRate, theme.cyan, ['17%', '55%']),
-      gaugeSeries('答卷有效', effectiveRate, theme.green, ['50%', '55%']),
-      gaugeSeries('干预完成', interventionRate, theme.blue, ['83%', '55%']),
-    ],
-  }), [completionRate, effectiveRate, interventionRate]);
+  const makePie = (dist: Record<string, number>, labels: Record<string, string>, colors: Record<string, string>) => {
+    const pieData = Object.entries(dist as Record<string, number>).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({ name: labels[k] || k, value: v, itemStyle: { color: colors[k] || T.textMuted } }));
+    if (!pieData.length) return null;
+    return { tooltip: darkTooltip, legend: { show: false }, series: [{ type: 'pie' as const, radius: ['40%', '68%'], center: ['38%', '50%'], data: pieData, padAngle: 2, itemStyle: { borderRadius: 5 }, label: { show: false } }] };
+  };
 
-  const riskLevelBar = useMemo(() => {
-    const items = Object.entries(riskDist).map(([key, value]) => ({
-      name: riskLabels[key] || '未知',
-      value: value as number,
-      color: COLORS[key as keyof typeof COLORS] || theme.textDim,
-    })).filter(i => i.value > 0);
+  const riskPie = useMemo(() => makePie(riskDist, riskLabels, T.riskColors), [riskDist]);
+  const qualityPie = useMemo(() => makePie(qualityDist, qualityLabels, T.qualityColors), [qualityDist]);
+
+  const statusChart = useMemo(() => {
+    if (!riskByStatus.length) return null;
+    const sc: Record<string, string> = { pending: T.warning, in_progress: T.primary, completed: T.success, follow_up: '#9b59b6', closed: T.info };
+    return {
+      tooltip: darkTooltip, grid: { left: 48, right: 16, bottom: 32, top: 12, containLabel: false },
+      xAxis: { type: 'category' as const, data: riskByStatus.map((x: any) => INTERVENTION_STATUS_LABELS[x.status] || x.status), axisLabel: { color: T.textSecondary, fontSize: 10 }, axisLine: axLine },
+      yAxis: { type: 'value' as const, splitLine: spLine, axisLabel: { color: T.textMuted, fontSize: 10 } },
+      series: [{ type: 'bar' as const, data: riskByStatus.map((x: any) => ({ value: x.count || 0, itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: sc[x.status] || T.primary }, { offset: 1, color: `${sc[x.status] || T.primary}20` }]), borderRadius: [3, 3, 0, 0] } })), barMaxWidth: 32, label: { show: true, position: 'top' as const, color: T.textSecondary, fontSize: 11 } }],
+    };
+  }, [riskByStatus]);
+
+  const classCompletion = useMemo(() => {
+    const items = (data?.class_completion || []).slice(0, 6);
     if (!items.length) return null;
     return {
-      tooltip: darkTooltip,
-      grid: { left: 36, right: 20, bottom: 24, top: 14, containLabel: true },
-      xAxis: { type: 'category' as const, data: items.map(i => i.name), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
-      yAxis: { type: 'value' as const, axisLabel: textStyle, splitLine },
-      series: [{
-        type: 'bar' as const,
-        data: items.map(i => ({
-          value: i.value,
-          itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: i.color }, { offset: 1, color: `${i.color}33` }]),
-            borderRadius: [6, 6, 0, 0],
-            shadowColor: `${i.color}44`,
-            shadowBlur: 8,
-          },
-        })),
-        barMaxWidth: 40,
-        label: { show: true, position: 'top' as const, color: theme.text, fontSize: 12, fontWeight: 600 },
-      }],
+      tooltip: { ...darkTooltip, formatter: (p: any) => `${p.name}<br/>完成率: <b>${p.value}%</b>` },
+      grid: { left: 90, right: 48, bottom: 4, top: 4, containLabel: false },
+      xAxis: { type: 'value' as const, max: 100, axisLabel: { color: T.textMuted, fontSize: 10 }, splitLine: spLine },
+      yAxis: { type: 'category' as const, data: items.map((c: any) => c.name?.length > 5 ? c.name.slice(0, 5) + '…' : c.name).reverse(), axisLabel: { color: T.text, fontSize: 12 }, axisLine: axLine },
+      series: [{ type: 'bar' as const, data: items.slice().reverse().map((c: any) => ({ value: Math.round(c.completion_rate || 0), itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${T.primary}20` }, { offset: 1, color: T.primary }]), borderRadius: [0, 3, 3, 0] } })), barMaxWidth: 16, label: { show: true, position: 'right' as const, color: T.textSecondary, fontSize: 11, formatter: '{c}%' } }],
     };
-  }, [riskDist]);
-
-  const qualityRanking = useMemo(
-    () => dimensionItems.map((d: any) => ({ name: d.name, value: Math.round(d.score || 0), suffix: '分' })),
-    [dimensionItems]
-  );
-
-  const mobileCards = (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-        {[...topKpis, ...sideKpis].map(k => <GlowKpi key={k.label} {...k} />)}
-      </div>
-      <ScreenCard title="核心态势"><ScreenChart option={cockpitGauge} height={280} /></ScreenCard>
-      <ScreenCard title="风险等级分布"><ChartOrSoftEmpty option={riskPie} height={260} /></ScreenCard>
-      <ScreenCard title="答题质量分布"><ChartOrSoftEmpty option={qualityPie} height={260} /></ScreenCard>
-      <ScreenCard title="维度关注信号"><ChartOrSoftEmpty option={dimensionBar} height={280} /></ScreenCard>
-      <ScreenCard title="干预处理状态"><ChartOrSoftEmpty option={interventionBar} height={260} /></ScreenCard>
-    </div>
-  );
-
-  const desktopCards = (
-    <div style={{
-      height: 'calc(100vh - 96px)',
-      minHeight: 620,
-      display: 'grid',
-      gridTemplateColumns: '1fr 1.4fr 1fr',
-      gridTemplateRows: '100%',
-      gap: 14,
-    }}>
-      {/* Left column */}
-      <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr 1fr', gap: 14, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-          {topKpis.slice(0, 6).map(k => <GlowKpi key={k.label} {...k} />)}
-        </div>
-        <ScreenCard title="风险等级分布" glow={theme.red}>
-          <ChartOrSoftEmpty option={riskPie} />
-        </ScreenCard>
-        <ScreenCard title="风险等级柱状分布">
-          <ChartOrSoftEmpty option={riskLevelBar} />
-        </ScreenCard>
-      </div>
-
-      {/* Center column */}
-      <div style={{ display: 'grid', gridTemplateRows: 'auto 1.4fr 1fr', gap: 14, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-          {sideKpis.map(k => <GlowKpi key={k.label} {...k} />)}
-        </div>
-        <ScreenCard title="学校测评核心态势" style={{ background: 'linear-gradient(180deg, rgba(4,26,58,0.96), rgba(6,22,48,0.86))' }}>
-          <div style={{ height: '100%', display: 'grid', gridTemplateRows: '1fr auto', gap: 10, minHeight: 0 }}>
-            <ScreenChart option={cockpitGauge} />
-            <StatusStrip completionRate={completionRate} effectiveRate={effectiveRate} interventionRate={interventionRate} riskCount={riskCount} pendingRisks={pendingRisks} />
-          </div>
-        </ScreenCard>
-        <ScreenCard title="维度关注信号分布">
-          <ChartOrSoftEmpty option={dimensionBar} />
-        </ScreenCard>
-      </div>
-
-      {/* Right column */}
-      <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr 1fr', gap: 14, minHeight: 0 }}>
-        <ScreenCard title="答题质量分布" glow={theme.green}>
-          <ChartOrSoftEmpty option={qualityPie} />
-        </ScreenCard>
-        <ScreenCard title="干预处理状态" glow={theme.orange}>
-          <ChartOrSoftEmpty option={interventionBar} />
-        </ScreenCard>
-        <ScreenCard title="维度得分排行">
-          <RankingOrSoftEmpty items={qualityRanking} />
-        </ScreenCard>
-      </div>
-    </div>
-  );
+  }, [data]);
 
   return (
-    <ScreenShell title="金盾护苗 · 学生关爱数据驾驶舱" subtitle="风险等级分布、答题质量、干预处理综合态势" onBack={() => navigate(-1)}>
-      {isMobile ? mobileCards : desktopCards}
+    <ScreenShell title="金盾护苗 · 学生关爱数据驾驶舱" subtitle="风险预警 · 答题质量 · 干预处理综合态势" backTo="/school-admin/dashboard">
+      {/* KPI 条 - 8个 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 'var(--gap)', marginBottom: 'var(--gap)', flexShrink: 0 }}>
+        <KpiBig label="学生总数" value={s.student_count || 0} icon="👨‍🎓" color={T.primary} />
+        <KpiBig label="教师总数" value={s.teacher_count || 0} icon="👨‍🏫" color="#9b59b6" />
+        <KpiBig label="班级数量" value={s.class_count || 0} icon="🏫" color={T.success} />
+        <KpiBig label="完成率" value={completionRate} suffix="%" icon="📊" color={T.primary} />
+        <KpiBig label="风险提示" value={s.risk_count || 0} icon="⚠️" color={T.warning} />
+        <KpiBig label="待处理" value={s.pending_risks || 0} icon="🔔" color={T.danger} />
+        <KpiBig label="有效率" value={effectiveRate} suffix="%" icon="✅" color={T.success} />
+        <KpiBig label="干预率" value={interventionRate} suffix="%" icon="🔄" color={T.info} />
+      </div>
+
+      {/* 中间4栏 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr 1fr', gap: 'var(--gap)', flex: 1, minHeight: 0, marginBottom: 'var(--gap)' }}>
+        <Card>
+          <CardHeader title="维度关注信号" icon="📊" />
+          <div style={{ flex: 1, minHeight: 0, padding: 'var(--gap-sm)' }}>{dimBar ? <ScreenChart option={dimBar} /> : <EmptyBox />}</div>
+        </Card>
+
+        <Card>
+          <CardHeader title="风险结构" icon="🎯" />
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, padding: 'var(--pad-sm) 0' }}>
+            <div style={{ flex: 1 }}>{riskPie ? <ScreenChart option={riskPie} /> : <EmptyBox />}</div>
+            <RiskLegend dist={riskDist} labels={riskLabels} colors={T.riskColors} />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="运行态势" icon="⚙️" />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--gap-sm)', padding: 'var(--pad-sm) var(--pad)' }}>
+            <StatusRow label="测评完成率" value={completionRate} color={T.primary} />
+            <StatusRow label="答卷有效率" value={effectiveRate} color={T.success} />
+            <StatusRow label="干预完成率" value={interventionRate} color={T.info} />
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 'var(--gap-sm)', marginTop: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-sm)' }}>
+                <MiniStat label="待处理" value={s.pending_risks || 0} color={T.danger} />
+                <MiniStat label="已处置" value={Math.max(0, (s.risk_count || 0) - (s.pending_risks || 0))} color={T.success} />
+                <MiniStat label="总任务" value={s.task_count || 0} color={T.primary} />
+                <MiniStat label="答卷数" value={s.total_answer_sheets || 0} color="#9b59b6" />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="质量分布" icon="📋" />
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, padding: 'var(--pad-sm) 0' }}>
+            <div style={{ flex: 1 }}>{qualityPie ? <ScreenChart option={qualityPie} /> : <EmptyBox />}</div>
+            <RiskLegend dist={qualityDist} labels={qualityLabels} colors={T.qualityColors} />
+          </div>
+        </Card>
+      </div>
+
+      {/* 底部4栏 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--gap)', height: 'calc(var(--kpi-h) * 3.5)', flexShrink: 0 }}>
+        <Card>
+          <CardHeader title="班级完成率" icon="🏆" extra={<span style={{ fontSize: 'var(--fs-tiny)', color: T.textMuted }}>TOP {(data?.class_completion || []).length}</span>} />
+          <div style={{ flex: 1, minHeight: 0, padding: '0 var(--gap-sm)' }}>
+            {classCompletion ? <ScreenChart option={classCompletion} /> : <EmptyBox />}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="干预状态" icon="🔄" />
+          <div style={{ flex: 1, minHeight: 0, padding: '0 var(--gap-sm)' }}>
+            {statusChart ? <ScreenChart option={statusChart} /> : <EmptyBox />}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="风险详情" icon="⚠️" extra={<Tag color={T.danger}>{(risks?.items || []).filter((r: any) => r.status === 'pending').length} 待处理</Tag>} />
+          <div style={{ flex: 1, overflow: 'hidden', padding: 'var(--gap-sm) var(--pad)' }}>
+            {(risks?.items || []).slice(0, 6).length > 0 ? (risks?.items || []).slice(0, 6).map((r: any, i: number) => (
+              <ListItem key={i} index={i}>
+                <Tag color={T.riskColors[r.risk_level as keyof typeof T.riskColors] || T.textMuted}>{riskLabels[r.risk_level] || r.risk_level}</Tag>
+                <span style={{ fontSize: 'var(--fs-body)', color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.student_name || '-'}</span>
+                <span style={{ fontSize: 'var(--fs-tiny)', color: T.textMuted }}>{r.class_name || ''}</span>
+              </ListItem>
+            )) : <EmptyBox text="暂无风险" />}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="最近答卷" icon="📝" extra={<span style={{ fontSize: 'var(--fs-tiny)', color: T.textMuted }}>RECENT</span>} />
+          <div style={{ flex: 1, overflow: 'hidden', padding: 'var(--gap-sm) var(--pad)' }}>
+            {(data?.recent_sheets || []).slice(0, 6).length > 0 ? (data?.recent_sheets || []).slice(0, 6).map((sh: any, i: number) => (
+              <ListItem key={i} index={i}>
+                <span style={{ fontSize: 'var(--fs-body)', color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sh.student_name || '-'}</span>
+                <Tag color={sh.status === 'submitted' ? T.success : T.warning}>{sh.status === 'submitted' ? '已提交' : '进行中'}</Tag>
+                <span style={{ fontSize: 'var(--fs-tiny)', color: T.textMuted, fontFamily: T.fontMono }}>{sh.submitted_at ? new Date(sh.submitted_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              </ListItem>
+            )) : <EmptyBox text="暂无答卷" />}
+          </div>
+        </Card>
+      </div>
     </ScreenShell>
   );
-}
-
-/* ─── KPI card with glow ─── */
-function GlowKpi({ label, value, unit, color }: { label: string; value: number; unit?: string; color: string }) {
-  return (
-    <div style={{
-      minHeight: 58,
-      border: `1px solid ${color}22`,
-      borderRadius: theme.radius,
-      background: `linear-gradient(135deg, ${color}08 0%, rgba(6,22,48,0.9) 100%)`,
-      boxShadow: `inset 0 1px 0 ${color}15, 0 2px 12px ${color}10`,
-      padding: '10px 12px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-      position: 'relative',
-      textAlign: 'center',
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: color,
-        boxShadow: `0 0 8px ${color}88`,
-        opacity: 0.7,
-      }} />
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'center' }}>
-        <span style={{
-          fontFamily: theme.numberFont,
-          color: '#f0fbff',
-          fontSize: theme.kpiFontSize,
-          fontWeight: 800,
-          lineHeight: 1,
-          textShadow: `0 0 20px ${color}33`,
-        }}>{fmtNumber(value)}</span>
-        {unit && <span style={{ color, fontSize: 13, flexShrink: 0, fontWeight: 600 }}>{unit}</span>}
-      </div>
-      <div style={{ marginTop: 6, minWidth: 0 }}>
-        <span style={{ color: theme.textDim, fontSize: theme.kpiLabelSize, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Status strip ─── */
-function StatusStrip({ completionRate, effectiveRate, interventionRate, riskCount, pendingRisks }: { completionRate: number; effectiveRate: number; interventionRate: number; riskCount: number; pendingRisks: number }) {
-  const items = [
-    { label: '测评完成', value: `${completionRate}%`, color: theme.cyan },
-    { label: '答卷有效', value: `${effectiveRate}%`, color: theme.green },
-    { label: '风险提示', value: fmtNumber(riskCount), color: theme.red },
-    { label: '待处理', value: fmtNumber(pendingRisks), color: theme.orange },
-    { label: '干预完成', value: `${interventionRate}%`, color: theme.blue },
-  ];
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8, flexShrink: 0 }}>
-      {items.map(item => (
-        <div key={item.label} style={{
-          padding: '10px 6px',
-          border: `1px solid ${item.color}22`,
-          borderRadius: 6,
-          background: `linear-gradient(135deg, ${item.color}08, rgba(0,20,44,0.5))`,
-          textAlign: 'center',
-          minWidth: 0,
-        }}>
-          <div style={{ color: item.color, fontFamily: theme.numberFont, fontWeight: 800, fontSize: theme.stripNumSize, lineHeight: 1, textShadow: `0 0 12px ${item.color}33` }}>{item.value}</div>
-          <div style={{ color: theme.textDim, fontSize: 12, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Chart or empty ─── */
-function ChartOrSoftEmpty({ option, height }: { option: any; height?: number }) {
-  if (option) return <ScreenChart option={option} height={height} />;
-  return <SoftEmpty height={height} />;
-}
-
-function RankingOrSoftEmpty({ items }: { items: { name: string; value: number; suffix?: string }[] }) {
-  if (items.length) return <RankingList title="" items={items} valueLabel="分" emptyText="暂无数据" max={8} />;
-  return <SoftEmpty />;
-}
-
-function SoftEmpty({ height }: { height?: number }) {
-  return (
-    <div style={{ height: height ? `${height}px` : '100%', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{
-        width: '72%',
-        maxWidth: 240,
-        padding: '20px 14px',
-        border: `1px dashed ${theme.border}`,
-        borderRadius: 10,
-        background: 'rgba(0,184,240,0.03)',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          width: 48,
-          height: 48,
-          margin: '0 auto 10px',
-          borderRadius: '50%',
-          border: `1px solid ${theme.border}`,
-          boxShadow: 'inset 0 0 18px rgba(0,184,240,0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: theme.textDim,
-          fontSize: 20,
-        }}>--</div>
-        <div style={{ color: theme.textDim, fontSize: 12 }}>暂无数据</div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Gauge series ─── */
-function gaugeSeries(name: string, value: number, color: string, center: [string, string]) {
-  return {
-    type: 'gauge' as const,
-    center,
-    radius: '42%',
-    min: 0,
-    max: 100,
-    startAngle: 220,
-    endAngle: -40,
-    splitNumber: 5,
-    progress: {
-      show: true,
-      width: 12,
-      itemStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${color}66` }, { offset: 1, color }]),
-        shadowColor: `${color}55`,
-        shadowBlur: 10,
-      },
-    },
-    axisLine: { lineStyle: { width: 12, color: [[1, 'rgba(255,255,255,0.04)']] } },
-    axisTick: { show: false },
-    splitLine: { show: false },
-    axisLabel: { show: false },
-    pointer: { show: false },
-    anchor: { show: false },
-    detail: {
-      valueAnimation: true,
-      formatter: '{value}%',
-      color: '#f0fbff',
-      fontSize: theme.gaugeDetailSize,
-      fontWeight: 800,
-      fontFamily: theme.numberFont,
-      offsetCenter: [0, '-5%'],
-      textShadowColor: `${color}44`,
-      textShadowBlur: 12,
-    },
-    title: { color: theme.textDim, fontSize: 13, offsetCenter: [0, '30%'] },
-    data: [{ value, name }],
-  };
-}
-
-/* ─── Pie option ─── */
-function pieOption(dist: Record<string, number>, labels: Record<string, string>, colorMap: Record<string, string>) {
-  const pieData = Object.entries(dist).filter(([, v]) => (v || 0) > 0).map(([k, v]) => ({
-    name: labels[k] || '未知',
-    value: v,
-    itemStyle: { color: colorMap[k] || theme.textDim },
-  }));
-  if (!pieData.length) return null;
-  return {
-    tooltip: darkTooltip,
-    legend: { bottom: 0, textStyle: { color: theme.textDim, fontSize: 11 }, itemWidth: 12, itemHeight: 8, itemGap: 14 },
-    series: [{
-      type: 'pie' as const,
-      radius: ['38%', '72%'],
-      center: ['50%', '42%'],
-      data: pieData,
-      padAngle: 2,
-      itemStyle: { borderRadius: 5 },
-      label: { show: true, formatter: '{b}\n{d}%', fontSize: 12, color: theme.text, lineHeight: 16 },
-      emphasis: {
-        scaleSize: 8,
-        itemStyle: { shadowBlur: 16, shadowColor: 'rgba(0,0,0,0.4)' },
-      },
-      labelLayout: { hideOverlap: true } as any,
-    }],
-  };
-}
-
-/* ─── Horizontal bar ─── */
-function horizontalBarOption(items: any[], valueKey: string) {
-  if (!items.length) return null;
-  const colors = [theme.purple, theme.cyan, theme.orange, theme.green, theme.blue, theme.gold, '#ff85c0', '#87e8de'];
-  const sliced = items.slice(0, 8);
-  return {
-    tooltip: darkTooltip,
-    grid: { left: 60, right: 38, bottom: 18, top: 10, containLabel: true },
-    xAxis: { type: 'value' as const, axisLabel: textStyle, splitLine },
-    yAxis: {
-      type: 'category' as const,
-      data: sliced.map((d: any) => d.name.length > 6 ? `${d.name.slice(0, 6)}…` : d.name).reverse(),
-      axisLabel: { color: theme.text, fontSize: 12 },
-      axisLine,
-    },
-    series: [{
-      type: 'bar' as const,
-      data: sliced.slice().reverse().map((d: any, i: number) => ({
-        value: d[valueKey],
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: `${colors[i] || theme.cyan}15` }, { offset: 1, color: colors[i] || theme.cyan }]),
-          borderRadius: [0, 6, 6, 0],
-          shadowColor: `${colors[i] || theme.cyan}33`,
-          shadowBlur: 6,
-        },
-      })),
-      barMaxWidth: 24,
-      label: { show: true, position: 'right' as const, color: theme.textDim, fontSize: 11 },
-    }],
-  };
-}
-
-/* ─── Status bar ─── */
-function statusBarOption(items: any[]) {
-  if (!items.length) return null;
-  const colors: Record<string, string> = { pending: COLORS.medium, processing: COLORS.low, in_progress: COLORS.low, completed: COLORS.normal, follow_up: theme.purple, closed: theme.textDim };
-  const labels = INTERVENTION_STATUS_LABELS;
-  return {
-    tooltip: darkTooltip,
-    grid: { left: 36, right: 20, bottom: 26, top: 16, containLabel: true },
-    xAxis: { type: 'category' as const, data: items.map((s: any) => labels[s.status] || '未知'), axisLabel: { ...textStyle, fontSize: 12 }, axisLine },
-    yAxis: { type: 'value' as const, splitLine, axisLabel: textStyle },
-    series: [{
-      type: 'bar' as const,
-      data: items.map((s: any) => ({
-        value: s.count || 0,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: colors[s.status] || theme.cyan }, { offset: 1, color: `${colors[s.status] || theme.cyan}22` }]),
-          borderRadius: [6, 6, 0, 0],
-          shadowColor: `${colors[s.status] || theme.cyan}33`,
-          shadowBlur: 6,
-        },
-      })),
-      barMaxWidth: 40,
-      label: { show: true, position: 'top' as const, color: theme.textDim, fontSize: 11 },
-    }],
-  };
 }

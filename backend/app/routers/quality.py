@@ -9,6 +9,9 @@ from ..utils.response import APIResponse
 
 router = APIRouter(prefix="/api/v1/quality", tags=["答题质量"])
 
+QUALITY_LEVEL_LABELS = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "高度异常"}
+VALIDITY_LABELS = {"valid": "有效", "basically_valid": "基本有效", "questionable": "存疑", "not_recommended": "不建议纳入", "invalid": "无效"}
+
 
 @router.get("/{answer_sheet_id}")
 def get_quality(answer_sheet_id: int, user: User = Depends(require_role("school_admin", "teacher", "counselor")), db: Session = Depends(get_db)):
@@ -25,7 +28,7 @@ def get_quality(answer_sheet_id: int, user: User = Depends(require_role("school_
         raise HTTPException(status_code=404, detail="未找到质量评估")
 
     quality_labels = {"normal": "正常", "mild_anomaly": "轻度异常", "moderate_anomaly": "中度异常", "severe_anomaly": "高度异常"}
-    validity_labels = {"valid": "有效", "basically_valid": "基本有效", "questionable": "存疑", "not_recommended": "不建议纳入核心统计"}
+    validity_labels = {"valid": "有效", "basically_valid": "基本有效", "questionable": "存疑", "not_recommended": "不建议纳入", "invalid": "无效"}
     details = q.details or {}
 
     return APIResponse.success({
@@ -78,8 +81,8 @@ def task_quality_stats(task_id: int, user: User = Depends(require_role("school_a
     return APIResponse.success({
         "total": len(sheets),
         "assessed": len(qs),
-        "by_level": [{"level": k, "count": v} for k, v in by_level.items()],
-        "by_validity": [{"validity": k, "count": v} for k, v in by_validity.items()],
+        "by_level": [{"level": k, "label": QUALITY_LEVEL_LABELS.get(k, k), "count": v} for k, v in by_level.items()],
+        "by_validity": [{"validity": k, "label": VALIDITY_LABELS.get(k, k), "count": v} for k, v in by_validity.items()],
         "suggest_retest_count": retest_count,
         "effective_rate": round(by_validity.get("valid", 0) / max(len(qs), 1) * 100, 1) if qs else 0,
     })
@@ -107,7 +110,7 @@ def school_quality_stats(user: User = Depends(require_role("school_admin")), db:
     normal = by_level.get("normal", 0)
     return APIResponse.success({
         "total": len(sheet_ids),
-        "by_level": [{"level": k, "count": v} for k, v in by_level.items()],
+        "by_level": [{"level": k, "label": QUALITY_LEVEL_LABELS.get(k, k), "count": v} for k, v in by_level.items()],
         "suggest_retest_count": retest,
         "effective_rate": round(normal / max(len(qs), 1) * 100, 1) if qs else 0,
     })

@@ -16,7 +16,7 @@ export default function StudentHome() {
       const pendingTasks = tasks.filter((t: any) => t.status !== 'submitted');
       setPending(pendingTasks.slice(0, 5));
       setPendingCount(pendingTasks.length);
-    }).catch(() => message.error('获取任务列表失败'));
+    }).catch((err: any) => message.error(err._friendlyMessage || '获取任务列表失败'));
     client.get('/student/tasks/completed').then(r => {
       setCompletedCount((r.data.data || []).length);
     }).catch(() => {});

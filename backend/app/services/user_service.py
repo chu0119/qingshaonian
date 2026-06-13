@@ -21,7 +21,8 @@ def list_users(db: Session, school_id: int, role: str, page: int = 1, page_size:
     if class_ids is not None:
         q = q.filter(User.class_id.in_(class_ids))
     if keyword:
-        q = q.filter(User.real_name.contains(keyword) | User.username.contains(keyword) | User.student_no.contains(keyword))
+        safe_kw = keyword.replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(User.real_name.contains(safe_kw) | User.username.contains(safe_kw) | User.student_no.contains(safe_kw))
     if teacher_type and role in ("teacher", "counselor"):
         q = q.filter(User.teacher_type == teacher_type)
 
@@ -51,7 +52,8 @@ def list_teachers(db: Session, school_id: int, page: int = 1, page_size: int = 2
                   keyword: str = "", teacher_type: str = ""):
     q = db.query(User).filter(User.school_id == school_id, User.role.in_(["teacher", "counselor"]))
     if keyword:
-        q = q.filter(User.real_name.contains(keyword) | User.username.contains(keyword))
+        safe_kw = keyword.replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(User.real_name.contains(safe_kw) | User.username.contains(safe_kw))
     if teacher_type:
         q = q.filter(User.teacher_type == teacher_type)
 
@@ -93,16 +95,20 @@ def _generate_student_no(db: Session, school_id: int) -> str:
 
 def create_user(db: Session, data: UserCreate) -> User:
     role = data.role or "student"
+    # 学生的用户名是身份证号，需要校验并规范化（小写x→大写X）
+    username = data.username
+    if role == "student":
+        username = validate_id_card(username)
     default_pw = "123456"
     force_change = False
-    if role in ("student", "teacher", "counselor") and len(data.username) >= 6:
-        default_pw = data.username[-6:]
+    if role in ("student", "teacher", "counselor") and len(username) >= 6:
+        default_pw = username[-6:]
         force_change = True
     student_no = data.student_no
     if role == "student" and not student_no:
         student_no = _generate_student_no(db, data.school_id)
     u = User(
-        school_id=data.school_id, username=data.username,
+        school_id=data.school_id, username=username,
         password_hash=hash_password(data.password or default_pw),
         real_name=data.real_name, role=role, teacher_type=data.teacher_type,
         gender=data.gender, phone=data.phone, student_no=student_no or "",
@@ -119,7 +125,11 @@ def update_user(db: Session, user_id: int, data: UserUpdate) -> User:
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise ValueError("用户不存在")
-    for k, v in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    # 学生身份证号更新时规范化（小写x→大写X）
+    if "username" in update_data and u.role == "student":
+        update_data["username"] = validate_id_card(update_data["username"])
+    for k, v in update_data.items():
         setattr(u, k, v)
     db.commit()
     db.refresh(u)
@@ -216,7 +226,7 @@ def import_students_from_excel(db: Session, school_id: int, file_bytes: bytes) -
             username = id_card
             if id_card:
                 try:
-                    validate_id_card(id_card)
+                    username = validate_id_card(id_card)  # 使用校验后的规范化值（大写X）
                 except ValueError as ve:
                     result.fail_count += 1
                     result.errors.append(f"第{i + 2}行: {str(ve)}")

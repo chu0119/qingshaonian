@@ -21,7 +21,7 @@ export default function TeacherDashboard() {
         const r = await client.get('/dashboard/teacher');
         setData(r.data.data);
       } catch (err: any) {
-        message.error(err?.response?.data?.message || '获取看板数据失败');
+        message.error(err._friendlyMessage || '获取看板数据失败');
       } finally {
         setLoading(false);
       }
@@ -64,7 +64,7 @@ export default function TeacherDashboard() {
   const stats = data?.stats || {};
 
   const getRiskLevelTag = (level: string) => {
-    return <Tag color={RISK_COLORS[level] || 'default'}>{RISK_LABELS[level] || '未知' || '-'}</Tag>;
+    return <Tag color={RISK_COLORS[level] || 'default'}>{RISK_LABELS[level] || '-'}</Tag>;
   };
 
   return (

@@ -47,18 +47,21 @@ export default function Dashboard() {
     chartsRef.current.push({ chart, observer, el });
   };
 
-  const cards = [
+  const coreCards = [
     { title: '学校总数', value: data.school_total, icon: <BankOutlined />, color: '#1677ff' },
-    { title: '启用学校', value: data.enabled_school_total, icon: <CheckCircleOutlined />, color: '#52c41a' },
-    { title: '停用学校', value: data.disabled_school_total, icon: <BankOutlined />, color: '#8c8c8c' },
     { title: '学生总数', value: data.student_total, icon: <TeamOutlined />, color: '#13c2c2' },
     { title: '教师总数', value: data.teacher_total, icon: <UserOutlined />, color: '#722ed1' },
     { title: '问卷任务', value: data.task_total, icon: <FileTextOutlined />, color: '#faad14' },
-    { title: '答卷总数', value: data.answer_sheet_total, icon: <BarChartOutlined />, color: '#2f54eb' },
     { title: '风险提示', value: data.risk_alert_total, icon: <AlertOutlined />, color: '#ff7a45' },
     { title: '待处理提示', value: data.pending_risk_total, icon: <AlertOutlined />, color: '#ff4d4f' },
-    { title: 'AI 调用', value: data.ai_call_total, icon: <RobotOutlined />, color: '#eb2f96' },
-    { title: '短信发送', value: data.sms_send_total, icon: <MessageOutlined />, color: '#08979c' },
+  ];
+
+  const opCards = [
+    { title: '启用学校', value: data.enabled_school_total, color: '#52c41a' },
+    { title: '停用学校', value: data.disabled_school_total, color: '#8c8c8c' },
+    { title: '答卷总数', value: data.answer_sheet_total, color: '#2f54eb' },
+    { title: 'AI 调用', value: data.ai_call_total, color: '#eb2f96' },
+    { title: '短信发送', value: data.sms_send_total, color: '#08979c' },
   ];
 
   const riskDist = data.risk_level_distribution || {};
@@ -131,15 +134,27 @@ export default function Dashboard() {
   return (
     <div>
       <Title level={4}>平台总览</Title>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {cards.map((card) => (
-          <Col xs={12} sm={8} lg={6} xl={4} key={card.title}>
-            <Card loading={loading}>
-              <Statistic title={card.title} value={card.value || 0} prefix={card.icon} valueStyle={{ color: card.color }} />
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        {coreCards.map((card) => (
+          <Col xs={8} sm={8} lg={4} key={card.title}>
+            <Card loading={loading} bodyStyle={{ padding: '12px 16px' }}>
+              <Statistic title={card.title} value={card.value || 0} prefix={card.icon} valueStyle={{ color: card.color, fontSize: 22 }} />
             </Card>
           </Col>
         ))}
       </Row>
+
+      <div style={{ marginBottom: 16 }}>
+        <Row gutter={[8, 8]}>
+          {opCards.map((card) => (
+            <Col xs={8} sm={8} md={4} lg={3} key={card.title}>
+              <Card loading={loading} size="small" bodyStyle={{ padding: '8px 12px' }}>
+                <Statistic title={card.title} value={card.value || 0} valueStyle={{ color: card.color, fontSize: 16 }} />
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={8}>

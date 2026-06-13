@@ -26,8 +26,8 @@ export default function TeacherInterventions() {
     setLoading(true);
     client.get('/interventions', { params: { page, page_size: 20 } }).then(r => {
       setData(r.data.data?.items || []); setTotal(r.data.data?.total || 0);
-    }).catch(() => {
-      message.error('获取干预记录失败');
+    }).catch((err: any) => {
+      message.error(err._friendlyMessage || '获取干预记录失败');
     }).finally(() => setLoading(false));
   };
 

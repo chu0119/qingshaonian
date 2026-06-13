@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Badge, Popover, List, Button, Typography, Space, Empty, Tag, message } from 'antd';
 import { BellOutlined, CheckOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 
 interface NotificationItem {
@@ -22,6 +23,7 @@ const typeLabels: Record<string, { color: string; label: string }> = {
 };
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -61,6 +63,25 @@ export default function NotificationBell() {
     } catch { /* silent */ }
   };
 
+  const handleNotificationClick = async (item: NotificationItem) => {
+    if (!item.is_read) await handleMarkRead(item.id);
+    setOpen(false);
+    if (item.related_type === 'task' && item.related_id) {
+      const path = window.location.pathname;
+      if (path.startsWith('/student')) navigate('/student/pending');
+      else if (path.startsWith('/platform')) navigate('/platform/tasks');
+      else navigate('/school-admin/tasks');
+    } else if (item.related_type === 'risk' && item.related_id) {
+      const path = window.location.pathname;
+      if (path.startsWith('/platform')) navigate('/platform/risks');
+      else navigate('/school-admin/risks');
+    } else if (item.related_type === 'intervention' && item.related_id) {
+      const path = window.location.pathname;
+      if (path.startsWith('/teacher') || path.startsWith('/counselor')) navigate('/teacher/interventions');
+      else navigate('/school-admin/interventions');
+    }
+  };
+
   const handleMarkAllRead = async () => {
     try {
       await client.put('/notifications/read-all');
@@ -82,7 +103,7 @@ export default function NotificationBell() {
   };
 
   const content = (
-    <div style={{ width: 360, maxHeight: 480, overflow: 'auto' }}>
+    <div style={{ width: Math.min(360, window.innerWidth - 48), maxHeight: 480, overflow: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px' }}>
         <Typography.Text strong>消息通知</Typography.Text>
         {unreadCount > 0 && (
@@ -103,7 +124,7 @@ export default function NotificationBell() {
                 background: item.is_read ? 'transparent' : '#f6f8ff',
                 borderRadius: 4,
               }}
-              onClick={() => { if (!item.is_read) handleMarkRead(item.id); }}
+              onClick={() => handleNotificationClick(item)}
             >
               <List.Item.Meta
                 title={

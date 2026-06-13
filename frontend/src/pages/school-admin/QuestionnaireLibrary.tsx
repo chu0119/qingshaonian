@@ -33,7 +33,7 @@ export default function QuestionnaireLibrary() {
 
   const handleDelete = async (id: number) => {
     try { await deleteQuestionnaire(id); message.success('删除成功'); fetchData(); }
-    catch (err: any) { message.error(err?.response?.data?.detail || '删除失败'); }
+    catch (err: any) { message.error(err._friendlyMessage || '删除失败'); }
   };
   const handleCopy = async (id: number) => {
     try { await copyQuestionnaire(id); message.success('复制成功'); fetchData(); }
@@ -146,7 +146,7 @@ export default function QuestionnaireLibrary() {
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 条` }} />
 
       <Modal title="导入问卷" open={importModalOpen} onCancel={() => setImportModalOpen(false)}
-        footer={null} destroyOnClose width={700}>
+        footer={null} destroyOnClose width={700} style={{ maxWidth: '95vw' }}>
         {!importSuccess && (
           <>
             <Upload.Dragger accept=".xlsx,.xls" maxCount={1} showUploadList={false}

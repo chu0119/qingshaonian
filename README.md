@@ -365,7 +365,7 @@ npm run build
 - Swagger UI：`http://localhost:8000/docs`
 - ReDoc：`http://localhost:8000/redoc`
 
-生产环境：`https://a.annanyun.com/docs`
+生产环境：`https://hm.annanyun.com/docs`
 
 ## 部署
 

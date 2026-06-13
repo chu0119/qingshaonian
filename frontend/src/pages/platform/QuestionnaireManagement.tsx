@@ -183,7 +183,7 @@ export default function PlatformQuestionnaireManagement() {
     { title: '标题', dataIndex: 'title', key: 'title', width: 200, ellipsis: true,
       render: (v: string, r: any) => <a onClick={() => navigate(`/platform/questionnaires/${r.id}/edit`)}>{v}</a> },
     { title: '类别', dataIndex: 'category', key: 'category', width: 90,
-      render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || '未知' || '-'}</Tag> },
+      render: (v: string) => <Tag>{QUESTIONNAIRE_CATEGORY_LABELS[v] || '-'}</Tag> },
     { title: '来源', key: 'source', width: 100,
       render: (_: any, r: any) => {
         if (r.is_builtin) return <Tag color="blue">内置</Tag>;
@@ -247,7 +247,7 @@ export default function PlatformQuestionnaireManagement() {
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 套问卷` }} />
 
-      <Modal title="使用统计" open={usageOpen} onCancel={() => setUsageOpen(false)} footer={null} width={500} destroyOnClose>
+      <Modal title="使用统计" open={usageOpen} onCancel={() => setUsageOpen(false)} footer={null} width={500} style={{ maxWidth: '95vw' }} destroyOnClose>
         {usage ? (
           <div>
             <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -266,7 +266,7 @@ export default function PlatformQuestionnaireManagement() {
       </Modal>
 
       <Modal title="推送到学校" open={pushOpen} onCancel={() => { setPushOpen(false); setSelectedSchools([]); }}
-        onOk={handlePush} confirmLoading={pushLoading} destroyOnClose width={500} okText="推送" cancelText="取消">
+        onOk={handlePush} confirmLoading={pushLoading} destroyOnClose width={500} style={{ maxWidth: '95vw' }} okText="推送" cancelText="取消">
         <p style={{ marginBottom: 12 }}>选择要推送此问卷的学校（已推送的学校不会重复推送）</p>
         <Select mode="multiple" placeholder="选择学校" style={{ width: '100%' }}
           value={selectedSchools} onChange={setSelectedSchools}
@@ -274,7 +274,7 @@ export default function PlatformQuestionnaireManagement() {
       </Modal>
 
       <Modal title="导入问卷" open={importModalOpen} onCancel={() => setImportModalOpen(false)}
-        footer={null} destroyOnClose width={700}>
+        footer={null} destroyOnClose width={700} style={{ maxWidth: '95vw' }}>
         {!importSuccess && (
           <>
             <Upload.Dragger accept=".xlsx,.xls" maxCount={1} showUploadList={false}

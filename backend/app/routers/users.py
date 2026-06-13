@@ -83,9 +83,44 @@ def download_template(user: User = Depends(require_role("school_admin"))):
 
 @router.get("/students/export")
 def export_students(request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """导出学生列表为 Excel"""
+    import openpyxl, io
     result = user_service.list_users(db, (getattr(user, '_effective_school_id', None) or user.school_id), "student", page=1, page_size=5000)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "学生列表"
+    ws.append(["学号", "姓名", "性别", "年级", "班级", "手机", "状态"])
+    for s in result["items"]:
+        ws.append([getattr(s, "student_no", "") or "",
+                   getattr(s, "real_name", "") or "",
+                   getattr(s, "gender", "") or "",
+                   getattr(s, "grade_name", "") or "",
+                   getattr(s, "class_name", "") or "",
+                   getattr(s, "phone", "") or "",
+                   "启用" if getattr(s, "status", False) else "停用"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
     log_operation(db, user, request, module="student", action="export", object_type="student_list", detail=f"count={len(result['items'])}")
-    return APIResponse.success(result["items"])
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": "attachment; filename=students.xlsx"})
+
+
+@router.post("/students/batch-delete")
+def batch_delete_students(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
+    """批量删除学生（级联清理关联数据）"""
+    ids = data.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的学生")
+    school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
+    students = db.query(User).filter(User.id.in_(ids), User.role == "student", User.school_id == school_id).all()
+    deleted = 0
+    for s in students:
+        user_service.delete_user(db, s.id)
+        deleted += 1
+    log_operation(db, user, request, module="student", action="batch_delete", object_type="student_batch", detail=f"deleted={deleted}")
+    return APIResponse.success({"deleted": deleted}, message=f"成功删除 {deleted} 名学生")
 
 
 # ===== 动态路径 {student_id} =====

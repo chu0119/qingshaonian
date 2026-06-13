@@ -53,7 +53,7 @@ export default function TeacherTasks() {
       const r = await client.get('/tasks');
       setTaskList(r.data.data?.items || r.data.data || []);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取任务列表失败');
+      message.error(err._friendlyMessage || '获取任务列表失败');
     } finally {
       setTaskLoading(false);
     }

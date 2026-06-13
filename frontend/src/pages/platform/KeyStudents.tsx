@@ -143,7 +143,7 @@ export default function PlatformKeyStudents() {
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: t => `共 ${t} 名重点学生` }} />
 
-      <Drawer title={`学生画像 - ${detail?.student_name || ''}`} open={detailOpen} onClose={() => setDetailOpen(false)} width={680} destroyOnClose>
+      <Drawer title={`学生画像 - ${detail?.student_name || ''}`} open={detailOpen} onClose={() => setDetailOpen(false)} width={680} style={{ maxWidth: '95vw' }} destroyOnClose>
         {detailLoading ? <Spin /> : detail ? (
           <div>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>

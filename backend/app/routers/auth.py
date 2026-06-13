@@ -9,6 +9,7 @@ from ..services import auth_service
 from ..dependencies import get_current_user, require_role
 from ..utils.response import APIResponse
 from ..utils.password import hash_password
+from ..utils.jwt import create_access_token
 from ..services.audit_service import log_login, log_operation
 import random, json, time
 
@@ -119,12 +120,39 @@ def reset_password(user_id: int, request_data: ResetPasswordRequest, request: Re
     effective_school_id = getattr(user, '_effective_school_id', None) or user.school_id
     if target.school_id != effective_school_id:
         raise HTTPException(status_code=403, detail="只能重置本校用户密码")
-    new_pwd = request_data.new_password or (target.username[-6:] if len(target.username) >= 6 else "123456")
-    auth_service.reset_user_password(db, user_id, new_pwd)
+    if not request_data.new_password or len(request_data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="请提供至少6位的新密码")
+    auth_service.reset_user_password(db, user_id, request_data.new_password)
     log_operation(db, user=user, request=request, module="auth", action="reset_password",
                   object_type="user", object_id=user_id, object_name=target.real_name,
                   detail=f"operator_school={effective_school_id}")
     return APIResponse.success(message="密码重置成功")
+
+
+# ======================== 登出 / Token 刷新 / 二维码入口 ========================
+
+@router.post("/logout")
+def logout(user: User = Depends(get_current_user)):
+    """登出（JWT 无状态，前端清除 token 即可）"""
+    return APIResponse.success(message="登出成功")
+
+
+@router.post("/refresh")
+def refresh_token(user: User = Depends(get_current_user)):
+    """刷新 token — 用当前有效 token 换取新 token"""
+    new_token = create_access_token({"user_id": user.id, "role": user.role})
+    return APIResponse.success({"access_token": new_token, "token_type": "bearer"})
+
+
+@router.get("/qr-token")
+def get_qr_token(task_id: int, db: Session = Depends(get_db)):
+    """生成扫码进入测评的临时 token"""
+    from ..models.task import Task
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    token = create_access_token({"task_id": task_id, "purpose": "qr_entry"}, expires_minutes=30)
+    return APIResponse.success({"token": token, "task_id": task_id, "task_name": task.name})
 
 
 # ======================== 短信验证码 ========================
@@ -173,14 +201,13 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
     if sms_enabled_config and sms_enabled_config.config_value == "false":
         raise HTTPException(status_code=400, detail="短信服务已被管理员关闭")
 
-    # 如果配置了短信API，尝试真实发送
-    sms_sent = False
-    sms_url_config = db.query(SystemConfig).filter(SystemConfig.config_key == "sms_api_url", SystemConfig.school_id.is_(None)).first()
+    # 检查短信是否已配置（新配置格式：sms_app_key + sms_sdk_app_id）
     sms_key_config = db.query(SystemConfig).filter(SystemConfig.config_key == "sms_app_key", SystemConfig.school_id.is_(None)).first()
-    sms_url = settings.SMS_API_URL or (sms_url_config.config_value if sms_url_config else "")
+    sms_app_id_config = db.query(SystemConfig).filter(SystemConfig.config_key == "sms_sdk_app_id", SystemConfig.school_id.is_(None)).first()
     sms_key = settings.SMS_APP_KEY or (sms_key_config.config_value if sms_key_config else "")
+    sms_app_id = settings.SMS_SDK_APP_ID or (sms_app_id_config.config_value if sms_app_id_config else "")
 
-    if not sms_url or not sms_key:
+    if not sms_key or not sms_app_id:
         if settings.DEBUG:
             code = _save_code(phone, username, purpose)
             recent_sends.append(now)
@@ -217,21 +244,15 @@ def send_sms_code(data: dict, request: Request, db: Session = Depends(get_db)):
     recent_sends.append(now)
     _sms_send_records[record_key] = recent_sends
 
-    if sms_url and sms_key:
-        failure_reason = ""
-        try:
-            import httpx
-            with httpx.Client(timeout=10) as client:
-                resp = client.post(
-                    sms_url,
-                    json={"phone": phone, "code": code, "template_id": "verification"},
-                    headers={"Authorization": f"Bearer {sms_key}"},
-                )
-                sms_sent = resp.status_code == 200
-                if not sms_sent:
-                    failure_reason = f"短信服务返回 HTTP {resp.status_code}"
-        except Exception as exc:
-            failure_reason = str(exc)[:300]  # 短信发送失败不阻塞流程，开发模式下验证码仍可用
+    # 到这里说明短信已配置（sms_key + sms_app_id 均非空），实际发送验证码
+    from ..services.sms_service import send_verification_code
+    sms_sent = False
+    failure_reason = ""
+    try:
+        sms_sent, failure_reason = send_verification_code(db, phone=phone, code=code)
+    except Exception as exc:
+        sms_sent = False
+        failure_reason = str(exc)[:300]
     _log_sms_code(
         db,
         phone=phone,

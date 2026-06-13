@@ -178,19 +178,28 @@ def seed_data(request: Request, user: User = Depends(require_role("platform_admi
     return APIResponse.success({"seeded_school_ids": seeded}, message="数据初始化完成")
 
 
-# ===== 短信配置（预留接口） =====
+# ===== 短信配置 =====
 
-SMS_CONFIG_KEYS = ["sms_api_url", "sms_app_key", "sms_template_id"]
+SMS_CONFIG_KEYS = [
+    "sms_enabled", "sms_provider", "sms_api_url",
+    "sms_app_key", "sms_app_secret", "sms_sign_name", "sms_sdk_app_id",
+    "sms_templates",
+]
 SMS_CONFIG_DEFAULTS = {
-    "sms_api_url": "",
+    "sms_enabled": "false",
+    "sms_provider": "tencent",
+    "sms_api_url": "https://sms.tencentcloudapi.com",
     "sms_app_key": "",
-    "sms_template_id": "",
+    "sms_app_secret": "",
+    "sms_sign_name": "",
+    "sms_sdk_app_id": "",
+    "sms_templates": "{}",
 }
 
 
 @router.get("/sms-config")
 def get_sms_config(user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    """获取短信配置（预留，当前不实际发送短信）"""
+    """获取短信配置"""
     from ..models.system_config import SystemConfig
 
     school_id = effective_school_id(user)
@@ -200,17 +209,19 @@ def get_sms_config(user: User = Depends(require_role("school_admin")), db: Sessi
     for c in configs:
         config_map[c.config_key] = c.config_value or ""
 
-    return APIResponse.success({
-        "sms_api_url": config_map["sms_api_url"],
-        "sms_app_key": config_map["sms_app_key"],
-        "sms_template_id": config_map["sms_template_id"],
-        "note": "短信功能为预留接口，当前仅支持配置存储，不实际发送短信。",
-    })
+    # 隐藏敏感字段
+    result = {**config_map}
+    if result.get("sms_app_key"):
+        result["sms_app_key_masked"] = "••••••"
+    if result.get("sms_app_secret"):
+        result["sms_app_secret_masked"] = "••••••"
+
+    return APIResponse.success(result)
 
 
 @router.put("/sms-config")
 def update_sms_config(data: dict, request: Request, user: User = Depends(require_role("school_admin")), db: Session = Depends(get_db)):
-    """保存短信配置（预留，仅做数据存储不实际发送）"""
+    """保存短信配置"""
     from ..models.system_config import SystemConfig
 
     school_id = effective_school_id(user)
@@ -219,6 +230,9 @@ def update_sms_config(data: dict, request: Request, user: User = Depends(require
         if key not in data:
             continue
         value = str(data[key]) if data[key] is not None else ""
+        # 不覆盖敏感字段的空值（前端可能发送掩码值）
+        if key in ("sms_app_key", "sms_app_secret") and value in ("", "••••••"):
+            continue
         _upsert_school_config(db, school_id, key, value, f"短信配置 - {key}")
         updated.append(key)
 

@@ -29,7 +29,7 @@ export default function RiskWarning() {
       setData(r.data.data.items || []);
       setTotal(r.data.data.total || 0);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取风险预警列表失败');
+      message.error(err._friendlyMessage || '获取风险预警列表失败');
     } finally {
       setLoading(false);
     }
@@ -46,10 +46,19 @@ export default function RiskWarning() {
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{statusLabels[v] || '未知'}</Tag> },
     { title: '触发时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-' },
     { title: '触发问卷', dataIndex: 'questionnaire_title', key: 'questionnaire_title', render: (v: string) => v || '-' },
-    { title: '操作', key: 'action', width: 150, render: (_: unknown, r: any) => (
+    { title: '操作', key: 'action', width: 200, render: (_: unknown, r: any) => (
       <Space>
         <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/school-admin/risks/${r.id}`)}>详情</Button>
         <Button type="link" size="small" onClick={() => { setAnswerAlertId(r.id); setAnswerOpen(true); }}>答题</Button>
+        {r.status === 'pending' && (
+          <Button type="link" size="small" onClick={async () => {
+            try {
+              await client.put(`/risks/${r.id}`, { status: 'viewed' });
+              message.success('已确认收到');
+              fetchData();
+            } catch { message.error('操作失败'); }
+          }}>确认收到</Button>
+        )}
       </Space>
     )},
   ];
