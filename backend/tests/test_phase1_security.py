@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 
 class Phase1SecurityTests(unittest.TestCase):
     def setUp(self):
+        import time
         from app.config import settings
 
+        self.suffix = str(int(time.time() * 1000))[-8:]
         self._old_debug = settings.DEBUG
         self.client = TestClient(self._load_app())
         self.client.__enter__()
@@ -175,7 +177,7 @@ class Phase1SecurityTests(unittest.TestCase):
         from app.models.audit import OperationLog
 
         headers = self._login("padm", "padm123")
-        code = "AUDIT_TEST_SCHOOL"
+        code = f"AUDIT_{self.suffix}"
         existing = self.client.get(
             "/api/v1/platform/schools",
             headers=headers,
@@ -190,7 +192,7 @@ class Phase1SecurityTests(unittest.TestCase):
             json={
                 "name": "审计测试学校",
                 "code": code,
-                "admin_username": "audit_school_admin",
+                "admin_username": f"audit_{self.suffix}",
                 "admin_password": "audit123456",
                 "admin_name": "审计管理员",
             },

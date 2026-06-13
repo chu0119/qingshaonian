@@ -178,7 +178,7 @@ class Phase2CoreTests(unittest.TestCase):
         sms = client.post(
             "/api/v1/sms/send",
             headers={"Authorization": f"Bearer {token}"},
-            json={"recipient_user_id": admin.id, "sms_type": "account_open", "template_code": "account_open"},
+            json={"recipient_user_id": admin.id, "sms_type": "task_publish", "template_code": "task_publish"},
         )
         self.assertEqual(sms.status_code, 200, sms.text)
         self.assertEqual(sms.json()["data"]["status"], "not_configured")
