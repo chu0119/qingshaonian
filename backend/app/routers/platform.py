@@ -498,7 +498,7 @@ def platform_update_student(
     from ..services.user_service import update_user
     from ..schemas.user import UserUpdate
 
-    update_data = UserUpdate(**{k: v for k, v in data.items() if v is not None})
+    update_data = UserUpdate(**data)
     updated = update_user(db, student_id, update_data)
 
     log_operation(db, user, request, module="platform_student", action="update",

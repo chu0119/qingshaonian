@@ -185,7 +185,7 @@ export default function Dashboard() {
           <Col xs={24} lg={12}>
             <Card title="答卷质量分布" loading={loading}>
               {Object.entries(data.quality_distribution).map(([level, count]) => {
-                const labels: Record<string, string> = { normal: '正常', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '严重异常' };
+                const labels: Record<string, string> = { normal: '正常', mild_anomaly: '轻度异常', moderate_anomaly: '中度异常', severe_anomaly: '高度异常' };
                 const colors: Record<string, string> = { normal: '#52c41a', mild_anomaly: '#faad14', moderate_anomaly: '#fa8c16', severe_anomaly: '#ff4d4f' };
                 const total = data.quality_total || 1;
                 return (

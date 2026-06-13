@@ -83,8 +83,7 @@ def create_intervention(data: dict, request: Request, user: User = Depends(requi
     db.refresh(inv)
     log_operation(db, user, request, module="intervention", action="create", object_type="intervention", object_id=inv.id, object_name=student.real_name)
 
-    METHOD_LABELS_CN = {"student_talk": "学生谈话", "teacher_communication": "班主任沟通", "counselor_guidance": "心理老师辅导", "family_school": "家校沟通", "home_visit": "家访", "referral": "转介专业机构", "observation": "持续观察", "other": "其他"}
-    method_cn = METHOD_LABELS_CN.get(inv.method, inv.method or "其他")
+    method_cn = METHOD_LABELS.get(inv.method, inv.method or "其他")
     school_id = (getattr(user, '_effective_school_id', None) or user.school_id)
     school_admins = db.query(User).filter(User.school_id == school_id, User.role == "school_admin", User.status == True).all()
     notify_content = f"教师「{user.real_name}」已对学生「{student.real_name}」创建干预记录（{method_cn}）。"
@@ -134,6 +133,15 @@ def delete_intervention(intervention_id: int, request: Request,
         raise HTTPException(status_code=404, detail="干预记录不存在")
     if user.role in ("teacher", "counselor") and inv.teacher_id != user.id:
         raise HTTPException(status_code=403, detail="无权限删除该记录")
+    # 级联清理附件文件
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "interventions")
+    for att in (inv.attachments or []):
+        fp = os.path.join(upload_dir, os.path.basename(str(att.get("filename", ""))))
+        if fp.startswith(upload_dir) and os.path.exists(fp):
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
     db.delete(inv)
     db.commit()
     log_operation(db, user, request, module="intervention", action="delete", object_type="intervention", object_id=intervention_id)
@@ -143,7 +151,7 @@ def delete_intervention(intervention_id: int, request: Request,
 # ======================== 附件管理 ========================
 
 @router.post("/{intervention_id}/attachments")
-async def upload_attachment(intervention_id: int, file: UploadFile = File(...),
+async def upload_attachment(intervention_id: int, request: Request, file: UploadFile = File(...),
                             user: User = Depends(require_role("school_admin", "teacher", "counselor")),
                             db: Session = Depends(get_db)):
     """上传干预记录附件"""
@@ -164,11 +172,12 @@ async def upload_attachment(intervention_id: int, file: UploadFile = File(...),
     attachments.append({"filename": filename, "original_name": file.filename, "size": len(content)})
     inv.attachments = attachments
     db.commit()
+    log_operation(db, user, request, module="intervention", action="upload_attachment", object_type="intervention", object_id=intervention_id, detail=f"file={filename}")
     return APIResponse.success({"filename": filename, "original_name": file.filename}, message="上传成功")
 
 
 @router.delete("/{intervention_id}/attachments/{filename}")
-def delete_attachment(intervention_id: int, filename: str,
+def delete_attachment(intervention_id: int, filename: str, request: Request,
                       user: User = Depends(require_role("school_admin", "teacher", "counselor")),
                       db: Session = Depends(get_db)):
     """删除干预记录附件"""
@@ -188,6 +197,7 @@ def delete_attachment(intervention_id: int, filename: str,
         os.remove(file_path)
     inv.attachments = new_attachments
     db.commit()
+    log_operation(db, user, request, module="intervention", action="delete_attachment", object_type="intervention", object_id=intervention_id, detail=f"file={safe_name}")
     return APIResponse.success(message="附件删除成功")
 
 

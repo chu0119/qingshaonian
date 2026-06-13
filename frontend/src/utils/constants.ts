@@ -173,8 +173,20 @@ export const ANALYSIS_TYPE_LABELS: Record<string, string> = {
 };
 
 export const TRIGGER_METHOD_LABELS: Record<string, string> = {
-  total_score: '总分规则', dimension: '维度规则', manual: '手动创建', system: '系统自动',
+  total_score: '总分规则',
+  dimension_rule: '维度规则', dimension: '维度规则',
+  risk_tag_rule: '风险标签规则', question_threshold: '题目阈值',
+  manual: '手动创建', system: '系统自动',
 };
+
+/** 把后端可能逗号拼接的 trigger_method 拆开映射为中文，避免显示原始 key 或 "-" */
+export function formatTriggerMethod(value?: string | null): string {
+  if (!value) return '-';
+  const parts = String(value).split(',').map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return '-';
+  const mapped = parts.map((p) => TRIGGER_METHOD_LABELS[p] || p);
+  return mapped.join(' / ');
+}
 
 export const QUESTIONNAIRE_STATUS_LABELS: Record<string, string> = {
   draft: '草稿', active: '启用', published: '已发布', archived: '已归档',
@@ -183,7 +195,7 @@ export const QUESTIONNAIRE_STATUS_LABELS: Record<string, string> = {
 
 export const QUALITY_LABELS: Record<string, string> = {
   normal: '正常', questionable: '存疑', mild_anomaly: '轻度异常',
-  moderate_anomaly: '中度异常', severe_anomaly: '严重异常',
+  moderate_anomaly: '中度异常', severe_anomaly: '高度异常',
 };
 
 export const VALIDITY_LABELS: Record<string, string> = {

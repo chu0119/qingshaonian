@@ -5,7 +5,7 @@ import client from '../../api/client';
 import { maskIdCard, translateRiskType } from '../../utils/maskIdCard';
 import AnswerDetail from '../../components/answer/AnswerDetail';
 import AiAnalysisModal from '../../components/ai/AiAnalysisModal';
-import { RISK_LABELS, RISK_COLORS, TRIGGER_METHOD_LABELS, INTERVENTION_STATUS_LABELS, METHOD_LABELS, QUALITY_LABELS, VALIDITY_LABELS, DIMENSION_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
+import { RISK_LABELS, RISK_COLORS, formatTriggerMethod, INTERVENTION_STATUS_LABELS, METHOD_LABELS, QUALITY_LABELS, VALIDITY_LABELS, DIMENSION_LABELS, RISK_TAG_LABELS } from '../../utils/constants';
 
 const statusLabels = INTERVENTION_STATUS_LABELS;
 const methodLabels = METHOD_LABELS;
@@ -207,7 +207,7 @@ export default function PlatformRiskCenter() {
               </Descriptions.Item>
               <Descriptions.Item label="风险类型">{translateRiskType(detail.risk_type)}</Descriptions.Item>
               <Descriptions.Item label="状态"><Tag>{statusLabels[detail.status] || '-'}</Tag></Descriptions.Item>
-              <Descriptions.Item label="触发方式">{TRIGGER_METHOD_LABELS[detail.trigger_method] || '-'}</Descriptions.Item>
+              <Descriptions.Item label="触发方式">{formatTriggerMethod(detail.trigger_method)}</Descriptions.Item>
               <Descriptions.Item label="生成时间" span={2}>{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
             </Descriptions>
 
